@@ -1,0 +1,20 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permissions": [
+    {
+      "action": "external_directory",
+      "resource": "~/.config/opencode-sandbox/*",
+      "effect": "allow"
+    },
+    {
+      "action": "read",
+      "resource": "~/.config/opencode-sandbox",
+      "effect": "allow"
+    },
+    {
+      "action": "read",
+      "resource": "~/.config/opencode-sandbox/*",
+      "effect": "allow"
+    }
+  ]
+}
