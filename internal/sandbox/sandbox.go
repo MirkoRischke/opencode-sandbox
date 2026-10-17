@@ -20,8 +20,8 @@ type Sandbox struct {
 }
 
 // Prepare creates or resumes one VM per worktree and initializes project tools.
-// It does not transfer host credentials.
-func Prepare(ctx context.Context, directory string, config []byte) (*Sandbox, error) {
+// GitHub credentials stay in the host proxy; the guest gets only a placeholder.
+func Prepare(ctx context.Context, directory string, config, githubToken []byte) (*Sandbox, error) {
 	git := func(args ...string) (string, error) {
 		out, err := exec.CommandContext(ctx, "git", append([]string{"-C", directory}, args...)...).CombinedOutput()
 		if err != nil {
@@ -55,12 +55,18 @@ func Prepare(ctx context.Context, directory string, config []byte) (*Sandbox, er
 	if !strings.HasPrefix(common, root+string(filepath.Separator)) {
 		mounts[common] = m.Mount.Bind(common, owner)
 	}
-	s.vm, err = m.ConnectOrCreateSandbox(ctx, s.Name,
+	opts := []m.SandboxOption{
 		m.WithImage("opencode-sandbox:poc"), m.WithPullPolicy(m.PullPolicyNever),
 		m.WithCPUs(2), m.WithMemory(2048), m.WithRootDisk(m.RootDisk.Managed(4096)),
-		m.WithWorkdir(root), m.WithMounts(mounts), m.WithDetached())
+		m.WithWorkdir(root), m.WithMounts(mounts), m.WithDetached(),
+	}
+	s.vm, err = connectWithGitHub(ctx, s.Name, githubToken, opts)
 	if err != nil {
 		return nil, fmt.Errorf("prepare sandbox: %w", err)
+	}
+	if err := s.configureGitHub(ctx, githubToken != nil); err != nil {
+		s.Close()
+		return nil, err
 	}
 	// mise discovers supported filenames (including .mise.toml and mise/config.toml).
 	// Ignore the image's global config when deciding whether this project uses mise.

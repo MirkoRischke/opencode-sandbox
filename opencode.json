@@ -15,6 +15,36 @@
       "action": "read",
       "resource": "~/.config/opencode-sandbox/*",
       "effect": "allow"
+    },
+    {
+      "action": "external_directory",
+      "resource": "~/.config/opencode-sandbox/creds",
+      "effect": "deny"
+    },
+    {
+      "action": "external_directory",
+      "resource": "~/.config/opencode-sandbox/creds/*",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "~/.config/opencode-sandbox/creds",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "~/.config/opencode-sandbox/creds/*",
+      "effect": "deny"
+    },
+    {
+      "action": "edit",
+      "resource": "~/.config/opencode-sandbox/creds",
+      "effect": "deny"
+    },
+    {
+      "action": "edit",
+      "resource": "~/.config/opencode-sandbox/creds/*",
+      "effect": "deny"
     }
   ]
 }

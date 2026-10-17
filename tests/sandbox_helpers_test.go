@@ -42,7 +42,7 @@ func prepareSandboxWithConfig(t *testing.T, worktree string, config []byte) *san
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	s, err := sandbox.Prepare(ctx, worktree, config)
+	s, err := sandbox.Prepare(ctx, worktree, config, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

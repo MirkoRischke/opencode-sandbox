@@ -1,0 +1,94 @@
+# Microsandbox credential injection for guest GitHub CLI
+
+**Finding: supported already in pinned local Microsandbox 0.7.8.** Its built-in host-side TLS proxy can replace a guest-visible token placeholder with a real GitHub token. A custom credential proxy is not needed for ordinary `gh` API authentication. **This hides the token value, not its authority:** read-only access must be enforced by GitHub token permissions, not by the placeholder, hostname allowlist, or a guest command wrapper. [S1–S5, G1–G4]
+
+Research date: 2026-10-17. Documentation/source research only; no credentials or host authentication configuration accessed, no VM/proxy integration test, no implementation. Only this note was created. Attempted background delegation required by the research skill was unavailable because this session is already at the subagent depth limit.
+
+## Versions and evidence
+
+- This repository pins both Go SDK (`go.mod`) and runtime (`mise.toml`) to **0.7.8**. Its current `internal/sandbox/sandbox.go:58–61` creates/resumes a detached local VM without `WithSecrets`, `WithInterceptTLS`, or custom network configuration. Thus the capability exists upstream but is **not enabled by this launcher**.
+- Upstream tag `v0.7.8` resolves to `3f72f34253264a488058939afd24578b16ffaaef`. GitHub's latest-release endpoint returned **v0.7.8**, published 2026-10-09; its release notes explicitly include header-scoped secret substitution and the application CA-trust helper. There was no newer published release in that result. [V1, V2]
+- Current development `main` was `44b0a8ff5c85bb1d0bd7fa0a290d3fe5a583231c` (2026-10-17). Current source retains `WithSecrets`, `SecretEnvOptions.Allow`, and `SecretSubstitution.HeaderFields`; these are not newer-only requirements. Current development is not the same evidence as a released runtime. [V3]
+- Context7 was consulted for current Microsandbox and GitHub CLI documentation. Some returned Go examples used **`AllowHosts` / `AllowHostPatterns`**, but **pinned source and pinned API reference use `Allow []string`**, accepting exact and wildcard hosts. Do not copy the stale indexed names. Direct versioned source takes precedence. [S1, S2]
+- Versioned GitHub documentation links below are the documentation shipped in the tag, not claims that today's hosted docs are version-pinned. Current hosted entry points are [secrets](https://docs.microsandbox.dev/sandboxes/secrets), [TLS](https://docs.microsandbox.dev/networking/tls), and [proxies](https://docs.microsandbox.dev/networking/outbound-proxy).
+
+## What 0.7.8 actually exposes
+
+| Mechanism | Supported surface and meaning |
+| --- | --- |
+| Secret injection | `WithSecrets(secrets ...SecretEntry)` and `Secret.Env(envVar, value, SecretEnvOptions)`. Guest environment gets a placeholder (`$MSB_<env_var>` by default); host runtime substitutes the real value in permitted outbound requests. This is substitution, not unconditional addition of an absent `Authorization` header. [S1–S3] |
+| Header scope | `SecretSubstitution{HeaderFields: []string{"authorization"}}`. Headers default on; query/body default off. Empty header-field list means **all headers**, not none. Decoded/re-encoded Basic auth is supported alongside ordinary token/Bearer headers, including HTTP/2 header rewriting. [S1, S2, S6] |
+| TLS interception | `WithInterceptTLS()` or `WithNetwork` with `TLS: &TLSConfig{...}`. The runtime installs an interception CA in the guest, terminates guest TLS, and establishes separate upstream TLS with certificate verification enabled by default. Secret TLS-identity requirement defaults true; TLS-dependent secret configuration enables interception at creation. [S1–S4] |
+| Firewall/DNS | `WithNetwork(*NetworkConfig)`, ordered first-match rules, default actions, DNS/rebind protection, domain/IP/port/protocol selectors. This is not a documented HTTP method/path/GraphQL-operation authorizer. [S5, S7] |
+| Egress proxy/gateway | `WithProxy(*OutboundProxy)` with `HTTPConnectProxy`, `SOCKS4Proxy`, or `SOCKS5Proxy`. Routes traffic through an external proxy **from the host**; guest uses its ordinary destinations. Built-in TLS/secret handling still works. These are routing/tunnel protocols, not an SDK HTTP-enrichment callback. [S8, S9] |
+| Arbitrary host HTTP callback | No documented Go per-request intercept/modify/response callback found in the inspected networking/secrets/proxy APIs or their option structs. `WithInterceptTLS` enables the runtime's built-in proxy; it does **not** register a Go `http.RoundTripper` or callback. Do not invent APIs such as `OnRequest` or `WithHTTPInterceptor`. This is a scoped API-inspection finding, not a proof that no internal extensibility exists anywhere. [S1, S2, S7–S9] |
+
+`WithNetwork` replaces the network configuration; `WithInterceptTLS` preserves existing settings, but a later `WithNetwork` can overwrite them. Order configuration deliberately. [S1]
+
+### External proxies: useful, but not the credential feature
+
+0.7.8 documents HTTP CONNECT (TCP, no proxy authentication), SOCKS4 (TCP, optional user ID), and SOCKS5 (TCP/non-DNS UDP, optional username/password). Only one is configured. Proxy address is host-side `IP:port`; HTTP CONNECT sends the checked destination IP/port. Network policy evaluates the actual destination before dialing the proxy. DNS uses Microsandbox's forwarder, and `host.microsandbox.internal` bypasses the external proxy. SOCKS5 passwords use host environment references; that authenticates to the **proxy**, not to GitHub. [S8, S9]
+
+A normal CONNECT/SOCKS tunnel cannot itself rewrite encrypted GitHub HTTP headers. Building a separate MITM proxy or host API broker is a **custom architecture**, not an additional documented Microsandbox enrichment API. It would need its own destination validation, authorization, CA/trust, redirect, logging, and response-leak protections. Prefer built-in substitution unless a broker must enforce restrictions beyond token permissions. [S4, S8; architectural inference]
+
+## `gh` compatibility and read-only enforcement
+
+### Expected fit: ordinary GitHub REST/GraphQL commands
+
+`gh` explicitly supports headless authentication from **`GH_TOKEN`**, then `GITHUB_TOKEN`, ahead of stored credentials. Bind a Microsandbox secret to `GH_TOKEN`: the guest CLI can treat the placeholder as its token and send it in `Authorization`; the host proxy replaces it for **`api.github.com`**. Current `gh` source constructs `Authorization: token <value>` and avoids adding a token on cross-host redirects. That header requires no signing or token computation inside the guest. **Compatibility is a source-supported expectation, not an executed test of this repo's guest image.** [G1, G2, S1–S4]
+
+Recommended initial policy shape (configuration requirements, not implemented code):
+
+- Exact credential allowlist **`api.github.com`**, `HeaderFields: [authorization]`, query/body substitution off; TLS identity and upstream verification on; no GitHub TLS bypass. Keep default block-and-log or explicitly block. [S1–S4]
+- A **separate short-lived, repository-selected, read-only fine-grained PAT**, or appropriately permissioned GitHub App installation token; do not repurpose a broad host login token merely because the guest cannot print it. For a PAT, choose only the read permissions required by the intended commands, for example Contents, Issues, and Pull requests. GitHub documents feature gaps and endpoint-specific permission requirements: no claim that one token shape supports every `gh` command. [G3, G4]
+- Keep credential destinations distinct from connectivity destinations. Release downloads, archives, assets, raw content, Enterprise instances, and redirects may need additional network hosts; **do not automatically allow those hosts to receive the token**. Validate each workflow before broadening the secret allowlist. [S3–S5, G2]
+- Keep guest-only CLI configuration; no host `gh` config/keychain/credential helper or authentication socket mount. A guest can read a placeholder without compromising the real value, whereas separately copying the real token defeats the boundary. [S3]
+
+**Not a read-only firewall:** a malicious guest can bypass `gh` and directly use the placeholder with any HTTP client against permitted hosts. The native policy does not constrain repository, REST path, verb, or GraphQL operation. A write-capable token remains write-capable through injection. A GET-only custom proxy is also not a transparent substitute: `gh` uses POST when parameters are supplied, including documented GraphQL query examples. Git smart HTTP reads also include POST. If GitHub's token permissions cannot express the required boundary, use a narrowly designed host broker with explicit operations, not a generic shell runner or arbitrary-URL forwarding endpoint. [S2, S7, G3, G5, G7; security/design inference]
+
+### `git` is separate
+
+- Plain `git` does not automatically authenticate from `GH_TOKEN`. `gh auth setup-git` documents configuring the GitHub CLI credential helper; its helper returns the active token as an HTTPS password. In a guest with placeholder-bound `GH_TOKEN`, that password should be the **placeholder**, not a real host token. [G1, G6]
+- HTTPS Git clone/fetch uses **`github.com`**, not just `api.github.com`. It needs explicit credential permission for that host, correct guest credential-helper configuration, and trusted interception CA. Microsandbox's Basic-auth decode/substitute/re-encode implementation makes this plausible without exposing the token. Additional Git LFS/submodule/redirect hosts require independent evaluation. Not tested here. [S4, S6, G4, G6]
+- SSH Git is **not covered** by HTTP credential substitution. GitHub PAT authentication applies to HTTPS; SSH uses its own authentication. Do not forward a host SSH agent as if that preserved the same authority boundary. Guest-side cryptographic request signing likewise cannot work with only a placeholder. [S3, G4]
+- Restricting access to `git-upload-pack` instead of `git-receive-pack` would be a custom HTTP application policy, not one of the documented Microsandbox domain/port rules. Prefer upstream read-only repository permissions. [S7, G7; inference]
+
+## Security restrictions and residual risks
+
+1. **Destination identity:** documented checks include secret allowed-host match, observed DNS-to-IP binding, intercepted TLS identity, and HTTP `Host`/`:authority` aligned with TLS SNI. A spoofed host header or hard-coded IP alone is insufficient. Runtime source has a distinct CONNECT-tunneled path that uses verified CONNECT-authority/SNI alignment instead of the ordinary DNS-cache pin, so “every injection always requires a guest DNS lookup” would overstate the implementation. Keep upstream certificate verification enabled. [S3, S5, S6]
+2. **SSRF:** default local policy permits public internet plus gateway DNS, denies host/private/loopback/link-local/metadata access, and enables DNS rebinding protection. Allow-all or broad host-network exceptions weaken that posture. A custom host broker creates another SSRF surface; do not let the guest choose arbitrary upstream URLs or forward credentials to redirects unchecked. Guest `localhost` is not host `localhost`. [S5, S8; broker warning is inference]
+3. **Allowed hosts can leak the token back.** The real credential reaches upstream. Microsandbox explicitly warns an allowed endpoint can echo it, and all-header substitution enables reflection through unrelated headers. Set `HeaderFields` to `authorization`; leave query/body substitution disabled. This reduces the documented reflection surface but is **not** a proof that GitHub can never return credential material, nor a response-redaction guarantee. [S2, S3]
+4. **No secret authority attenuation.** Even when the bytes cannot be extracted, the guest can spend the delegated permissions, consume rate limits, read/exfiltrate authorized repository data, and attempt any API calls the real token permits. Do not describe injection as protecting private repository contents from the guest. [S3, G3; inference]
+5. **Opaque protocols:** bypassed TLS cannot be inspected or injected; certificate-pinned clients cannot transparently use MITM, guest mTLS is not proxied, and QUIC/HTTP3 is not intercepted. Applications with independent trust stores may need the opt-in `msb-trust.sh` helper. Do not “fix” failures by disabling TLS verification. [S4]
+6. **Not arbitrary transformations:** Basic encoding is explicitly supported, but guest-side signing using raw credentials is not. Optional body substitution has HTTP/1/size/encoding limits; HTTP/2 body substitution is unsupported. Standard `gh` auth needs header substitution only; GraphQL request bodies need not have token substitution enabled. [S2, S3, S6, G2]
+7. **Host storage:** `Secret.Env` accepts a raw value; documentation says SDK-supplied raw values are persisted in durable host sandbox configuration and remain after stopping. “Never in the VM” does **not** mean “only in host RAM” or “automatically in the OS keychain.” CLI/YAML host environment references avoid persisting the resolved value; Go live modification also documents environment-reference secret specifications. Storage/rotation must be designed explicitly; no automatic host credential-manager integration is established. [S2, S3]
+8. **Persistence/lifecycle:** adding a secret or changing its placeholder requires restart; existing-value rotation/removal can be live where supported. Local `Modify` supports secret environment references; cloud modification is not supported. This launcher resumes persistent sandboxes, so merely adding create-time options is not an established migration for existing VMs. Revocation at GitHub is separate from modifying/stopping the sandbox. [S2, S3; launcher observation]
+9. **Local versus cloud:** TLS interception and outbound proxy settings are documented local-only; cloud creation rejects outbound proxies. Do not extrapolate this verified local mechanism to managed cloud support. [S4, S8, S9]
+
+## Recommendation and remaining validation
+
+**Best fit:** built-in 0.7.8 secret placeholders + exact GitHub API destination + Authorization-only substitution + independently read-only GitHub permissions. No runtime upgrade or custom egress proxy is established necessary for that design. Enable Git HTTPS separately only if needed. Use a custom host broker only when a narrower operation/repository restriction cannot be expressed by issuing a suitably scoped token. [S1–S9, G1–G7]
+
+Before implementation is accepted, test with a newly issued disposable least-privilege credential in an isolated test environment: REST and GraphQL reads; denied writes; guest printing/auth-token output shows only a placeholder; disallowed destinations/authority spoofing do not receive injection; reflection attempts in non-Authorization headers stay placeholders; no token in guest output/logs; redirects/downloads; optional HTTPS clone/fetch; persistent VM restart/rotation/removal. These are **proposed acceptance checks**, not results. No claim of a complete security audit or universal `gh`/Git compatibility.
+
+## Primary sources
+
+- **V1:** [v0.7.8 tag ref](https://api.github.com/repos/superradcompany/microsandbox/git/ref/tags/v0.7.8).
+- **V2:** [v0.7.8 release and notes](https://github.com/superradcompany/microsandbox/releases/tag/v0.7.8); [latest-release API](https://api.github.com/repos/superradcompany/microsandbox/releases/latest) (time-dependent).
+- **V3:** [observed current Go options source](https://github.com/superradcompany/microsandbox/blob/44b0a8ff5c85bb1d0bd7fa0a290d3fe5a583231c/sdk/go/options.go); [current secret security docs](https://github.com/superradcompany/microsandbox/blob/44b0a8ff5c85bb1d0bd7fa0a290d3fe5a583231c/docs/security/secrets.mdx).
+- **S1:** [0.7.8 Go options source](https://github.com/superradcompany/microsandbox/blob/v0.7.8/sdk/go/options.go#L1017-L1046), [network structs](https://github.com/superradcompany/microsandbox/blob/v0.7.8/sdk/go/options.go#L1165-L1390), [secret types/factory](https://github.com/superradcompany/microsandbox/blob/v0.7.8/sdk/go/options.go#L1470-L1550).
+- **S2:** [0.7.8 Go secret API reference](https://github.com/superradcompany/microsandbox/blob/v0.7.8/docs/sdk/go/secrets.mdx).
+- **S3:** [0.7.8 secrets guide](https://github.com/superradcompany/microsandbox/blob/v0.7.8/docs/sandboxes/secrets.mdx); [secret handling/security boundary](https://github.com/superradcompany/microsandbox/blob/v0.7.8/docs/security/secrets.mdx).
+- **S4:** [0.7.8 TLS inspection guide](https://github.com/superradcompany/microsandbox/blob/v0.7.8/docs/networking/tls.mdx).
+- **S5:** [0.7.8 network defenses](https://github.com/superradcompany/microsandbox/blob/v0.7.8/docs/security/network.mdx).
+- **S6:** [0.7.8 runtime Basic/header substitution](https://github.com/superradcompany/microsandbox/blob/v0.7.8/crates/network/lib/engine/secrets/handler.rs#L350-L434), [TLS/DNS/CONNECT constructors](https://github.com/superradcompany/microsandbox/blob/v0.7.8/crates/network/lib/engine/secrets/handler.rs#L525-L584), [HTTP/2 header handling](https://github.com/superradcompany/microsandbox/blob/v0.7.8/crates/network/lib/engine/secrets/handler.rs#L1448-L1482).
+- **S7:** [0.7.8 Go networking API reference](https://github.com/superradcompany/microsandbox/blob/v0.7.8/docs/sdk/go/networking.mdx).
+- **S8:** [0.7.8 outbound proxy guide](https://github.com/superradcompany/microsandbox/blob/v0.7.8/docs/networking/outbound-proxy.mdx).
+- **S9:** [0.7.8 Go proxy API reference](https://github.com/superradcompany/microsandbox/blob/v0.7.8/docs/sdk/go/proxies.mdx).
+- **G1:** [GitHub CLI environment manual](https://cli.github.com/manual/gh_help_environment).
+- **G2:** [GitHub CLI HTTP client/auth-header source](https://github.com/cli/cli/blob/trunk/api/http_client.go) (current, not pinned to this guest's CLI).
+- **G3:** [GitHub PAT permissions and limitations](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens).
+- **G4:** [GitHub PAT HTTPS Git authentication](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#using-a-personal-access-token-on-the-command-line); [GitHub App installation authentication/permissions](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/authenticating-as-a-github-app-installation).
+- **G5:** [GitHub CLI API manual, request methods and GraphQL examples](https://cli.github.com/manual/gh_api).
+- **G6:** [GitHub CLI setup-git manual](https://cli.github.com/manual/gh_auth_setup-git); [credential-helper source](https://github.com/cli/cli/blob/trunk/pkg/cmd/auth/gitcredential/helper.go) (current, not pinned to this guest's CLI).
+- **G7:** [Git HTTP protocol specification: upload-pack and receive-pack](https://git-scm.com/docs/http-protocol).

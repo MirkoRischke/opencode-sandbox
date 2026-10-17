@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     git \
+    gh \
     libatomic1 \
     unzip \
     xz-utils \
@@ -25,7 +26,8 @@ ENV MISE_DATA_DIR=/mise/data \
     MISE_CACHE_DIR=/mise/cache \
     MISE_STATE_DIR=/mise/state \
     PATH=/mise/data/shims:$PATH \
-    SHELL=/bin/bash
+    SHELL=/bin/bash \
+    NODE_USE_SYSTEM_CA=1
 
 ARG OPENCODE_VERSION
 RUN mise use --global node@24 \
