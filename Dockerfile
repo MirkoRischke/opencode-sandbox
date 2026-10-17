@@ -9,6 +9,8 @@ FROM debian:13-slim
 COPY --from=mise /usr/local/bin/mise /usr/local/bin/mise
 
 # Installation prerequisites, not the optional development/debugging toolset.
+# Keep Debian package updates available when rebuilding the image.
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
