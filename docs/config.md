@@ -12,16 +12,21 @@ The launcher always stops its VM on exit, including errors and handled terminati
 signals. It never removes the VM: installed tools and guest files persist for the
 next launch. Forced termination (`SIGKILL`) or a host crash cannot run cleanup.
 
-New VMs carry the label `app=opencode-sandbox` for bulk management:
+New VMs carry the label `app=opencode-sandbox` for bulk management. Run from any
+directory, without loading launch configuration or secrets:
 
 ```sh
-msb ps --label app=opencode-sandbox
-msb stop --label app=opencode-sandbox
-msb rm --force --label app=opencode-sandbox
+opencode-sandbox list
+opencode-sandbox remove
 ```
 
-Existing VMs are not automatically relabeled. Removal deletes guest-local state,
-but not mounted host worktrees.
+`ls` is an alias for `list`; `rm` is an alias for `remove`.
+
+`list` shows names and states of all managed VMs, including stopped VMs. `remove`
+stops and deletes all managed VMs without confirmation, including stopped VMs.
+It attempts every target and exits nonzero if any removal fails. No matches is a
+successful no-op. Existing VMs are not automatically relabeled and unlabeled VMs
+are excluded. Removal deletes guest-local state, but not mounted host worktrees.
 
 Inside a Herdr pane (`HERDR_ENV=1`), the launcher automatically identifies itself
 as OpenCode for agent detection. No command prefix or Herdr configuration is

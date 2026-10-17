@@ -26,6 +26,28 @@ func TestLauncherRejectsDirectoriesOutsideGit(t *testing.T) {
 	require.Contains(t, string(output), "discover worktree")
 }
 
+func TestLauncherListsVMsOutsideGitWithoutLoadingSettings(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	writeSettings(t, "invalid TOML [")
+	binary := buildLauncher(t)
+	for _, name := range []string{"list", "ls"} {
+		t.Run(name, func(t *testing.T) {
+			command := exec.CommandContext(ctx, binary, name)
+			command.Dir = t.TempDir()
+
+			output, err := command.CombinedOutput()
+
+			require.NoError(t, err, "%s", output)
+			if string(output) != "No managed VMs found.\n" {
+				require.Contains(t, string(output), "NAME")
+				require.Contains(t, string(output), "STATE")
+			}
+		})
+	}
+}
+
 func TestLauncherAcceptsCustomConfigFlag(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	writeSettings(t, "[network]\nallowed_hosts = []\n")

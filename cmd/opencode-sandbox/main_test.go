@@ -5,9 +5,26 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestManagementCommandsRejectExtraArguments(t *testing.T) {
+	for _, command := range []string{"list", "ls", "remove", "rm"} {
+		for _, extra := range []string{"--all", "--yes", "vm-name"} {
+			t.Run(command+"/"+extra, func(t *testing.T) {
+				originalArgs := os.Args
+				t.Cleanup(func() { os.Args = originalArgs })
+				os.Args = []string{"opencode-sandbox", command, extra}
+				err := run()
+				if err == nil || !strings.Contains(err.Error(), "usage: opencode-sandbox "+command) {
+					t.Fatalf("expected management usage error, got %v", err)
+				}
+			})
+		}
+	}
+}
 
 func TestIdentifyHerdrAgent(t *testing.T) {
 	if os.Getenv("OPENCODE_SANDBOX_HERDR_TEST") == "1" {

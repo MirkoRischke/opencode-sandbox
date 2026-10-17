@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"text/tabwriter"
 
 	"opencode-sandbox/internal/sandbox"
 )
@@ -20,7 +21,37 @@ func main() {
 }
 
 func run() (err error) {
+	if len(os.Args) > 1 && (os.Args[1] == "list" || os.Args[1] == "ls" || os.Args[1] == "remove" || os.Args[1] == "rm") {
+		if len(os.Args) != 2 {
+			return fmt.Errorf("usage: opencode-sandbox %s", os.Args[1])
+		}
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+		defer cancel()
+		if os.Args[1] == "remove" || os.Args[1] == "rm" {
+			return sandbox.Remove(ctx)
+		}
+		vms, err := sandbox.List(ctx)
+		if err != nil {
+			return err
+		}
+		if len(vms) == 0 {
+			_, err := fmt.Fprintln(os.Stdout, "No managed VMs found.")
+			return err
+		}
+		w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+		fmt.Fprintln(w, "NAME\tSTATE")
+		for _, vm := range vms {
+			fmt.Fprintf(w, "%s\t%s\n", vm.Name(), vm.Status())
+		}
+		return w.Flush()
+	}
 	flags := flag.NewFlagSet("opencode-sandbox", flag.ContinueOnError)
+	flags.Usage = func() {
+		fmt.Fprintln(flags.Output(), "Usage: opencode-sandbox [launch flags] | list (ls) | remove (rm)")
+		fmt.Fprintln(flags.Output(), "  list, ls    List all managed VMs, including stopped VMs")
+		fmt.Fprintln(flags.Output(), "  remove, rm  Stop and delete all managed VMs without confirmation")
+		flags.PrintDefaults()
+	}
 	configPath := flags.String("config", "", "Guest OpenCode JSON configuration file")
 	cliConfigPath := flags.String("cli-config", "", "Guest OpenCode CLI JSON settings file")
 	awsRole := flags.String("aws-role", "", "IAM role ARN to assume for this session (optional)")
@@ -32,7 +63,7 @@ func run() (err error) {
 		return err
 	}
 	if flags.NArg() != 0 {
-		return fmt.Errorf("usage: opencode-sandbox [--config path] [--cli-config path] [--aws-role arn [--aws-profile name]] (run inside a Git worktree)")
+		return fmt.Errorf("usage: opencode-sandbox [--config path] [--cli-config path] [--aws-role arn [--aws-profile name]] | list (ls) | remove (rm) (launch inside a Git worktree)")
 	}
 	if err := identifyHerdrAgent(); err != nil {
 		return err
