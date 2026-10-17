@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 
@@ -16,11 +17,23 @@ func main() {
 }
 
 func run() error {
-	if len(os.Args) != 1 {
-		return fmt.Errorf("usage: opencode-sandbox (run inside a Git worktree)")
+	flags := flag.NewFlagSet("opencode-sandbox", flag.ContinueOnError)
+	configPath := flags.String("config", "", "Guest OpenCode JSON configuration file")
+	if err := flags.Parse(os.Args[1:]); err != nil {
+		if err == flag.ErrHelp {
+			return nil
+		}
+		return err
+	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf("usage: opencode-sandbox [--config path] (run inside a Git worktree)")
+	}
+	config, err := sandbox.LoadConfig(*configPath)
+	if err != nil {
+		return err
 	}
 	ctx := context.Background()
-	s, err := sandbox.Prepare(ctx, ".")
+	s, err := sandbox.Prepare(ctx, ".", config)
 	if err != nil {
 		return err
 	}

@@ -30,9 +30,14 @@ func newWorktree(t *testing.T) string {
 
 func prepareSandbox(t *testing.T, worktree string) *sandbox.Sandbox {
 	t.Helper()
+	return prepareSandboxWithConfig(t, worktree, nil)
+}
+
+func prepareSandboxWithConfig(t *testing.T, worktree string, config []byte) *sandbox.Sandbox {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	s, err := sandbox.Prepare(ctx, worktree)
+	s, err := sandbox.Prepare(ctx, worktree, config)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

@@ -22,7 +22,7 @@ type Sandbox struct {
 
 // Prepare creates or resumes one VM per worktree and initializes project tools.
 // It does not transfer host credentials.
-func Prepare(ctx context.Context, directory string) (*Sandbox, error) {
+func Prepare(ctx context.Context, directory string, config []byte) (*Sandbox, error) {
 	git := func(args ...string) (string, error) {
 		out, err := exec.CommandContext(ctx, "git", append([]string{"-C", directory}, args...)...).CombinedOutput()
 		if err != nil {
@@ -76,6 +76,10 @@ fi`)
 	if err != nil {
 		s.Close()
 		return nil, fmt.Errorf("initialize project tools: %w", err)
+	}
+	if err := s.configureOpenCode(ctx, config); err != nil {
+		s.Close()
+		return nil, fmt.Errorf("configure guest OpenCode: %w", err)
 	}
 	return s, nil
 }
