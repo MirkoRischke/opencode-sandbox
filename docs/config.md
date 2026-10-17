@@ -5,6 +5,9 @@ Copy `docs/config.example.toml` to
 `$XDG_CONFIG_HOME/opencode-sandbox/config.toml`). This is the general launcher
 configuration; OpenCode's `opencode.json` and `cli.json` remain separate.
 
+AWS role access is enabled per launch with `--aws-role` and optional
+`--aws-profile`, not with global configuration. See [AWS credentials](aws.md).
+
 The launcher always stops its VM on exit, including errors and handled termination
 signals. It never removes the VM: installed tools and guest files persist for the
 next launch. Forced termination (`SIGKILL`) or a host crash cannot run cleanup.

@@ -12,6 +12,7 @@ COPY --from=mise /usr/local/bin/mise /usr/local/bin/mise
 # Keep Debian package updates available when rebuilding the image.
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    awscli \
     ca-certificates \
     curl \
     git \
@@ -33,6 +34,9 @@ ARG OPENCODE_VERSION
 RUN mise use --global node@24 \
     && mise use --global opencode@${OPENCODE_VERSION} \
     && mise exec -- opencode --version
+
+# AWS CLI bundles its own CA file; use the trust store updated by Microsandbox.
+ENV AWS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
 WORKDIR /workspace
 CMD ["/bin/bash"]

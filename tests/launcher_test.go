@@ -100,3 +100,32 @@ func TestLauncherRejectsInvalidSettingsBeforeStartingVM(t *testing.T) {
 	require.Contains(t, string(output), "network.allowed_hosts")
 	require.Contains(t, string(output), "config.toml")
 }
+
+func TestLauncherValidatesAWSFlagsBeforeStartingVM(t *testing.T) {
+	binary := buildLauncher(t)
+	for _, args := range [][]string{
+		{"--aws-role", "not-a-role"},
+		{"--aws-profile", "sandbox-test"},
+		{"--aws-role", "arn:aws:iam::123456789012:user/NotARole"},
+	} {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		command := exec.CommandContext(ctx, binary, args...)
+		command.Dir = t.TempDir()
+		output, err := command.CombinedOutput()
+		cancel()
+		require.Error(t, err)
+		require.Contains(t, string(output), "--aws-role")
+		require.NotContains(t, string(output), "discover worktree")
+	}
+}
+
+func TestLauncherAcceptsAWSRoleWithoutProfile(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	command := exec.CommandContext(ctx, buildLauncher(t), "--aws-role", "arn:aws:iam::123456789012:role/SandboxReadOnly")
+	command.Dir = t.TempDir()
+	output, err := command.CombinedOutput()
+	require.Error(t, err)
+	require.Contains(t, string(output), "discover worktree")
+}

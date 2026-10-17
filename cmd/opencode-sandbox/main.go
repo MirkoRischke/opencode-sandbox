@@ -23,6 +23,8 @@ func run() (err error) {
 	flags := flag.NewFlagSet("opencode-sandbox", flag.ContinueOnError)
 	configPath := flags.String("config", "", "Guest OpenCode JSON configuration file")
 	cliConfigPath := flags.String("cli-config", "", "Guest OpenCode CLI JSON settings file")
+	awsRole := flags.String("aws-role", "", "IAM role ARN to assume for this session (optional)")
+	awsProfile := flags.String("aws-profile", "", "Optional host AWS source profile (requires --aws-role)")
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		if err == flag.ErrHelp {
 			return nil
@@ -30,7 +32,14 @@ func run() (err error) {
 		return err
 	}
 	if flags.NArg() != 0 {
-		return fmt.Errorf("usage: opencode-sandbox [--config path] [--cli-config path] (run inside a Git worktree)")
+		return fmt.Errorf("usage: opencode-sandbox [--config path] [--cli-config path] [--aws-role arn [--aws-profile name]] (run inside a Git worktree)")
+	}
+	var awsOptions *sandbox.AWSOptions
+	if *awsRole != "" || *awsProfile != "" {
+		awsOptions = &sandbox.AWSOptions{SourceProfile: *awsProfile, RoleARN: *awsRole}
+		if err := awsOptions.Validate(); err != nil {
+			return err
+		}
 	}
 	config, err := sandbox.LoadConfig(*configPath)
 	if err != nil {
@@ -55,6 +64,11 @@ func run() (err error) {
 		return err
 	}
 	defer func() { err = errors.Join(err, s.Shutdown()) }()
+	stopAWS, err := s.StartAWS(ctx, awsOptions)
+	if err != nil {
+		return err
+	}
+	defer stopAWS()
 	if err := s.SyncTUIConfig(ctx, cliConfig); err != nil {
 		return err
 	}
