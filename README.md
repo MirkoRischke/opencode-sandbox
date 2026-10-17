@@ -52,6 +52,7 @@ opencode-sandbox        # Launch from inside a Git worktree
 opencode-sandbox list   # List managed VMs (alias: ls)
 opencode-sandbox remove # Delete ALL managed VMs without confirmation (alias: rm)
 opencode-sandbox --help # Show launch options
+opencode-sandbox config default # Print documented launcher defaults
 ```
 
 Configure network access and secrets in [launcher configuration](docs/config.md).

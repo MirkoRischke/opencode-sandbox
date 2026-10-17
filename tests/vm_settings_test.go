@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	launcherconfig "opencode-sandbox/internal/config"
 	"opencode-sandbox/internal/sandbox"
 
 	"github.com/stretchr/testify/require"
@@ -15,7 +16,7 @@ import (
 func TestVMResourcesFollowConfigAndPersistAcrossResume(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	writeSettings(t, "[vm]\ncpus = 1\nmemory_mib = 1024\nroot_disk_mib = 5120\n")
-	settings, err := sandbox.LoadSettings()
+	settings, err := launcherconfig.LoadSettings()
 	require.NoError(t, err)
 	s := startSandboxWithSettings(t, settings)
 	var config m.SandboxConfig
@@ -28,7 +29,7 @@ func TestVMResourcesFollowConfigAndPersistAcrossResume(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	require.NoError(t, s.Stop(ctx))
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, sandbox.DefaultSettings())
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, launcherconfig.DefaultSettings())
 	require.NoError(t, err)
 	defer resumed.Close()
 	require.NoError(t, json.Unmarshal([]byte(storedSandboxConfig(t, resumed)), &config))

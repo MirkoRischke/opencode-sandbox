@@ -8,20 +8,20 @@ import (
 	"os"
 	"strings"
 
-	"opencode-sandbox/internal/sandbox"
+	launcherconfig "opencode-sandbox/internal/config"
 
 	"github.com/BurntSushi/toml"
 	"golang.org/x/term"
 )
 
-func approveRepoConfig(path string, data []byte, settings sandbox.Settings) error {
+func approveRepoConfig(path string, data []byte, settings launcherconfig.Settings) error {
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return fmt.Errorf("untrusted repo config %q; launch interactively to approve it", path)
 	}
 	return confirmRepoConfig(os.Stdin, os.Stderr, path, data, settings)
 }
 
-func confirmRepoConfig(input io.Reader, output io.Writer, path string, data []byte, settings sandbox.Settings) error {
+func confirmRepoConfig(input io.Reader, output io.Writer, path string, data []byte, settings launcherconfig.Settings) error {
 	var effective bytes.Buffer
 	if err := toml.NewEncoder(&effective).Encode(settings); err != nil {
 		return err

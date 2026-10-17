@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	launcherconfig "opencode-sandbox/internal/config"
 	"opencode-sandbox/internal/sandbox"
 
 	"github.com/stretchr/testify/require"
@@ -24,7 +25,33 @@ func repoSettingsFixture(t *testing.T, config string) (string, string) {
 	return root, path
 }
 
-func approveSettings(string, []byte, sandbox.Settings) error { return nil }
+func approveSettings(string, []byte, launcherconfig.Settings) error { return nil }
+
+func TestRepoSettingsAdditionalNetworkHostsMergeIndependently(t *testing.T) {
+	for _, tc := range []struct {
+		name, config        string
+		allowed, additional []string
+	}{
+		{"add repo hosts", "[network]\nadditional_allowed_hosts = ['registry.npmjs.org']\n", []string{"github.com"}, []string{"registry.npmjs.org"}},
+		{"inherit both", "# inherit\n", []string{"github.com"}, []string{"global.example.com"}},
+		{"clear additions", "[network]\nadditional_allowed_hosts = []\n", []string{"github.com"}, []string{}},
+		{"clear baseline", "[network]\nallowed_hosts = []\n", []string{}, []string{"global.example.com"}},
+		{"deny all", "[network]\nallowed_hosts = []\nadditional_allowed_hosts = []\n", []string{}, []string{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root, _ := repoSettingsFixture(t, tc.config)
+			writeSettings(t, "[network]\nallowed_hosts = ['github.com']\nadditional_allowed_hosts = ['global.example.com']\n")
+			settings, err := launcherconfig.LoadRepoSettings(root, func(_ string, _ []byte, effective launcherconfig.Settings) error {
+				require.Equal(t, tc.allowed, effective.Network.AllowedHosts)
+				require.Equal(t, tc.additional, effective.Network.AdditionalAllowedHosts)
+				return nil
+			})
+			require.NoError(t, err)
+			require.Equal(t, tc.allowed, settings.Network.AllowedHosts)
+			require.Equal(t, tc.additional, settings.Network.AdditionalAllowedHosts)
+		})
+	}
+}
 
 func TestRepoSettingsMergeAllAttributes(t *testing.T) {
 	root, path := repoSettingsFixture(t, `
@@ -57,7 +84,7 @@ headers = ['authorization']
 	require.NoError(t, os.Mkdir(subdir, 0700))
 	require.NoError(t, os.WriteFile(filepath.Join(subdir, ".opencode-sandbox.toml"), []byte("invalid"), 0600))
 	calls := 0
-	settings, err := sandbox.LoadRepoSettings(subdir, func(gotPath string, data []byte, effective sandbox.Settings) error {
+	settings, err := launcherconfig.LoadRepoSettings(subdir, func(gotPath string, data []byte, effective launcherconfig.Settings) error {
 		calls++
 		require.Equal(t, path, gotPath)
 		want, err := os.ReadFile(path)
@@ -68,9 +95,9 @@ headers = ['authorization']
 	})
 	require.NoError(t, err)
 	require.Equal(t, 1, calls)
-	require.Equal(t, sandbox.VMSettings{CPUs: 4, MemoryMiB: 8192, RootDiskMiB: 9000}, settings.VM)
+	require.Equal(t, launcherconfig.VMSettings{CPUs: 4, MemoryMiB: 8192, RootDiskMiB: 9000}, settings.VM)
 	require.Empty(t, settings.Network.AllowedHosts)
-	require.Equal(t, sandbox.SecretSettings{
+	require.Equal(t, launcherconfig.SecretSettings{
 		File: "creds/github-token", Env: "GH_TOKEN",
 		AllowedHosts: []string{"custom.example.com"}, Headers: []string{"x-token"},
 	}, settings.Secrets["github"])
@@ -78,14 +105,14 @@ headers = ['authorization']
 	// Credential files do not exist: loading/reviewing settings must not read them.
 	_, err = sandbox.LoadSecrets(settings)
 	require.Error(t, err)
-	_, err = sandbox.LoadRepoSettings(root, nil)
+	_, err = launcherconfig.LoadRepoSettings(root, nil)
 	require.NoError(t, err)
 }
 
 func TestRepoSettingsSecretFileOverrideUsesRepoOrigin(t *testing.T) {
 	root, _ := repoSettingsFixture(t, "[secrets.github]\nfile = 'local-token'\n")
 	writeSettings(t, "[secrets.github]\nfile = 'global-token'\nenv = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
-	settings, err := sandbox.LoadRepoSettings(root, approveSettings)
+	settings, err := launcherconfig.LoadRepoSettings(root, approveSettings)
 	require.NoError(t, err)
 	require.Equal(t, filepath.Join(root, "local-token"), settings.Secrets["github"].File)
 }
@@ -93,13 +120,13 @@ func TestRepoSettingsSecretFileOverrideUsesRepoOrigin(t *testing.T) {
 func TestRepoSettingsTrustUsesExactReviewedBytes(t *testing.T) {
 	original := "[vm]\nmemory_mib = 8192\n"
 	root, path := repoSettingsFixture(t, original)
-	settings, err := sandbox.LoadRepoSettings(root, func(_ string, data []byte, _ sandbox.Settings) error {
+	settings, err := launcherconfig.LoadRepoSettings(root, func(_ string, data []byte, _ launcherconfig.Settings) error {
 		require.Equal(t, original, string(data))
 		return os.WriteFile(path, []byte("[vm]\nmemory_mib = 16384\n"), 0600)
 	})
 	require.NoError(t, err)
 	require.EqualValues(t, 8192, settings.VM.MemoryMiB)
-	_, err = sandbox.LoadRepoSettings(root, nil)
+	_, err = launcherconfig.LoadRepoSettings(root, nil)
 	require.ErrorContains(t, err, "untrusted repo config")
 
 	trustPath := filepath.Join(os.Getenv("XDG_STATE_HOME"), "opencode-sandbox", "trust.json")
@@ -123,30 +150,30 @@ func TestRepoSettingsTrustUsesExactReviewedBytes(t *testing.T) {
 
 func TestRepoSettingsTrustBoundToCanonicalRepoPath(t *testing.T) {
 	root, path := repoSettingsFixture(t, "# approved\n")
-	_, err := sandbox.LoadRepoSettings(root, approveSettings)
+	_, err := launcherconfig.LoadRepoSettings(root, approveSettings)
 	require.NoError(t, err)
 	alias := filepath.Join(t.TempDir(), "alias")
 	require.NoError(t, os.Symlink(root, alias))
-	_, err = sandbox.LoadRepoSettings(alias, nil)
+	_, err = launcherconfig.LoadRepoSettings(alias, nil)
 	require.NoError(t, err)
 	other := filepath.Join(t.TempDir(), "other")
 	runGit(t, "init", other)
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(filepath.Join(other, ".opencode-sandbox.toml"), data, 0600))
-	_, err = sandbox.LoadRepoSettings(other, nil)
+	_, err = launcherconfig.LoadRepoSettings(other, nil)
 	require.ErrorContains(t, err, "untrusted repo config")
 	// Even a comment-only change invalidates approval.
 	require.NoError(t, os.WriteFile(path, []byte("# changed\n"), 0600))
-	_, err = sandbox.LoadRepoSettings(root, nil)
+	_, err = launcherconfig.LoadRepoSettings(root, nil)
 	require.ErrorContains(t, err, "untrusted repo config")
 }
 
 func TestRepoSettingsApprovalRejectedOrUnavailable(t *testing.T) {
 	root, _ := repoSettingsFixture(t, "[vm]\ncpus = 4\n")
-	_, err := sandbox.LoadRepoSettings(root, nil)
+	_, err := launcherconfig.LoadRepoSettings(root, nil)
 	require.ErrorContains(t, err, "launch interactively")
-	_, err = sandbox.LoadRepoSettings(root, func(string, []byte, sandbox.Settings) error {
+	_, err = launcherconfig.LoadRepoSettings(root, func(string, []byte, launcherconfig.Settings) error {
 		return fmt.Errorf("declined")
 	})
 	require.ErrorContains(t, err, "declined")
@@ -157,9 +184,9 @@ func TestRepoSettingsApprovalRejectedOrUnavailable(t *testing.T) {
 func TestRepoSettingsMissingConfigSkipsTrust(t *testing.T) {
 	root, path := repoSettingsFixture(t, "")
 	require.NoError(t, os.Remove(path))
-	settings, err := sandbox.LoadRepoSettings(root, nil)
+	settings, err := launcherconfig.LoadRepoSettings(root, nil)
 	require.NoError(t, err)
-	require.Equal(t, sandbox.DefaultSettings(), settings)
+	require.Equal(t, launcherconfig.DefaultSettings(), settings)
 	entries, err := os.ReadDir(os.Getenv("XDG_STATE_HOME"))
 	require.NoError(t, err)
 	require.Empty(t, entries)
@@ -169,11 +196,12 @@ func TestRepoSettingsRejectInvalidBeforeApproval(t *testing.T) {
 	for _, config := range []string{
 		"[network", "[vm]\ncpuz = 4", "[vm]\ncpus = 0", "[vm]\ncpus = 256",
 		"[network]\nallowed_hosts = 'github.com'", "[network]\nallowed_hosts = ['*.github.com']",
+		"[network]\nadditional_allowed_hosts = ['*.github.com']", "[network]\nadditional_allowed_hosts = 'github.com'",
 		"[secrets.test]\nfile = 'token'", "[secrets.test]\nvalue = 'inline'",
 	} {
 		t.Run(config, func(t *testing.T) {
 			root, _ := repoSettingsFixture(t, config)
-			_, err := sandbox.LoadRepoSettings(root, func(string, []byte, sandbox.Settings) error {
+			_, err := launcherconfig.LoadRepoSettings(root, func(string, []byte, launcherconfig.Settings) error {
 				t.Fatal("invalid config must not reach approval")
 				return nil
 			})
@@ -189,7 +217,7 @@ func TestRepoSettingsMalformedTrustFailsClosed(t *testing.T) {
 			dir := filepath.Join(os.Getenv("XDG_STATE_HOME"), "opencode-sandbox")
 			require.NoError(t, os.Mkdir(dir, 0700))
 			require.NoError(t, os.WriteFile(filepath.Join(dir, "trust.json"), []byte(stored), 0600))
-			_, err := sandbox.LoadRepoSettings(root, func(string, []byte, sandbox.Settings) error {
+			_, err := launcherconfig.LoadRepoSettings(root, func(string, []byte, launcherconfig.Settings) error {
 				t.Fatal("malformed trust must fail closed")
 				return nil
 			})
@@ -202,7 +230,7 @@ func TestRepoSettingsTrustFallsBackToHome(t *testing.T) {
 	root, _ := repoSettingsFixture(t, "# config\n")
 	t.Setenv("XDG_STATE_HOME", "")
 	t.Setenv("HOME", t.TempDir())
-	_, err := sandbox.LoadRepoSettings(root, approveSettings)
+	_, err := launcherconfig.LoadRepoSettings(root, approveSettings)
 	require.NoError(t, err)
 	_, err = os.Stat(filepath.Join(os.Getenv("HOME"), ".local/state/opencode-sandbox/trust.json"))
 	require.NoError(t, err)

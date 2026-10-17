@@ -5,58 +5,24 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 
+	"opencode-sandbox/internal/config"
+
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
-
-type SecretSettings struct {
-	File         string   `toml:"file"`
-	Env          string   `toml:"env"`
-	AllowedHosts []string `toml:"allowed_hosts"`
-	Headers      []string `toml:"headers"`
-}
 
 // Secret contains a resolved host credential. Never log it or expose it to guests.
 type Secret struct {
 	entry m.SecretEntry
 }
 
-var envPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-var headerPattern = regexp.MustCompile("^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
-
-func validateSecrets(config map[string]SecretSettings) error {
-	envs := map[string]bool{}
-	for name, secret := range config {
-		if secret.File == "" || !envPattern.MatchString(secret.Env) {
-			return fmt.Errorf("secret %q requires a file and a valid environment variable name", name)
-		}
-		if envs[secret.Env] {
-			return fmt.Errorf("duplicate secret environment variable %q", secret.Env)
-		}
-		envs[secret.Env] = true
-		if len(secret.AllowedHosts) == 0 || len(secret.Headers) == 0 {
-			return fmt.Errorf("secret %q requires non-empty allowed_hosts and headers", name)
-		}
-		if err := (NetworkSettings{AllowedHosts: secret.AllowedHosts}).validate(); err != nil {
-			return fmt.Errorf("secret %q: %w", name, err)
-		}
-		for _, header := range secret.Headers {
-			if !headerPattern.MatchString(header) {
-				return fmt.Errorf("secret %q has an invalid header name", name)
-			}
-		}
-	}
-	return nil
-}
-
 // LoadSecrets reads only explicitly configured files. Remaining relative paths
-// use the global config directory; repo paths are resolved by LoadRepoSettings.
+// use the global config directory; repo paths are resolved by config.LoadRepoSettings.
 // Host environment credentials are ignored.
-func LoadSecrets(settings Settings) ([]Secret, error) {
-	if err := validateSecrets(settings.Secrets); err != nil {
+func LoadSecrets(settings config.Settings) ([]Secret, error) {
+	if err := config.ValidateSecrets(settings.Secrets); err != nil {
 		return nil, err
 	}
 	if len(settings.Secrets) == 0 {

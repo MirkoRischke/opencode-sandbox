@@ -9,8 +9,38 @@ import (
 	"testing"
 	"time"
 
+	launcherconfig "opencode-sandbox/internal/config"
+
+	"github.com/BurntSushi/toml"
 	"github.com/stretchr/testify/require"
 )
+
+func TestLauncherPrintsDefaultConfigWithoutLoadingHostState(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("HERDR_ENV", "1")
+	writeSettings(t, "invalid TOML [")
+	trustDir := filepath.Join(os.Getenv("XDG_STATE_HOME"), "opencode-sandbox")
+	require.NoError(t, os.Mkdir(trustDir, 0700))
+	trustPath := filepath.Join(trustDir, "trust.json")
+	require.NoError(t, os.WriteFile(trustPath, []byte("invalid JSON"), 0600))
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	command := exec.CommandContext(ctx, buildLauncher(t), "config", "default")
+	command.Dir = t.TempDir() // Printing defaults must work outside Git.
+	output, err := command.CombinedOutput()
+	require.NoError(t, err, "%s", output)
+	var settings launcherconfig.Settings
+	metadata, err := toml.Decode(string(output), &settings)
+	require.NoError(t, err)
+	require.Empty(t, metadata.Undecoded())
+	require.Equal(t, launcherconfig.DefaultSettings(), settings)
+	require.Contains(t, string(output), "# Number of virtual CPUs")
+	require.Contains(t, string(output), "# [secrets.example]")
+	stored, err := os.ReadFile(trustPath)
+	require.NoError(t, err)
+	require.Equal(t, "invalid JSON", string(stored))
+}
 
 func TestLauncherRejectsDirectoriesOutsideGit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)

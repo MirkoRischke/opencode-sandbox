@@ -1,4 +1,4 @@
-package sandbox
+package config
 
 import (
 	"bytes"
@@ -82,7 +82,7 @@ func mergeRepoSettings(settings Settings, data []byte, root string) (Settings, e
 		return settings, err
 	}
 	// Resolve only paths supplied by this layer; inherited paths retain their
-	// global config directory origin in LoadSecrets.
+	// global config directory origin when credentials are loaded by the sandbox.
 	if secrets, ok := overlay["secrets"].(map[string]any); ok {
 		for _, value := range secrets {
 			if secret, ok := value.(map[string]any); ok {
@@ -101,7 +101,7 @@ func mergeRepoSettings(settings Settings, data []byte, root string) (Settings, e
 	if _, err := toml.Decode(encoded.String(), &merged); err != nil {
 		return settings, err
 	}
-	return merged, merged.validate()
+	return merged, merged.Validate()
 }
 
 // Tables merge recursively; every other value (including empty arrays) replaces.

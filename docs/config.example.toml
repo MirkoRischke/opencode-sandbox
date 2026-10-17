@@ -71,6 +71,12 @@ allowed_hosts = [
   # "httpbingo.org",
 ]
 
+# Optional repo-root .opencode-sandbox.toml additions to the global baseline above:
+# [network]
+# additional_allowed_hosts = ["nodejs.org"]
+# Both lists use replacement semantics across configs; their union is allowed.
+# Set both allowed_hosts and additional_allowed_hosts to [] to deny all internet.
+
 # Scope / limits:
 # - Based on this repo's mise.toml and your OpenAI-only sandbox configuration.
 # - Other projects, LSP downloads, Git LFS, and Actions logs can need extra hosts.

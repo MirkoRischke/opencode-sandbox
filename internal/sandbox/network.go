@@ -3,10 +3,12 @@ package sandbox
 import (
 	"strings"
 
+	"opencode-sandbox/internal/config"
+
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
-func (n NetworkSettings) policy() *m.NetworkConfig {
+func networkPolicy(n config.NetworkSettings) *m.NetworkConfig {
 	policy := &m.NetworkConfig{
 		DefaultEgress:  m.PolicyActionDeny,
 		DefaultIngress: m.PolicyActionDeny,
@@ -19,11 +21,19 @@ func (n NetworkSettings) policy() *m.NetworkConfig {
 			Action: m.PolicyActionDeny, Direction: m.PolicyDirectionEgress, Destination: destination,
 		})
 	}
-	for _, host := range n.AllowedHosts {
-		policy.Rules = append(policy.Rules, m.PolicyRule{
-			Action: m.PolicyActionAllow, Direction: m.PolicyDirectionEgress,
-			Destination: strings.ToLower(host), Protocol: m.PolicyProtocolTCP, Port: "443",
-		})
+	seen := make(map[string]bool)
+	for _, hosts := range [][]string{n.AllowedHosts, n.AdditionalAllowedHosts} {
+		for _, host := range hosts {
+			host = strings.ToLower(host)
+			if seen[host] {
+				continue
+			}
+			seen[host] = true
+			policy.Rules = append(policy.Rules, m.PolicyRule{
+				Action: m.PolicyActionAllow, Direction: m.PolicyDirectionEgress,
+				Destination: host, Protocol: m.PolicyProtocolTCP, Port: "443",
+			})
+		}
 	}
 	return policy
 }

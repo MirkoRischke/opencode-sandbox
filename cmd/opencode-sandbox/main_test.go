@@ -26,6 +26,19 @@ func TestManagementCommandsRejectExtraArguments(t *testing.T) {
 	}
 }
 
+func TestConfigCommandRejectsInvalidArguments(t *testing.T) {
+	for _, args := range [][]string{{"config"}, {"config", "show"}, {"config", "default", "extra"}} {
+		t.Run(strings.Join(args, "/"), func(t *testing.T) {
+			original := os.Args
+			t.Cleanup(func() { os.Args = original })
+			os.Args = append([]string{"opencode-sandbox"}, args...)
+			if err := run(); err == nil || !strings.Contains(err.Error(), "usage: opencode-sandbox config default") {
+				t.Fatalf("expected config usage error, got %v", err)
+			}
+		})
+	}
+}
+
 func TestIdentifyHerdrAgent(t *testing.T) {
 	if os.Getenv("OPENCODE_SANDBOX_HERDR_TEST") == "1" {
 		if err := identifyHerdrAgent(); err != nil {

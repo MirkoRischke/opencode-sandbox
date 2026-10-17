@@ -5,13 +5,14 @@ import (
 	"testing"
 	"time"
 
+	launcherconfig "opencode-sandbox/internal/config"
 	"opencode-sandbox/internal/sandbox"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func startSandboxWithSettings(t *testing.T, settings sandbox.Settings) *sandbox.Sandbox {
+func startSandboxWithSettings(t *testing.T, settings launcherconfig.Settings) *sandbox.Sandbox {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

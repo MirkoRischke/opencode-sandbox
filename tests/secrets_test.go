@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	launcherconfig "opencode-sandbox/internal/config"
 	"opencode-sandbox/internal/sandbox"
 
 	"github.com/stretchr/testify/require"
@@ -19,7 +20,7 @@ func TestUnconfiguredSecretsAreNotLoadedOrInjected(t *testing.T) {
 	// Invalid contents and permissions would fail if the implicit loader ran.
 	require.NoError(t, os.WriteFile(path, nil, 0644))
 	t.Setenv("GH_TOKEN", "host-credential-must-not-be-used")
-	settings, err := sandbox.LoadSettings()
+	settings, err := launcherconfig.LoadSettings()
 	require.NoError(t, err)
 	secrets, err := sandbox.LoadSecrets(settings)
 	require.NoError(t, err)
@@ -42,7 +43,7 @@ func TestSecretSettingsRejectInvalidScopes(t *testing.T) {
 		t.Run(fields, func(t *testing.T) {
 			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 			writeSettings(t, "[secrets.test]\n"+fields+"\n")
-			_, err := sandbox.LoadSettings()
+			_, err := launcherconfig.LoadSettings()
 			require.Error(t, err)
 		})
 	}
@@ -74,7 +75,7 @@ env = 'SECOND_TOKEN'
 allowed_hosts = ['httpbingo.org']
 headers = ['X-Api-Key']
 `)
-	settings, err := sandbox.LoadSettings()
+	settings, err := launcherconfig.LoadSettings()
 	require.NoError(t, err)
 	secrets, err := sandbox.LoadSecrets(settings)
 	require.NoError(t, err)
@@ -115,7 +116,7 @@ func TestSecretHostDoesNotExpandNetworkAllowlist(t *testing.T) {
 }
 
 func TestSecretIsNotSubstitutedOnAnUnlistedHost(t *testing.T) {
-	settings := sandbox.DefaultSettings()
+	settings := launcherconfig.DefaultSettings()
 	settings.Network.AllowedHosts = []string{"httpbingo.org"}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

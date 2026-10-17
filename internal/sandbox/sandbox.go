@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	launcherconfig "opencode-sandbox/internal/config"
+
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
@@ -22,8 +24,8 @@ type Sandbox struct {
 
 // Prepare creates or resumes one VM per worktree and initializes project tools.
 // GitHub credentials stay in the host proxy; the guest gets only a placeholder.
-func Prepare(ctx context.Context, directory string, config []byte, secrets []Secret, settings Settings) (*Sandbox, error) {
-	if err := settings.validate(); err != nil {
+func Prepare(ctx context.Context, directory string, config []byte, secrets []Secret, settings launcherconfig.Settings) (*Sandbox, error) {
+	if err := settings.Validate(); err != nil {
 		return nil, err
 	}
 	git := func(args ...string) (string, error) {
@@ -64,7 +66,7 @@ func Prepare(ctx context.Context, directory string, config []byte, secrets []Sec
 		m.WithCPUs(settings.VM.CPUs), m.WithMemory(settings.VM.MemoryMiB),
 		m.WithRootDisk(m.RootDisk.Managed(settings.VM.RootDiskMiB)),
 		m.WithWorkdir(root), m.WithMounts(mounts), m.WithDetached(),
-		m.WithNetwork(settings.Network.policy()), m.WithInterceptTLS(),
+		m.WithNetwork(networkPolicy(settings.Network)), m.WithInterceptTLS(),
 		m.WithLabel("app", "opencode-sandbox"),
 	}
 	s.vm, err = connectWithSecrets(ctx, s.Name, secrets, opts)

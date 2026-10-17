@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	launcherconfig "opencode-sandbox/internal/config"
 	"opencode-sandbox/internal/sandbox"
 
 	"github.com/stretchr/testify/require"
@@ -14,7 +15,7 @@ import (
 func TestRestrictedNetworkAllowsOnlyConfiguredHTTPSHostsWithoutCredentials(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	writeSettings(t, "[network]\nallowed_hosts = ['GitHub.com']\n")
-	settings, err := sandbox.LoadSettings()
+	settings, err := launcherconfig.LoadSettings()
 	require.NoError(t, err)
 	s := startSandboxWithSettings(t, settings)
 	execInSandbox(t, s, "curl", "--noproxy", "*", "--fail", "--silent", "--show-error", "--max-time", "15", "https://github.com")
@@ -42,13 +43,13 @@ func TestRestrictedNetworkAllowsOnlyConfiguredHTTPSHostsWithoutCredentials(t *te
 }
 
 func TestEmptyNetworkAllowlistBlocksInternet(t *testing.T) {
-	s := startSandboxWithSettings(t, sandbox.DefaultSettings())
+	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
 	requireNetworkBlocked(t, s, "https://github.com")
 }
 
 func TestMissingConfigDefaultsToDenyingInternetInVM(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	settings, err := sandbox.LoadSettings()
+	settings, err := launcherconfig.LoadSettings()
 	require.NoError(t, err)
 	s := startSandboxWithSettings(t, settings)
 	requireNetworkBlocked(t, s, "https://github.com")
@@ -57,11 +58,11 @@ func TestMissingConfigDefaultsToDenyingInternetInVM(t *testing.T) {
 }
 
 func TestExistingSandboxRetainsItsNetworkPolicy(t *testing.T) {
-	s := startSandboxWithSettings(t, sandbox.DefaultSettings())
+	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	require.NoError(t, s.Stop(ctx))
-	settings := sandbox.DefaultSettings()
+	settings := launcherconfig.DefaultSettings()
 	settings.Network.AllowedHosts = []string{"github.com"}
 	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, settings)
 	require.NoError(t, err)

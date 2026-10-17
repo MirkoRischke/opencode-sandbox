@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	launcherconfig "opencode-sandbox/internal/config"
 	"opencode-sandbox/internal/sandbox"
 
 	"github.com/stretchr/testify/assert"
@@ -48,9 +49,9 @@ func githubSecrets(t *testing.T, token []byte) []sandbox.Secret {
 	return loadGitHubSecrets(t, path)
 }
 
-func githubSecretSettings(path string) sandbox.Settings {
-	settings := sandbox.DefaultSettings()
-	settings.Secrets = map[string]sandbox.SecretSettings{"github": {
+func githubSecretSettings(path string) launcherconfig.Settings {
+	settings := launcherconfig.DefaultSettings()
+	settings.Secrets = map[string]launcherconfig.SecretSettings{"github": {
 		File: path, Env: "GH_TOKEN", AllowedHosts: []string{"api.github.com", "github.com"}, Headers: []string{"authorization"},
 	}}
 	return settings

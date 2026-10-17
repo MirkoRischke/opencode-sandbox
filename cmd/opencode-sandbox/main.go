@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"text/tabwriter"
 
+	launcherconfig "opencode-sandbox/internal/config"
 	"opencode-sandbox/internal/sandbox"
 )
 
@@ -21,6 +22,12 @@ func main() {
 }
 
 func run() (err error) {
+	if len(os.Args) > 1 && os.Args[1] == "config" {
+		if len(os.Args) != 3 || os.Args[2] != "default" {
+			return fmt.Errorf("usage: opencode-sandbox config default")
+		}
+		return launcherconfig.WriteDefaultConfig(os.Stdout)
+	}
 	if len(os.Args) > 1 && (os.Args[1] == "list" || os.Args[1] == "ls" || os.Args[1] == "remove" || os.Args[1] == "rm") {
 		if len(os.Args) != 2 {
 			return fmt.Errorf("usage: opencode-sandbox %s", os.Args[1])
@@ -47,9 +54,10 @@ func run() (err error) {
 	}
 	flags := flag.NewFlagSet("opencode-sandbox", flag.ContinueOnError)
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: opencode-sandbox [launch flags] | list (ls) | remove (rm)")
+		fmt.Fprintln(flags.Output(), "Usage: opencode-sandbox [launch flags] | list (ls) | remove (rm) | config default")
 		fmt.Fprintln(flags.Output(), "  list, ls    List all managed VMs, including stopped VMs")
 		fmt.Fprintln(flags.Output(), "  remove, rm  Stop and delete all managed VMs without confirmation")
+		fmt.Fprintln(flags.Output(), "  config default  Print documented launcher defaults without loading configuration")
 		flags.PrintDefaults()
 	}
 	configPath := flags.String("config", "", "Guest OpenCode JSON configuration file")
@@ -83,7 +91,7 @@ func run() (err error) {
 	if err != nil {
 		return err
 	}
-	settings, err := sandbox.LoadRepoSettings(".", approveRepoConfig)
+	settings, err := launcherconfig.LoadRepoSettings(".", approveRepoConfig)
 	if err != nil {
 		return err
 	}

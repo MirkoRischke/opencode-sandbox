@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"opencode-sandbox/internal/sandbox"
+	launcherconfig "opencode-sandbox/internal/config"
 
 	"github.com/stretchr/testify/require"
 )
@@ -14,18 +14,41 @@ func TestSettingsLoadFromConfigDirectory(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	writeSettings(t, "[network]\nallowed_hosts = ['github.com', 'api.github.com']\n")
 
-	settings, err := sandbox.LoadSettings()
+	settings, err := launcherconfig.LoadSettings()
 
 	require.NoError(t, err)
 	require.Equal(t, []string{"github.com", "api.github.com"}, settings.Network.AllowedHosts)
 }
 
+func TestSettingsLoadAdditionalNetworkHosts(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	writeSettings(t, "[network]\nadditional_allowed_hosts = ['registry.npmjs.org']\n")
+	settings, err := launcherconfig.LoadSettings()
+	require.NoError(t, err)
+	require.Empty(t, settings.Network.AllowedHosts)
+	require.Equal(t, []string{"registry.npmjs.org"}, settings.Network.AdditionalAllowedHosts)
+}
+
+func TestSettingsRejectInvalidAdditionalNetworkHosts(t *testing.T) {
+	for _, value := range []string{
+		"'github.com'", "['https://github.com']", "['*.github.com']",
+		"['1.1.1.1']", "['github.com:443']", "['']",
+	} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			writeSettings(t, "[network]\nadditional_allowed_hosts = "+value+"\n")
+			_, err := launcherconfig.LoadSettings()
+			require.ErrorContains(t, err, "additional_allowed_hosts")
+		})
+	}
+}
+
 func TestVMSettingsOverrideDefaultsIndependently(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	writeSettings(t, "[vm]\nmemory_mib = 3072\n")
-	settings, err := sandbox.LoadSettings()
+	settings, err := launcherconfig.LoadSettings()
 	require.NoError(t, err)
-	require.Equal(t, sandbox.VMSettings{CPUs: 2, MemoryMiB: 3072, RootDiskMiB: 4096}, settings.VM)
+	require.Equal(t, launcherconfig.VMSettings{CPUs: 2, MemoryMiB: 3072, RootDiskMiB: 4096}, settings.VM)
 	require.Empty(t, settings.Network.AllowedHosts)
 }
 
@@ -36,7 +59,7 @@ func TestSettingsUseHomeWhenXDGIsUnset(t *testing.T) {
 	require.NoError(t, os.MkdirAll(dir, 0700))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.toml"), []byte("[network]\nallowed_hosts = []\n"), 0600))
 
-	settings, err := sandbox.LoadSettings()
+	settings, err := launcherconfig.LoadSettings()
 
 	require.NoError(t, err)
 	require.Empty(t, settings.Network.AllowedHosts)
@@ -44,17 +67,17 @@ func TestSettingsUseHomeWhenXDGIsUnset(t *testing.T) {
 
 func TestSettingsMissingFileUsesRestrictiveDefaults(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	settings, err := sandbox.LoadSettings()
+	settings, err := launcherconfig.LoadSettings()
 	require.NoError(t, err)
-	require.Equal(t, sandbox.DefaultSettings(), settings)
+	require.Equal(t, launcherconfig.DefaultSettings(), settings)
 }
 
 func TestSettingsOmittedNetworkUsesRestrictiveDefaults(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	writeSettings(t, "")
-	settings, err := sandbox.LoadSettings()
+	settings, err := launcherconfig.LoadSettings()
 	require.NoError(t, err)
-	require.Equal(t, sandbox.DefaultSettings(), settings)
+	require.Equal(t, launcherconfig.DefaultSettings(), settings)
 }
 
 func TestSettingsRejectInvalidConfiguration(t *testing.T) {
@@ -81,7 +104,7 @@ func TestSettingsRejectInvalidConfiguration(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 			writeSettings(t, contents)
-			_, err := sandbox.LoadSettings()
+			_, err := launcherconfig.LoadSettings()
 			require.Error(t, err)
 		})
 	}
@@ -92,6 +115,6 @@ func TestExampleSettingsLoad(t *testing.T) {
 	data, err := os.ReadFile("../docs/config.example.toml")
 	require.NoError(t, err)
 	writeSettings(t, string(data))
-	_, err = sandbox.LoadSettings()
+	_, err = launcherconfig.LoadSettings()
 	require.NoError(t, err)
 }

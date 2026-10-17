@@ -5,15 +5,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	"opencode-sandbox/internal/sandbox"
+	launcherconfig "opencode-sandbox/internal/config"
 
 	"github.com/BurntSushi/toml"
 	"github.com/stretchr/testify/require"
 )
 
-func testSettings(t *testing.T) sandbox.Settings {
+func testSettings(t *testing.T) launcherconfig.Settings {
 	t.Helper()
-	var settings sandbox.Settings
+	var settings launcherconfig.Settings
 	_, err := toml.DecodeFile("../docs/config.example.toml", &settings)
 	require.NoError(t, err)
 	// The credential substitution test sends fake values to this echo service.

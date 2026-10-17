@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	launcherconfig "opencode-sandbox/internal/config"
 	"opencode-sandbox/internal/sandbox"
 
 	"github.com/stretchr/testify/require"
@@ -17,7 +18,7 @@ import (
 func TestAWSIsNotConfiguredGlobally(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	writeSettings(t, "[aws]\nsource_profile = 'sandbox-test'\nrole_arn = 'arn:aws:iam::123456789012:role/SandboxReadOnly'\n")
-	_, err := sandbox.LoadSettings()
+	_, err := launcherconfig.LoadSettings()
 	require.ErrorContains(t, err, "unknown launcher setting")
 }
 
@@ -27,7 +28,7 @@ func TestAWSRoleCanUseDefaultHostCredentialsWithoutProfileFlag(t *testing.T) {
 	// The normal host chain selects the default profile when no profile is set.
 	require.NoError(t, os.WriteFile(os.Getenv("AWS_CONFIG_FILE"), []byte("[default]\n"), 0600))
 	require.NoError(t, os.WriteFile(os.Getenv("AWS_SHARED_CREDENTIALS_FILE"), []byte("[default]\naws_access_key_id = FAKE_DEFAULT_SOURCE_KEY\naws_secret_access_key = FAKE_DEFAULT_SOURCE_SECRET\n"), 0600))
-	s := startSandboxWithSettings(t, sandbox.DefaultSettings())
+	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
 	stop, err := s.StartAWS(context.Background(), settings)
 	require.NoError(t, err)
 	defer stop()
@@ -38,7 +39,7 @@ func TestAWSRoleUsesHostProfileEnvironmentWhenNoProfileFlagIsGiven(t *testing.T)
 	settings, requests := fakeAWSHost(t, "", validAWSResponse)
 	settings.SourceProfile = ""
 	t.Setenv("AWS_PROFILE", "sandbox-test")
-	s := startSandboxWithSettings(t, sandbox.DefaultSettings())
+	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
 	stop, err := s.StartAWS(context.Background(), settings)
 	require.NoError(t, err)
 	defer stop()
@@ -56,7 +57,7 @@ func TestAWSWritesOnlyRoleCredentialsAndUsesHostRegion(t *testing.T) {
 			settings, requests := fakeAWSHost(t, tc.profileRegion, validAWSResponse)
 			t.Setenv("AWS_REGION", tc.envRegion)
 			t.Setenv("AWS_DEFAULT_REGION", tc.defaultEnvRegion)
-			s := startSandboxWithSettings(t, sandbox.DefaultSettings())
+			s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
 			stop, err := s.StartAWS(context.Background(), settings)
 			require.NoError(t, err)
 			defer stop()
@@ -88,7 +89,7 @@ func TestAWSRefreshesCredentialsAndStopsRefreshingOnExit(t *testing.T) {
 		}
 		return validAWSResponse(n)
 	})
-	s := startSandboxWithSettings(t, sandbox.DefaultSettings())
+	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
 	stop, err := s.StartAWS(context.Background(), settings)
 	require.NoError(t, err)
 	defer stop()
@@ -115,14 +116,14 @@ func TestAWSRefreshesCredentialsAndStopsRefreshingOnExit(t *testing.T) {
 
 func TestAWSReplacesCredentialsOnReuseAndClearsThemWhenDisabled(t *testing.T) {
 	settings, _ := fakeAWSHost(t, "", validAWSResponse)
-	s := startSandboxWithSettings(t, sandbox.DefaultSettings())
+	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
 	stop, err := s.StartAWS(context.Background(), settings)
 	require.NoError(t, err)
 	stop()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	require.NoError(t, s.Stop(ctx))
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, sandbox.DefaultSettings())
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, launcherconfig.DefaultSettings())
 	require.NoError(t, err)
 	defer resumed.Close()
 	stop, err = resumed.StartAWS(ctx, settings)
@@ -138,7 +139,7 @@ func TestAWSReplacesCredentialsOnReuseAndClearsThemWhenDisabled(t *testing.T) {
 
 func TestAWSFailsClosedAndSuppressesUpstreamDetails(t *testing.T) {
 	settings, _ := fakeAWSHost(t, "", func(int) (time.Time, bool) { return time.Time{}, false })
-	s := startSandboxWithSettings(t, sandbox.DefaultSettings())
+	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
 	_, err := s.StartAWS(context.Background(), settings)
 	require.ErrorContains(t, err, "assume AWS role failed")
 	require.NotContains(t, err.Error(), "FAKE_HOST_SOURCE_SECRET")
@@ -149,7 +150,7 @@ func TestAWSRejectsExpiredRoleCredentials(t *testing.T) {
 	settings, _ := fakeAWSHost(t, "", func(int) (time.Time, bool) {
 		return time.Now().Add(-time.Minute), true
 	})
-	s := startSandboxWithSettings(t, sandbox.DefaultSettings())
+	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
 	_, err := s.StartAWS(context.Background(), settings)
 	require.ErrorContains(t, err, "expired role credentials")
 	execInSandbox(t, s, "test", "!", "-e", "/root/.aws/credentials")
@@ -159,14 +160,14 @@ func TestAWSRefreshFailureKeepsOnlyPreviousRoleCredentials(t *testing.T) {
 	settings, requests := fakeAWSHost(t, "", func(n int) (time.Time, bool) {
 		return time.Now().Add(5*time.Minute + 2*time.Second), n == 1
 	})
-	s := startSandboxWithSettings(t, sandbox.DefaultSettings())
+	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
 	stop, err := s.StartAWS(context.Background(), settings)
 	require.NoError(t, err)
 	defer stop()
 	<-requests
 	select {
 	case <-requests:
-	case <-time.After(10*time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("expected attempted refresh")
 	}
 	// Joining the refresh loop also ensures any in-flight failed refresh is done.
@@ -178,7 +179,7 @@ func TestAWSRefreshFailureKeepsOnlyPreviousRoleCredentials(t *testing.T) {
 
 func TestAWSDoesNotOverwriteOrRemoveUnmanagedGuestFiles(t *testing.T) {
 	settings, _ := fakeAWSHost(t, "", validAWSResponse)
-	s := startSandboxWithSettings(t, sandbox.DefaultSettings())
+	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
 	execInSandbox(t, s, "bash", "-eu", "-c", "mkdir -p /root/.aws; printf 'user-owned' > /root/.aws/credentials")
 	_, err := s.StartAWS(context.Background(), settings)
 	require.ErrorContains(t, err, "unmanaged")

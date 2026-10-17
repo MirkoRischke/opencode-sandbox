@@ -5,6 +5,21 @@ Copy `docs/config.example.toml` to
 `$XDG_CONFIG_HOME/opencode-sandbox/config.toml`). This is the general launcher
 configuration; OpenCode's `opencode.json` and `cli.json` remain separate.
 
+Print all built-in defaults with descriptions and a commented secret example:
+
+```sh
+opencode-sandbox config default
+opencode-sandbox config default > .opencode-sandbox.toml
+```
+
+This works outside Git and does not load user configuration, trust state, or
+credential files, or start a VM. Values come from the same `DefaultSettings()`
+used at runtime; descriptions come from configuration struct tags. The host lists
+are empty because built-in defaults deny internet access. Use
+`docs/config.example.toml` for a suggested network-enabled configuration instead.
+For repo overrides, keep only settings you want to override: saving all defaults
+also overrides your global values with those defaults.
+
 ## Repository overrides and trust
 
 Optionally add `.opencode-sandbox.toml` at the Git worktree root. Launching from
@@ -22,6 +37,7 @@ memory_mib = 8192
 
 [network]
 allowed_hosts = []
+additional_allowed_hosts = []
 
 [secrets.github]
 allowed_hosts = ["api.github.com"]
@@ -33,6 +49,21 @@ clear inherited entries; empty arrays replace inherited arrays. Relative secret
 file paths resolve against the directory of the config supplying the `file`
 field. Overriding another secret field does not change the inherited file's origin.
 Do not commit credential files.
+
+To add repo-specific destinations without replacing global `allowed_hosts`, use:
+
+```toml
+# .opencode-sandbox.toml
+[network]
+additional_allowed_hosts = ["registry.npmjs.org", "nodejs.org"]
+```
+
+The effective network allowlist is the union of `allowed_hosts` and
+`additional_allowed_hosts`, deduplicated case-insensitively after merging.
+Both fields follow the same inheritance/replacement rules: repo additions replace
+global additions, not append to them. Keep your shared baseline in global
+`allowed_hosts`. To deny all application internet access, set **both** lists to
+`[]`. Neither list expands a secret's credential substitution scope.
 
 Before a new or changed repo config is used, an interactive launch shows its
 contents and the effective settings, and asks for approval (default: no).
@@ -104,10 +135,10 @@ recreate them to apply changes.
 Only exact DNS hostnames are accepted. Connections are limited to TCP port 443
 with strict hostname checks and verified TLS inspection. Other outbound traffic
 is denied, apart from DNS through Microsandbox's gateway. Host/private networks,
-loopback, link-local and metadata destinations remain blocked. An empty list
-denies application internet access. Missing files or omitted network settings use
-that empty allowlist by default. Malformed TOML, unknown keys, and invalid values
-fail launch before VM startup.
+loopback, link-local and metadata destinations remain blocked. Both host lists
+must be empty to deny application internet access. Missing files or omitted
+network settings use empty allowlists by default. Malformed TOML, unknown keys,
+and invalid values fail launch before VM startup.
 
 Settings apply **only when creating a VM**. Existing VMs keep their old policy,
 including VMs created before this feature with public internet access. No policy
@@ -120,7 +151,14 @@ still receive data: this is a destination restriction, not an exfiltration or
 read-only guarantee.
 
 For new launcher settings, extend the `Settings` struct in
-`internal/sandbox/settings.go`, add validation, and document the new keys here.
+`internal/config/settings.go`, add a `description` tag and validation, and document
+the new keys here. The default-config printer discovers fields automatically;
+tests enforce descriptions and verify that printed values match runtime defaults.
+
+The `internal/config` package owns launcher settings, merging, trust storage,
+validation, and default-config generation. Interactive approval remains in the CLI;
+credential file loading and Microsandbox policy conversion remain in
+`internal/sandbox`. Guest OpenCode JSON and TUI configuration are separate.
 
 ## Secrets
 

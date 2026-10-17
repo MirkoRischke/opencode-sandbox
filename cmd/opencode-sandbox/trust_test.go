@@ -6,15 +6,15 @@ import (
 	"strings"
 	"testing"
 
-	"opencode-sandbox/internal/sandbox"
+	launcherconfig "opencode-sandbox/internal/config"
 )
 
 func TestConfirmRepoConfig(t *testing.T) {
 	for _, answer := range []string{"y\n", "yes\n", "YES\n", "n\n", "\n", "", "yes"} {
 		t.Run(answer, func(t *testing.T) {
 			var output bytes.Buffer
-			settings := sandbox.DefaultSettings()
-			settings.Secrets = map[string]sandbox.SecretSettings{"github": {
+			settings := launcherconfig.DefaultSettings()
+			settings.Secrets = map[string]launcherconfig.SecretSettings{"github": {
 				File: "creds/token", Env: "GH_TOKEN", AllowedHosts: []string{"api.github.com"}, Headers: []string{"authorization"},
 			}}
 			err := confirmRepoConfig(strings.NewReader(answer), &output, "/repo/.opencode-sandbox.toml", []byte("# override\n\x1b[2J\n"), settings)
@@ -47,7 +47,7 @@ func TestApproveRepoConfigRejectsPipedInput(t *testing.T) {
 	if _, err := writer.WriteString("yes\n"); err != nil {
 		t.Fatal(err)
 	}
-	err = approveRepoConfig("/repo/.opencode-sandbox.toml", nil, sandbox.DefaultSettings())
+	err = approveRepoConfig("/repo/.opencode-sandbox.toml", nil, launcherconfig.DefaultSettings())
 	if err == nil || !strings.Contains(err.Error(), "launch interactively") {
 		t.Fatalf("expected non-interactive refusal, got %v", err)
 	}
