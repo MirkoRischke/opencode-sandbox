@@ -25,6 +25,19 @@ func TestSandboxEditsAreVisibleOnHost(t *testing.T) {
 	assert.Equal(t, "written in sandbox\n", string(contents))
 }
 
+func TestSandboxCanBeSelectedByAppLabel(t *testing.T) {
+	s := startSandbox(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	page, err := m.ListSandboxesWith(ctx, m.WithListLabels(map[string]string{"app": "opencode-sandbox"}))
+	require.NoError(t, err)
+	names := make([]string, 0, len(page.Sandboxes))
+	for _, handle := range page.Sandboxes {
+		names = append(names, handle.Name())
+	}
+	require.Contains(t, names, s.Name)
+}
+
 func TestGitStatusWorksInMountedWorktree(t *testing.T) {
 	s := startSandbox(t)
 	err := os.WriteFile(filepath.Join(s.Worktree, "host.txt"), []byte("written on host\n"), 0644)

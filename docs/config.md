@@ -9,6 +9,17 @@ The launcher always stops its VM on exit, including errors and handled terminati
 signals. It never removes the VM: installed tools and guest files persist for the
 next launch. Forced termination (`SIGKILL`) or a host crash cannot run cleanup.
 
+New VMs carry the label `app=opencode-sandbox` for bulk management:
+
+```sh
+msb ps --label app=opencode-sandbox
+msb stop --label app=opencode-sandbox
+msb rm --force --label app=opencode-sandbox
+```
+
+Existing VMs are not automatically relabeled. Removal deletes guest-local state,
+but not mounted host worktrees.
+
 ```toml
 [network]
 allowed_hosts = ["github.com", "api.github.com"]

@@ -64,6 +64,7 @@ func Prepare(ctx context.Context, directory string, config, githubToken []byte, 
 		m.WithCPUs(2), m.WithMemory(2048), m.WithRootDisk(m.RootDisk.Managed(4096)),
 		m.WithWorkdir(root), m.WithMounts(mounts), m.WithDetached(),
 		m.WithNetwork(settings.Network.policy()), m.WithInterceptTLS(),
+		m.WithLabel("app", "opencode-sandbox"),
 	}
 	s.vm, err = connectWithGitHub(ctx, s.Name, githubToken, opts)
 	if err != nil {
