@@ -16,9 +16,19 @@ Save a dedicated **fine-grained, read-only** GitHub personal access token as:
 
 `XDG_CONFIG_HOME` is respected. The file contains only the token, with an optional
 trailing newline. Use directory mode `700` and file mode `600`; the launcher
-rejects group/other access and symlinked credential directories or files. Missing
-credentials create new VMs without GitHub authentication; host `gh` credentials
-are never used.
+rejects group/other access and symlinked credential directories or files. Add this
+explicit entry to `config.toml`; the file is never read without it:
+
+```toml
+[secrets.github]
+file = "creds/github-token"
+env = "GH_TOKEN"
+allowed_hosts = ["github.com", "api.github.com"]
+headers = ["authorization"]
+```
+
+Both hosts must also be allowed by `[network].allowed_hosts`. A configured file
+that is missing or invalid fails launch. Host `gh` credentials are never used.
 
 Select only the required repositories and grant read-only Contents, Issues, and
 Pull requests permissions. GitHub enforces read-only access: the launcher does
@@ -27,7 +37,7 @@ not verify or reduce the token's authority. Organization approval may be needed.
 ## Guest behavior
 
 - `gh` uses a placeholder in `GH_TOKEN`, not the real token.
-- Microsandbox replaces that placeholder only in Authorization headers sent to
+- With the configuration above, Microsandbox replaces it only in Authorization headers sent to
   exactly `api.github.com` or `github.com`, over verified intercepted TLS.
 - The guest GitHub CLI credential helper authenticates **HTTPS** clone/fetch.
   SSH remotes are not converted or supported by this token mechanism.
@@ -39,6 +49,8 @@ guest configuration or files. An allowed upstream receives the real credential;
 substitution does not guarantee an upstream can never reflect it back.
 
 Credentials are fixed for the lifetime of a VM. Changing or deleting the host
-file does not change existing VMs, even after stopping and resuming them.
+file does not change existing VMs, even after stopping and resuming them. A missing
+file still fails launch while its entry remains configured. Removing the entry
+allows launch but does not revoke a credential already stored in an existing VM.
 Recreate a VM to use a different token or remove its stored credential. To
 revoke access immediately, revoke the token on GitHub.

@@ -26,7 +26,7 @@ func prepareWithGitHub(t *testing.T, worktree string, token []byte) *sandbox.San
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	s, err := sandbox.Prepare(ctx, worktree, nil, token, testSettings(t))
+	s, err := sandbox.Prepare(ctx, worktree, nil, githubSecrets(t, token), testSettings(t))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -34,6 +34,33 @@ func prepareWithGitHub(t *testing.T, worktree string, token []byte) *sandbox.San
 		assert.NoError(t, s.Remove(ctx))
 	})
 	return s
+}
+
+func githubSecrets(t *testing.T, token []byte) []sandbox.Secret {
+	t.Helper()
+	if token == nil {
+		return nil
+	}
+	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0700))
+	path := filepath.Join(dir, "token")
+	require.NoError(t, os.WriteFile(path, token, 0600))
+	return loadGitHubSecrets(t, path)
+}
+
+func githubSecretSettings(path string) sandbox.Settings {
+	settings := sandbox.DefaultSettings()
+	settings.Secrets = map[string]sandbox.SecretSettings{"github": {
+		File: path, Env: "GH_TOKEN", AllowedHosts: []string{"api.github.com", "github.com"}, Headers: []string{"authorization"},
+	}}
+	return settings
+}
+
+func loadGitHubSecrets(t *testing.T, path string) []sandbox.Secret {
+	t.Helper()
+	secrets, err := sandbox.LoadSecrets(githubSecretSettings(path))
+	require.NoError(t, err)
+	return secrets
 }
 
 func storedSandboxConfig(t *testing.T, s *sandbox.Sandbox) string {

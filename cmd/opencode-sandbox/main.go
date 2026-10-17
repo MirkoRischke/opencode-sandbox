@@ -44,13 +44,13 @@ func run() (err error) {
 	if err != nil {
 		return err
 	}
-	githubToken, err := sandbox.LoadGitHubToken()
+	secrets, err := sandbox.LoadSecrets(settings)
 	if err != nil {
 		return err
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer cancel()
-	s, err := sandbox.Prepare(ctx, ".", config, githubToken, settings)
+	s, err := sandbox.Prepare(ctx, ".", config, secrets, settings)
 	if err != nil {
 		return err
 	}

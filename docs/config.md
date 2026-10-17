@@ -56,3 +56,39 @@ read-only guarantee.
 
 For new launcher settings, extend the `Settings` struct in
 `internal/sandbox/settings.go`, add validation, and document the new keys here.
+
+## Secrets
+
+Only explicitly configured secrets are loaded. There is no implicit GitHub token
+loading and no fallback to host environment variables or host `gh` credentials.
+
+```toml
+[secrets.github]
+file = "creds/github-token"
+env = "GH_TOKEN"
+allowed_hosts = ["github.com", "api.github.com"]
+headers = ["authorization"]
+```
+
+Add other named `[secrets.<name>]` sections in the same form. Each must have a
+unique environment variable name, a file, non-empty exact hostnames, and non-empty
+HTTP header names. Relative paths resolve against the launcher config directory;
+absolute paths are also accepted. Inline values and environment sources are not
+supported. Use mode `700` on the credential directory and `600` on the file.
+Symlinked paths, oversized files (over 16 KiB), empty values, multiple lines, and
+NUL bytes are rejected. A trailing newline is stripped. Configured files are
+validated on every launch; missing/invalid files fail launch, even for existing VMs.
+
+Guests receive placeholders such as `$MSB_GH_TOKEN`, never the source value.
+Microsandbox substitutes values only in the selected headers for the selected
+hosts over verified TLS. Secret scopes never grant network access: the hosts
+must independently be allowed by `[network]`. Configuring `GH_TOKEN` also enables
+GitHub's guest HTTPS Git credential helper. OpenAI subscription authentication
+remains separate and unchanged.
+
+Real values persist in Microsandbox's **host-side VM configuration**. Never log
+resolved secrets or commit credential files. Allowed upstreams receive real
+values and could reflect them back; this is not an absolute secrecy guarantee.
+Only new VMs receive changes: recreate a VM to rotate or remove its stored
+credentials. Removing an entry stops reading its file, but does not revoke
+credentials in existing VMs. Revoke credentials upstream for immediate revocation.

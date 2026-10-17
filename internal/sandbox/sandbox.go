@@ -22,7 +22,7 @@ type Sandbox struct {
 
 // Prepare creates or resumes one VM per worktree and initializes project tools.
 // GitHub credentials stay in the host proxy; the guest gets only a placeholder.
-func Prepare(ctx context.Context, directory string, config, githubToken []byte, settings Settings) (*Sandbox, error) {
+func Prepare(ctx context.Context, directory string, config []byte, secrets []Secret, settings Settings) (*Sandbox, error) {
 	if err := settings.validate(); err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func Prepare(ctx context.Context, directory string, config, githubToken []byte, 
 		m.WithNetwork(settings.Network.policy()), m.WithInterceptTLS(),
 		m.WithLabel("app", "opencode-sandbox"),
 	}
-	s.vm, err = connectWithGitHub(ctx, s.Name, githubToken, opts)
+	s.vm, err = connectWithSecrets(ctx, s.Name, secrets, opts)
 	if err != nil {
 		return nil, fmt.Errorf("prepare sandbox: %w", err)
 	}
@@ -79,7 +79,11 @@ func Prepare(ctx context.Context, directory string, config, githubToken []byte, 
 			}
 		}
 	}()
-	if err := s.configureGitHub(ctx, githubToken != nil); err != nil {
+	githubEnabled := false
+	for _, secret := range secrets {
+		githubEnabled = githubEnabled || secret.entry.EnvVar == "GH_TOKEN"
+	}
+	if err := s.configureGitHub(ctx, githubEnabled); err != nil {
 		return nil, err
 	}
 	// mise discovers supported filenames (including .mise.toml and mise/config.toml).

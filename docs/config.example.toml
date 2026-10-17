@@ -4,6 +4,16 @@
 # Applied only when creating a VM. Recreate it after changing this file.
 # Missing configuration defaults to no internet; invalid configuration fails.
 
+# This example enables GitHub authentication and requires the file below.
+# Remove this section to disable loading the credential for new VMs.
+# Relative file paths are resolved against this config's directory.
+# The credential directory must be mode 700 and file mode 600.
+[secrets.github]
+file = "creds/github-token"
+env = "GH_TOKEN"
+allowed_hosts = ["github.com", "api.github.com"]
+headers = ["authorization"]
+
 [vm]
 # Applied at VM creation only. Sizes are in MiB.
 cpus = 2

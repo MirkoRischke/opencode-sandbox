@@ -17,9 +17,7 @@ func TestGitHubCredentialStaysOnHostWhileGuestReceivesAPlaceholder(t *testing.T)
 	const token = "github_pat_FAKE_TEST_CREDENTIAL"
 	path := githubTokenPath(t)
 	require.NoError(t, os.WriteFile(path, []byte(token+"\n"), 0600))
-	loaded, err := sandbox.LoadGitHubToken()
-	require.NoError(t, err)
-	s := prepareWithGitHub(t, newWorktree(t), loaded)
+	s := prepareWithGitHub(t, newWorktree(t), []byte(token))
 
 	require.Equal(t, "$MSB_GH_TOKEN\n", execInSandbox(t, s, "printenv", "GH_TOKEN"))
 	stored := storedSandboxConfig(t, s)
@@ -54,7 +52,7 @@ func TestExistingSandboxKeepsItsOriginalGitHubCredential(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	resumed, err := sandbox.Prepare(ctx, worktree, nil, []byte("github_pat_FAKE_ROTATED"), testSettings(t))
+	resumed, err := sandbox.Prepare(ctx, worktree, nil, githubSecrets(t, []byte("github_pat_FAKE_ROTATED")), testSettings(t))
 
 	require.NoError(t, err)
 	defer resumed.Close()
@@ -70,7 +68,7 @@ func TestGitHubCredentialCanBeReusedWithoutChanges(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, []byte(token), testSettings(t))
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, githubSecrets(t, []byte(token)), testSettings(t))
 
 	require.NoError(t, err)
 	defer resumed.Close()
@@ -97,7 +95,7 @@ func TestStoppedSandboxKeepsItsOriginalGitHubCredential(t *testing.T) {
 	defer cancel()
 	require.NoError(t, s.Stop(ctx))
 
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, []byte("github_pat_FAKE_ROTATED"), testSettings(t))
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, githubSecrets(t, []byte("github_pat_FAKE_ROTATED")), testSettings(t))
 
 	require.NoError(t, err)
 	defer resumed.Close()
@@ -109,18 +107,15 @@ func TestStoppedSandboxKeepsItsOriginalGitHubCredential(t *testing.T) {
 func TestRemovingGitHubTokenFileDoesNotChangeAnExistingSandbox(t *testing.T) {
 	path := githubTokenPath(t)
 	require.NoError(t, os.WriteFile(path, []byte("github_pat_FAKE_INITIAL"), 0600))
-	token, err := sandbox.LoadGitHubToken()
-	require.NoError(t, err)
-	s := prepareWithGitHub(t, newWorktree(t), token)
+	s := prepareWithGitHub(t, newWorktree(t), []byte("github_pat_FAKE_INITIAL"))
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	require.NoError(t, s.Stop(ctx))
 	require.NoError(t, os.Remove(path))
-	token, err = sandbox.LoadGitHubToken()
-	require.NoError(t, err)
-	require.Nil(t, token)
+	_, err := sandbox.LoadSecrets(githubSecretSettings(path))
+	require.Error(t, err)
 
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, token, testSettings(t))
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, testSettings(t))
 
 	require.NoError(t, err)
 	defer resumed.Close()
@@ -133,7 +128,7 @@ func TestOlderSandboxRequiresRecreationBeforeEnablingGitHub(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	_, err := sandbox.Prepare(ctx, s.Worktree, nil, []byte("github_pat_FAKE"), testSettings(t))
+	_, err := sandbox.Prepare(ctx, s.Worktree, nil, githubSecrets(t, []byte("github_pat_FAKE")), testSettings(t))
 
 	require.ErrorContains(t, err, "recreate this VM")
 	require.NotContains(t, storedSandboxConfig(t, s), "github_pat_FAKE")
@@ -144,14 +139,13 @@ func TestGitHubTokenLoadsOnlyFromDedicatedCredentialFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte("github_pat_FAKE\n"), 0600))
 	t.Setenv("GH_TOKEN", "host-gh-token-must-not-be-used")
 
-	token, err := sandbox.LoadGitHubToken()
+	secrets, err := sandbox.LoadSecrets(githubSecretSettings(path))
 
 	require.NoError(t, err)
-	require.Equal(t, "github_pat_FAKE", string(token))
+	require.Len(t, secrets, 1)
 	require.NoError(t, os.Remove(path))
-	token, err = sandbox.LoadGitHubToken()
-	require.NoError(t, err)
-	require.Nil(t, token)
+	_, err = sandbox.LoadSecrets(githubSecretSettings(path))
+	require.Error(t, err)
 }
 
 func TestGitHubTokenRejectsUnsafePermissionsAndInvalidContents(t *testing.T) {
@@ -163,7 +157,7 @@ func TestGitHubTokenRejectsUnsafePermissionsAndInvalidContents(t *testing.T) {
 		{"readable directory", 0755, 0600, "github_pat_FAKE"},
 		{"readable token", 0700, 0644, "github_pat_FAKE"},
 		{"empty token", 0700, 0600, ""},
-		{"multiple tokens", 0700, 0600, "first\nsecond"},
+		{"multiple lines", 0700, 0600, "first\nsecond"},
 		{"NUL byte", 0700, 0600, "first\x00second"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -172,7 +166,7 @@ func TestGitHubTokenRejectsUnsafePermissionsAndInvalidContents(t *testing.T) {
 			require.NoError(t, os.Chmod(path, tc.fileMode))
 			require.NoError(t, os.Chmod(filepath.Dir(path), tc.dirMode))
 
-			_, err := sandbox.LoadGitHubToken()
+			_, err := sandbox.LoadSecrets(githubSecretSettings(path))
 
 			require.Error(t, err)
 			if tc.contents != "" {
@@ -188,7 +182,7 @@ func TestGitHubTokenRejectsSymlinks(t *testing.T) {
 	require.NoError(t, os.WriteFile(target, []byte("github_pat_FAKE"), 0600))
 	require.NoError(t, os.Symlink(target, path))
 
-	_, err := sandbox.LoadGitHubToken()
+	_, err := sandbox.LoadSecrets(githubSecretSettings(path))
 
 	require.ErrorContains(t, err, "regular owner-only file")
 }

@@ -12,8 +12,9 @@ import (
 // Settings is the host-side launcher configuration, separate from OpenCode's
 // guest JSON configuration. Add new launcher settings as fields or sections.
 type Settings struct {
-	VM      VMSettings      `toml:"vm"`
-	Network NetworkSettings `toml:"network"`
+	VM      VMSettings                `toml:"vm"`
+	Network NetworkSettings           `toml:"network"`
+	Secrets map[string]SecretSettings `toml:"secrets"`
 }
 
 type VMSettings struct {
@@ -73,7 +74,10 @@ func (s Settings) validate() error {
 	if s.VM.RootDiskMiB == 0 {
 		return fmt.Errorf("vm.root_disk_mib must be greater than zero")
 	}
-	return s.Network.validate()
+	if err := s.Network.validate(); err != nil {
+		return err
+	}
+	return validateSecrets(s.Secrets)
 }
 
 var hostnamePattern = regexp.MustCompile(`(?i)^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
