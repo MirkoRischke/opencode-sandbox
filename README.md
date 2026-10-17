@@ -16,9 +16,8 @@ retain installed tools and guest files for the next launch.
 
 ## How it works
 
-The custom Debian image in [Dockerfile](Dockerfile) includes OpenCode, mise,
-Node.js, Git, GitHub CLI, and AWS CLI. Docker builds the image; Microsandbox runs
-it as a VM.
+The custom Debian image comes with pre-installed tools (see
+[Dockerfile](Dockerfile)). Docker builds the image; Microsandbox runs it as a VM.
 
 On launch, the host launcher:
 
