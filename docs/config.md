@@ -21,9 +21,20 @@ Existing VMs are not automatically relabeled. Removal deletes guest-local state,
 but not mounted host worktrees.
 
 ```toml
+[vm]
+cpus = 2
+memory_mib = 2048
+root_disk_mib = 4096
+
 [network]
 allowed_hosts = ["github.com", "api.github.com"]
 ```
+
+VM settings default to the values above; each can be overridden independently.
+Values must be positive integers (CPUs: 1–255; memory/disk: 1–4294967295 MiB).
+Microsandbox and host resource limits still apply. Root-disk size controls
+guest-local storage, not mounted host worktrees. Existing VMs retain their specs;
+recreate them to apply changes.
 
 Only exact DNS hostnames are accepted. Connections are limited to TCP port 443
 with strict hostname checks and verified TLS inspection. Other outbound traffic

@@ -12,7 +12,14 @@ import (
 // Settings is the host-side launcher configuration, separate from OpenCode's
 // guest JSON configuration. Add new launcher settings as fields or sections.
 type Settings struct {
+	VM      VMSettings      `toml:"vm"`
 	Network NetworkSettings `toml:"network"`
+}
+
+type VMSettings struct {
+	CPUs        uint8  `toml:"cpus"`
+	MemoryMiB   uint32 `toml:"memory_mib"`
+	RootDiskMiB uint32 `toml:"root_disk_mib"`
 }
 
 type NetworkSettings struct {
@@ -21,7 +28,10 @@ type NetworkSettings struct {
 
 // DefaultSettings denies application internet access.
 func DefaultSettings() Settings {
-	return Settings{Network: NetworkSettings{AllowedHosts: []string{}}}
+	return Settings{
+		VM:      VMSettings{CPUs: 2, MemoryMiB: 2048, RootDiskMiB: 4096},
+		Network: NetworkSettings{AllowedHosts: []string{}},
+	}
 }
 
 // LoadSettings overlays the user's config.toml onto restrictive defaults.
@@ -47,10 +57,23 @@ func LoadSettings() (Settings, error) {
 	if keys := metadata.Undecoded(); len(keys) != 0 {
 		return settings, fmt.Errorf("unknown launcher setting: %s", keys[0])
 	}
-	if err := settings.Network.validate(); err != nil {
+	if err := settings.validate(); err != nil {
 		return settings, fmt.Errorf("launcher settings %s: %w", path, err)
 	}
 	return settings, nil
+}
+
+func (s Settings) validate() error {
+	if s.VM.CPUs == 0 {
+		return fmt.Errorf("vm.cpus must be greater than zero")
+	}
+	if s.VM.MemoryMiB == 0 {
+		return fmt.Errorf("vm.memory_mib must be greater than zero")
+	}
+	if s.VM.RootDiskMiB == 0 {
+		return fmt.Errorf("vm.root_disk_mib must be greater than zero")
+	}
+	return s.Network.validate()
 }
 
 var hostnamePattern = regexp.MustCompile(`(?i)^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$`)

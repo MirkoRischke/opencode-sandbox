@@ -23,7 +23,7 @@ type Sandbox struct {
 // Prepare creates or resumes one VM per worktree and initializes project tools.
 // GitHub credentials stay in the host proxy; the guest gets only a placeholder.
 func Prepare(ctx context.Context, directory string, config, githubToken []byte, settings Settings) (*Sandbox, error) {
-	if err := settings.Network.validate(); err != nil {
+	if err := settings.validate(); err != nil {
 		return nil, err
 	}
 	git := func(args ...string) (string, error) {
@@ -61,7 +61,8 @@ func Prepare(ctx context.Context, directory string, config, githubToken []byte, 
 	}
 	opts := []m.SandboxOption{
 		m.WithImage("opencode-sandbox:poc"), m.WithPullPolicy(m.PullPolicyNever),
-		m.WithCPUs(2), m.WithMemory(2048), m.WithRootDisk(m.RootDisk.Managed(4096)),
+		m.WithCPUs(settings.VM.CPUs), m.WithMemory(settings.VM.MemoryMiB),
+		m.WithRootDisk(m.RootDisk.Managed(settings.VM.RootDiskMiB)),
 		m.WithWorkdir(root), m.WithMounts(mounts), m.WithDetached(),
 		m.WithNetwork(settings.Network.policy()), m.WithInterceptTLS(),
 		m.WithLabel("app", "opencode-sandbox"),

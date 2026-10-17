@@ -4,6 +4,12 @@
 # Applied only when creating a VM. Recreate it after changing this file.
 # Missing configuration defaults to no internet; invalid configuration fails.
 
+[vm]
+# Applied at VM creation only. Sizes are in MiB.
+cpus = 2
+memory_mib = 2048
+root_disk_mib = 4096
+
 [network]
 allowed_hosts = [
   # OpenAI subscription inference (legacy Codex and Sign in with ChatGPT)

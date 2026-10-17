@@ -20,6 +20,15 @@ func TestSettingsLoadFromConfigDirectory(t *testing.T) {
 	require.Equal(t, []string{"github.com", "api.github.com"}, settings.Network.AllowedHosts)
 }
 
+func TestVMSettingsOverrideDefaultsIndependently(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	writeSettings(t, "[vm]\nmemory_mib = 3072\n")
+	settings, err := sandbox.LoadSettings()
+	require.NoError(t, err)
+	require.Equal(t, sandbox.VMSettings{CPUs: 2, MemoryMiB: 3072, RootDiskMiB: 4096}, settings.VM)
+	require.Empty(t, settings.Network.AllowedHosts)
+}
+
 func TestSettingsUseHomeWhenXDGIsUnset(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -50,14 +59,24 @@ func TestSettingsOmittedNetworkUsesRestrictiveDefaults(t *testing.T) {
 
 func TestSettingsRejectInvalidConfiguration(t *testing.T) {
 	for name, contents := range map[string]string{
-		"malformed TOML": "[network",
-		"wrong type":     "[network]\nallowed_hosts = 'github.com'\n",
-		"unknown field":  "[network]\nallowed_hosts = []\nallow_hosts = ['github.com']\n",
-		"URL":            "[network]\nallowed_hosts = ['https://github.com']\n",
-		"wildcard":       "[network]\nallowed_hosts = ['*.github.com']\n",
-		"IP":             "[network]\nallowed_hosts = ['1.1.1.1']\n",
-		"port":           "[network]\nallowed_hosts = ['github.com:443']\n",
-		"policy group":   "[network]\nallowed_hosts = ['public']\n",
+		"zero CPUs":         "[vm]\ncpus = 0\n",
+		"negative CPUs":     "[vm]\ncpus = -1\n",
+		"CPU overflow":      "[vm]\ncpus = 256\n",
+		"zero memory":       "[vm]\nmemory_mib = 0\n",
+		"negative memory":   "[vm]\nmemory_mib = -1\n",
+		"memory overflow":   "[vm]\nmemory_mib = 4294967296\n",
+		"fractional memory": "[vm]\nmemory_mib = 512.5\n",
+		"zero disk":         "[vm]\nroot_disk_mib = 0\n",
+		"negative disk":     "[vm]\nroot_disk_mib = -1\n",
+		"disk overflow":     "[vm]\nroot_disk_mib = 4294967296\n",
+		"malformed TOML":    "[network",
+		"wrong type":        "[network]\nallowed_hosts = 'github.com'\n",
+		"unknown field":     "[network]\nallowed_hosts = []\nallow_hosts = ['github.com']\n",
+		"URL":               "[network]\nallowed_hosts = ['https://github.com']\n",
+		"wildcard":          "[network]\nallowed_hosts = ['*.github.com']\n",
+		"IP":                "[network]\nallowed_hosts = ['1.1.1.1']\n",
+		"port":              "[network]\nallowed_hosts = ['github.com:443']\n",
+		"policy group":      "[network]\nallowed_hosts = ['public']\n",
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
