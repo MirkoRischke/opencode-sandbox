@@ -26,6 +26,7 @@ func TestLauncherRejectsDirectoriesOutsideGit(t *testing.T) {
 }
 
 func TestLauncherAcceptsCustomConfigFlag(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	binary := buildLauncher(t)
@@ -41,6 +42,7 @@ func TestLauncherAcceptsCustomConfigFlag(t *testing.T) {
 }
 
 func TestLauncherRejectsMissingCustomConfigBeforeStartingVM(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	binary := buildLauncher(t)
@@ -50,4 +52,33 @@ func TestLauncherRejectsMissingCustomConfigBeforeStartingVM(t *testing.T) {
 
 	require.Error(t, err)
 	require.Contains(t, string(output), "read sandbox config")
+}
+
+func TestLauncherAcceptsCustomCLIConfigFlag(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	binary := buildLauncher(t)
+	path := filepath.Join(t.TempDir(), "cli.json")
+	require.NoError(t, os.WriteFile(path, []byte(`{"theme":{"name":"tokyonight"}}`), 0600))
+	command := exec.CommandContext(ctx, binary, "--cli-config", path)
+	command.Dir = t.TempDir()
+
+	output, err := command.CombinedOutput()
+
+	require.Error(t, err)
+	require.Contains(t, string(output), "discover worktree", "CLI config must be accepted before worktree discovery")
+}
+
+func TestLauncherRejectsMissingCLIConfigBeforeStartingVM(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	binary := buildLauncher(t)
+	command := exec.CommandContext(ctx, binary, "--cli-config", filepath.Join(t.TempDir(), "missing.json"))
+
+	output, err := command.CombinedOutput()
+
+	require.Error(t, err)
+	require.Contains(t, string(output), "read CLI config")
 }

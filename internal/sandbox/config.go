@@ -35,6 +35,14 @@ func LoadConfig(path string) ([]byte, error) {
 }
 
 func userConfigPath() (string, error) {
+	dir, err := userConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "opencode-sandbox", "opencode.json"), nil
+}
+
+func userConfigDir() (string, error) {
 	dir := os.Getenv("XDG_CONFIG_HOME")
 	if dir == "" {
 		home, err := os.UserHomeDir()
@@ -43,7 +51,7 @@ func userConfigPath() (string, error) {
 		}
 		dir = filepath.Join(home, ".config")
 	}
-	return filepath.Join(dir, "opencode-sandbox", "opencode.json"), nil
+	return dir, nil
 }
 
 // configureOpenCode writes only guest-local configuration. The marker lets us remove

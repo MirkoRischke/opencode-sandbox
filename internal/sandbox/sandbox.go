@@ -157,7 +157,14 @@ func (s *Sandbox) Exec(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 }
 
 func (s *Sandbox) Open(ctx context.Context) error {
-	code, err := s.vm.AttachWith(ctx, "opencode", nil, m.WithAttachCwd(s.Worktree))
+	terminalEnv := make(map[string]string)
+	for _, key := range []string{"TERM", "COLORTERM"} {
+		if value := os.Getenv(key); value != "" {
+			terminalEnv[key] = value
+		}
+	}
+	code, err := s.vm.AttachWith(ctx, "opencode", nil,
+		m.WithAttachCwd(s.Worktree), m.WithAttachEnv(terminalEnv))
 	if err != nil {
 		return err
 	}
