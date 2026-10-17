@@ -33,13 +33,19 @@ func TestGitHubInjectionIsRestrictedToAuthorizationOnExactGitHubHosts(t *testing
 	s := prepareWithGitHub(t, newWorktree(t), []byte("github_pat_FAKE"))
 	var config map[string]any
 	require.NoError(t, json.Unmarshal([]byte(storedSandboxConfig(t, s)), &config))
-	network := config["network"].(map[string]any)
-	tls := network["tls"].(map[string]any)
+	network, ok := config["network"].(map[string]any)
+	require.True(t, ok)
+	tls, ok := network["tls"].(map[string]any)
+	require.True(t, ok)
 	require.Equal(t, true, tls["enabled"])
 	require.Equal(t, true, tls["verify_upstream"])
-	secrets := network["secrets"].(map[string]any)["secrets"].([]any)
+	secretConfig, ok := network["secrets"].(map[string]any)
+	require.True(t, ok)
+	secrets, ok := secretConfig["secrets"].([]any)
+	require.True(t, ok)
 	require.Len(t, secrets, 1)
-	secret := secrets[0].(map[string]any)
+	secret, ok := secrets[0].(map[string]any)
+	require.True(t, ok)
 	require.Equal(t, true, secret["require_tls_identity"])
 	require.Equal(t, []any{map[string]any{"exact": "api.github.com"}, map[string]any{"exact": "github.com"}}, secret["allowed_hosts"])
 	require.Equal(t, map[string]any{"headers": true, "header_fields": []any{"authorization"}, "query": false, "body": false}, secret["substitution"])
@@ -55,7 +61,7 @@ func TestExistingSandboxKeepsItsOriginalGitHubCredential(t *testing.T) {
 	resumed, err := sandbox.Prepare(ctx, worktree, nil, githubSecrets(t, []byte("github_pat_FAKE_ROTATED")), testSettings(t))
 
 	require.NoError(t, err)
-	defer resumed.Close()
+	defer func() { require.NoError(t, resumed.Close()) }()
 	require.Equal(t, bootID, execInSandbox(t, resumed, "cat", "/proc/sys/kernel/random/boot_id"))
 	stored := storedSandboxConfig(t, resumed)
 	require.Contains(t, stored, "github_pat_FAKE_INITIAL")
@@ -71,7 +77,7 @@ func TestGitHubCredentialCanBeReusedWithoutChanges(t *testing.T) {
 	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, githubSecrets(t, []byte(token)), testSettings(t))
 
 	require.NoError(t, err)
-	defer resumed.Close()
+	defer func() { require.NoError(t, resumed.Close()) }()
 	require.Equal(t, s.Name, resumed.Name)
 }
 
@@ -98,7 +104,7 @@ func TestStoppedSandboxKeepsItsOriginalGitHubCredential(t *testing.T) {
 	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, githubSecrets(t, []byte("github_pat_FAKE_ROTATED")), testSettings(t))
 
 	require.NoError(t, err)
-	defer resumed.Close()
+	defer func() { require.NoError(t, resumed.Close()) }()
 	require.Equal(t, "$MSB_GH_TOKEN\n", execInSandbox(t, resumed, "printenv", "GH_TOKEN"))
 	require.Contains(t, storedSandboxConfig(t, resumed), "github_pat_FAKE_INITIAL")
 	require.NotContains(t, storedSandboxConfig(t, resumed), "github_pat_FAKE_ROTATED")
@@ -118,7 +124,7 @@ func TestRemovingGitHubTokenFileDoesNotChangeAnExistingSandbox(t *testing.T) {
 	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, testSettings(t))
 
 	require.NoError(t, err)
-	defer resumed.Close()
+	defer func() { require.NoError(t, resumed.Close()) }()
 	require.Contains(t, storedSandboxConfig(t, resumed), "github_pat_FAKE_INITIAL")
 	require.Equal(t, "$MSB_GH_TOKEN\n", execInSandbox(t, resumed, "gh", "auth", "token"))
 }

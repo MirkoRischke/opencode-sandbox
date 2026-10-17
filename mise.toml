@@ -1,15 +1,16 @@
 [tools]
 go = "1.27.2"
+golangci-lint = "2.15.0"
 hadolint = "2.15.1"
 microsandbox = "0.7.8"
 
 [tasks.lint]
-description = "Lint the Dockerfile"
-run = "hadolint Dockerfile"
+description = "Lint Go code and the Dockerfile"
+run = ["golangci-lint run ./...", "hadolint Dockerfile"]
 
 [tasks.fmt]
 description = "Format Go code"
-run = "go fmt ./..."
+run = "golangci-lint fmt ./..."
 
 [tasks.cli]
 description = "Build the worktree launcher"

@@ -49,7 +49,7 @@ func confirmRepoConfig(input io.Reader, output io.Writer, path string, data []by
 
 // Repository content must not be able to inject terminal control sequences into
 // the approval prompt or hide credential destinations from the reviewer.
-func quoteConfig(output io.Writer, data []byte) {
+func quoteConfig(output *bytes.Buffer, data []byte) {
 	for _, line := range strings.Split(strings.TrimSuffix(string(data), "\n"), "\n") {
 		fmt.Fprintf(output, "  %q\n", line)
 	}

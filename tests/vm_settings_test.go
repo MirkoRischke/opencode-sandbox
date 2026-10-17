@@ -31,7 +31,7 @@ func TestVMResourcesFollowConfigAndPersistAcrossResume(t *testing.T) {
 	require.NoError(t, s.Stop(ctx))
 	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, launcherconfig.DefaultSettings())
 	require.NoError(t, err)
-	defer resumed.Close()
+	defer func() { require.NoError(t, resumed.Close()) }()
 	require.NoError(t, json.Unmarshal([]byte(storedSandboxConfig(t, resumed)), &config))
 	require.EqualValues(t, 1, config.CPUs)
 	require.EqualValues(t, 1024, config.MemoryMiB)

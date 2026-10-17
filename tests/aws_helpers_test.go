@@ -12,6 +12,7 @@ import (
 
 	"opencode-sandbox/internal/sandbox"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -51,10 +52,12 @@ func fakeAWSHost(t *testing.T, region string, response func(int) (time.Time, boo
 		w.Header().Set("Content-Type", "text/xml")
 		if !success {
 			w.WriteHeader(http.StatusForbidden)
-			fmt.Fprint(w, `<ErrorResponse><Error><Code>AccessDenied</Code><Message>FAKE_HOST_SOURCE_SECRET must not leak</Message></Error></ErrorResponse>`)
+			_, err := fmt.Fprint(w, `<ErrorResponse><Error><Code>AccessDenied</Code><Message>FAKE_HOST_SOURCE_SECRET must not leak</Message></Error></ErrorResponse>`)
+			assert.NoError(t, err)
 			return
 		}
-		fmt.Fprintf(w, `<AssumeRoleResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/"><AssumeRoleResult><Credentials><AccessKeyId>FAKE_ROLE_KEY_%d</AccessKeyId><SecretAccessKey>FAKE_ROLE_SECRET_%d</SecretAccessKey><SessionToken>FAKE_ROLE_SESSION_%d</SessionToken><Expiration>%s</Expiration></Credentials></AssumeRoleResult></AssumeRoleResponse>`, n, n, n, expires.UTC().Format(time.RFC3339))
+		_, err := fmt.Fprintf(w, `<AssumeRoleResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/"><AssumeRoleResult><Credentials><AccessKeyId>FAKE_ROLE_KEY_%d</AccessKeyId><SecretAccessKey>FAKE_ROLE_SECRET_%d</SecretAccessKey><SessionToken>FAKE_ROLE_SESSION_%d</SessionToken><Expiration>%s</Expiration></Credentials></AssumeRoleResult></AssumeRoleResponse>`, n, n, n, expires.UTC().Format(time.RFC3339))
+		assert.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
 	t.Setenv("AWS_ENDPOINT_URL_STS", server.URL)

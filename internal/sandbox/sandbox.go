@@ -122,14 +122,14 @@ func (s *Sandbox) Exec(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 	if err != nil {
 		return err
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck // Release the stream after completion or failure; preserve the command result.
 	var inputDone chan error
 	if stdin != nil {
 		sink := h.TakeStdin()
 		if sink == nil {
 			return fmt.Errorf("guest stdin unavailable")
 		}
-		defer sink.Close()
+		defer sink.Close() //nolint:errcheck // Fallback cleanup; the input goroutine checks its own Close error.
 		inputDone = make(chan error, 1)
 		go func() {
 			_, err := io.Copy(sink, stdin)
@@ -194,8 +194,8 @@ func (s *Sandbox) Open(ctx context.Context) error {
 	return checkExit(code)
 }
 
-func (s *Sandbox) Remove(ctx context.Context) error {
-	defer s.Close()
+func (s *Sandbox) Remove(ctx context.Context) (err error) {
+	defer func() { err = errors.Join(err, s.Close()) }()
 	return s.vm.Destroy(ctx)
 }
 

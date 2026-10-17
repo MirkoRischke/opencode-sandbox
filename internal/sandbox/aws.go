@@ -149,7 +149,7 @@ mktemp /root/.aws/.config.XXXXXX
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		for _, path := range temporary {
-			_ = s.vm.FS().Remove(cleanupCtx, path)
+			_ = s.vm.FS().Remove(cleanupCtx, path) //nolint:errcheck // Best-effort cleanup; renamed files no longer exist at these paths.
 		}
 	}()
 	if err := s.vm.FS().WriteString(ctx, temporary[0], credentials); err != nil {

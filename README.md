@@ -73,6 +73,6 @@ New VMs deny application internet access by default. See also
 
 ```sh
 mise run fmt  # Format Go code
-mise run lint # Lint the Dockerfile
+mise run lint
 mise run test # Build, import, and smoke-test in a fresh VM
 ```

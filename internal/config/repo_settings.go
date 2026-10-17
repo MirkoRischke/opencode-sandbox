@@ -178,7 +178,7 @@ func trustRepoSettings(root string, data []byte, approve func() error) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmp.Name())
+	defer os.Remove(tmp.Name()) //nolint:errcheck // Best-effort cleanup; a successful rename already removes this path.
 	_, writeErr := tmp.Write(append(encoded, '\n'))
 	closeErr := tmp.Close()
 	if writeErr != nil {

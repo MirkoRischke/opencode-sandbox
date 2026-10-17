@@ -21,11 +21,10 @@ func testSettings(t *testing.T) launcherconfig.Settings {
 	return settings
 }
 
-func writeSettings(t *testing.T, contents string) string {
+func writeSettings(t *testing.T, contents string) {
 	t.Helper()
 	dir := filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "opencode-sandbox")
 	require.NoError(t, os.MkdirAll(dir, 0700))
 	path := filepath.Join(dir, "config.toml")
 	require.NoError(t, os.WriteFile(path, []byte(contents), 0600))
-	return path
 }

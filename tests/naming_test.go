@@ -43,7 +43,7 @@ func TestSandboxNameRemainsStableWhenBranchChanges(t *testing.T) {
 	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, testSettings(t))
 
 	require.NoError(t, err)
-	defer resumed.Close()
+	defer func() { require.NoError(t, resumed.Close()) }()
 	require.Equal(t, s.Name, resumed.Name)
 }
 

@@ -46,18 +46,23 @@ func run() (err error) {
 			return err
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-		fmt.Fprintln(w, "NAME\tSTATE")
+		if _, err := fmt.Fprintln(w, "NAME\tSTATE"); err != nil {
+			return err
+		}
 		for _, vm := range vms {
-			fmt.Fprintf(w, "%s\t%s\n", vm.Name(), vm.Status())
+			if _, err := fmt.Fprintf(w, "%s\t%s\n", vm.Name(), vm.Status()); err != nil {
+				return err
+			}
 		}
 		return w.Flush()
 	}
 	flags := flag.NewFlagSet("opencode-sandbox", flag.ContinueOnError)
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: opencode-sandbox [launch flags] | list (ls) | remove (rm) | config default")
-		fmt.Fprintln(flags.Output(), "  list, ls    List all managed VMs, including stopped VMs")
-		fmt.Fprintln(flags.Output(), "  remove, rm  Stop and delete all managed VMs without confirmation")
-		fmt.Fprintln(flags.Output(), "  config default  Print documented launcher defaults without loading configuration")
+		//nolint:errcheck // flag.Usage cannot return output errors.
+		fmt.Fprintln(flags.Output(), `Usage: opencode-sandbox [launch flags] | list (ls) | remove (rm) | config default
+  list, ls    List all managed VMs, including stopped VMs
+  remove, rm  Stop and delete all managed VMs without confirmation
+  config default  Print documented launcher defaults without loading configuration`)
 		flags.PrintDefaults()
 	}
 	configPath := flags.String("config", "", "Guest OpenCode JSON configuration file")
@@ -65,7 +70,7 @@ func run() (err error) {
 	awsRole := flags.String("aws-role", "", "IAM role ARN to assume for this session (optional)")
 	awsProfile := flags.String("aws-profile", "", "Optional host AWS source profile (requires --aws-role)")
 	if err := flags.Parse(os.Args[1:]); err != nil {
-		if err == flag.ErrHelp {
+		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
 		return err

@@ -101,7 +101,7 @@ func TestGuestConfigUpdatesOnEveryPreparation(t *testing.T) {
 	updated := []byte(`{"model":"openai/gpt-6-luna"}`)
 	resumed, err := sandbox.Prepare(ctx, worktree, updated, nil, testSettings(t))
 	require.NoError(t, err)
-	defer resumed.Close()
+	defer func() { require.NoError(t, resumed.Close()) }()
 	require.JSONEq(t, string(updated), execInSandbox(t, resumed, "cat", "/etc/opencode/opencode.json"))
 }
 
@@ -114,7 +114,7 @@ func TestRemovingCustomConfigClearsManagedGuestConfig(t *testing.T) {
 
 	withoutConfig, err := sandbox.Prepare(ctx, worktree, nil, nil, testSettings(t))
 	require.NoError(t, err)
-	defer withoutConfig.Close()
+	defer func() { require.NoError(t, withoutConfig.Close()) }()
 	execInSandbox(t, withoutConfig, "test", "!", "-e", "/etc/opencode/opencode.json")
 }
 
@@ -127,6 +127,6 @@ func TestNoCustomConfigPreservesUnmanagedGuestConfig(t *testing.T) {
 	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, testSettings(t))
 
 	require.NoError(t, err)
-	defer resumed.Close()
+	defer func() { require.NoError(t, resumed.Close()) }()
 	require.JSONEq(t, `{}`, execInSandbox(t, resumed, "cat", "/etc/opencode/opencode.json"))
 }

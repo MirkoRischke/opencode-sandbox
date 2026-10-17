@@ -39,8 +39,16 @@ func TestApproveRepoConfigRejectsPipedInput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader.Close()
-	defer writer.Close()
+	defer func() {
+		if err := reader.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	defer func() {
+		if err := writer.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	original := os.Stdin
 	os.Stdin = reader
 	defer func() { os.Stdin = original }()
