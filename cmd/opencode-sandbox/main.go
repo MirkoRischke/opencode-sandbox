@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"opencode-sandbox/internal/sandbox"
 )
@@ -16,7 +19,7 @@ func main() {
 	}
 }
 
-func run() error {
+func run() (err error) {
 	flags := flag.NewFlagSet("opencode-sandbox", flag.ContinueOnError)
 	configPath := flags.String("config", "", "Guest OpenCode JSON configuration file")
 	cliConfigPath := flags.String("cli-config", "", "Guest OpenCode CLI JSON settings file")
@@ -45,12 +48,13 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	defer cancel()
 	s, err := sandbox.Prepare(ctx, ".", config, githubToken, settings)
 	if err != nil {
 		return err
 	}
-	defer s.Close()
+	defer func() { err = errors.Join(err, s.Shutdown()) }()
 	if err := s.SyncTUIConfig(ctx, cliConfig); err != nil {
 		return err
 	}

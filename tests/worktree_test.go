@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
 func TestSandboxEditsAreVisibleOnHost(t *testing.T) {
@@ -76,6 +77,22 @@ func TestPreparingStoppedSandboxResumesState(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, resumed.Close()) })
 	assert.Equal(t, s.Name, resumed.Name)
+	execInSandbox(t, resumed, "test", "-f", "/root/persistent-state")
+}
+
+func TestShutdownStopsSandboxAndPreservesGuestState(t *testing.T) {
+	s := startSandbox(t)
+	execInSandbox(t, s, "touch", "/root/persistent-state")
+	require.NoError(t, s.Shutdown())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	handle, err := m.GetSandbox(ctx, s.Name)
+	require.NoError(t, err)
+	require.Equal(t, m.SandboxStatusStopped, handle.Status())
+
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, testSettings(t))
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, resumed.Close()) })
 	execInSandbox(t, resumed, "test", "-f", "/root/persistent-state")
 }
 

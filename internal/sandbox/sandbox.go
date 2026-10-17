@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -68,8 +69,15 @@ func Prepare(ctx context.Context, directory string, config, githubToken []byte, 
 	if err != nil {
 		return nil, fmt.Errorf("prepare sandbox: %w", err)
 	}
+	initialized := false
+	defer func() {
+		if !initialized {
+			if err := s.Shutdown(); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		}
+	}()
 	if err := s.configureGitHub(ctx, githubToken != nil); err != nil {
-		s.Close()
 		return nil, err
 	}
 	// mise discovers supported filenames (including .mise.toml and mise/config.toml).
@@ -82,13 +90,12 @@ if printf '%s\n' "$configs" | grep -F -- "$PWD/" >/dev/null; then
   mise install
 fi`)
 	if err != nil {
-		s.Close()
 		return nil, fmt.Errorf("initialize project tools: %w", err)
 	}
 	if err := s.configureOpenCode(ctx, config); err != nil {
-		s.Close()
 		return nil, fmt.Errorf("configure guest OpenCode: %w", err)
 	}
+	initialized = true
 	return s, nil
 }
 
@@ -191,6 +198,18 @@ func (s *Sandbox) Close() error {
 
 func (s *Sandbox) Stop(ctx context.Context) error {
 	return s.vm.Stop(ctx)
+}
+
+// Shutdown stops the VM without deleting its disk, then releases the connection.
+// Cleanup uses an independent deadline, even when the launch context was canceled.
+func (s *Sandbox) Shutdown() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	stopErr := s.Stop(ctx)
+	if stopErr != nil {
+		stopErr = fmt.Errorf("stop sandbox: %w", stopErr)
+	}
+	return errors.Join(stopErr, s.Close())
 }
 
 func checkExit(code int) error {

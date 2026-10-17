@@ -5,6 +5,10 @@ Copy `docs/config.example.toml` to
 `$XDG_CONFIG_HOME/opencode-sandbox/config.toml`). This is the general launcher
 configuration; OpenCode's `opencode.json` and `cli.json` remain separate.
 
+The launcher always stops its VM on exit, including errors and handled termination
+signals. It never removes the VM: installed tools and guest files persist for the
+next launch. Forced termination (`SIGKILL`) or a host crash cannot run cleanup.
+
 ```toml
 [network]
 allowed_hosts = ["github.com", "api.github.com"]
