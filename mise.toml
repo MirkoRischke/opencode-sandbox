@@ -1,0 +1,33 @@
+[tools]
+go = "1.27.2"
+microsandbox = "0.7.8"
+
+[tasks.fmt]
+description = "Format Go code"
+run = "go fmt ./..."
+
+[tasks.cli]
+description = "Build the worktree launcher"
+run = "go build -o bin/opencode-sandbox ./cmd/opencode-sandbox"
+
+[tasks.install]
+description = "Build and install the launcher to ~/.local/bin"
+depends = ["cli"]
+run = '''
+mkdir -p "$HOME/.local/bin"
+install -m755 bin/opencode-sandbox "$HOME/.local/bin/opencode-sandbox"
+'''
+
+[tasks.build]
+description = "Build the sandbox image"
+run = "docker build -t opencode-sandbox:poc ."
+
+[tasks.load]
+description = "Build and import the image into Microsandbox"
+depends = ["build"]
+run = "bash -o pipefail -c 'docker save opencode-sandbox:poc | msb load'"
+
+[tasks.test]
+description = "Build, import, and smoke-test the image in a fresh VM"
+depends = ["load"]
+run = "go test -count=1 -v -timeout 10m ./..."

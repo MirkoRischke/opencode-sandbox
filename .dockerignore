@@ -1,0 +1,4 @@
+# No repositories, authentication, or host configuration enter the build.
+**
+!Dockerfile
+!.dockerignore
