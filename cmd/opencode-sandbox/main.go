@@ -34,6 +34,9 @@ func run() (err error) {
 	if flags.NArg() != 0 {
 		return fmt.Errorf("usage: opencode-sandbox [--config path] [--cli-config path] [--aws-role arn [--aws-profile name]] (run inside a Git worktree)")
 	}
+	if err := identifyHerdrAgent(); err != nil {
+		return err
+	}
 	var awsOptions *sandbox.AWSOptions
 	if *awsRole != "" || *awsProfile != "" {
 		awsOptions = &sandbox.AWSOptions{SourceProfile: *awsProfile, RoleARN: *awsRole}
@@ -76,4 +79,21 @@ func run() (err error) {
 		return err
 	}
 	return s.Open(ctx)
+}
+
+func identifyHerdrAgent() error {
+	if os.Getenv("HERDR_ENV") != "1" || os.Getenv("HERDR_AGENT") != "" {
+		return nil
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("identify Herdr agent: %w", err)
+	}
+	if err := os.Setenv("HERDR_AGENT", "opencode"); err != nil {
+		return fmt.Errorf("identify Herdr agent: %w", err)
+	}
+	// Herdr reads /proc/<pid>/environ on Linux, which exposes the initial
+	// environment rather than later Setenv changes. Exec preserves the PID,
+	// terminal, and arguments while making the hint visible to Herdr.
+	return syscall.Exec(executable, os.Args, os.Environ())
 }

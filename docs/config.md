@@ -23,6 +23,11 @@ msb rm --force --label app=opencode-sandbox
 Existing VMs are not automatically relabeled. Removal deletes guest-local state,
 but not mounted host worktrees.
 
+Inside a Herdr pane (`HERDR_ENV=1`), the launcher automatically identifies itself
+as OpenCode for agent detection. No command prefix or Herdr configuration is
+needed. An explicitly set `HERDR_AGENT` takes precedence. The TUI still runs in
+the guest; the guest receives no Herdr socket access.
+
 ```toml
 [vm]
 cpus = 2
