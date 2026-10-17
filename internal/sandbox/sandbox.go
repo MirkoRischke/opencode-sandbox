@@ -2,7 +2,6 @@ package sandbox
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
@@ -46,8 +45,7 @@ func Prepare(ctx context.Context, directory string, config []byte) (*Sandbox, er
 	if err != nil {
 		return nil, err
 	}
-	hash := sha256.Sum256([]byte(root))
-	s := &Sandbox{Name: fmt.Sprintf("opencode-%x", hash[:12]), Worktree: root}
+	s := &Sandbox{Name: sandboxName(root, common), Worktree: root}
 	if err := configureRuntime(); err != nil {
 		return nil, fmt.Errorf("locate Microsandbox runtime: %w", err)
 	}

@@ -17,10 +17,15 @@ import (
 
 func newWorktree(t *testing.T) string {
 	t.Helper()
+	return newNamedWorktree(t, "repo", "worktree")
+}
+
+func newNamedWorktree(t *testing.T, repoName, worktreeName string) string {
+	t.Helper()
 	dir, err := os.MkdirTemp("/tmp/opencode", "worktree-test-")
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, os.RemoveAll(dir)) })
-	repo, worktree := filepath.Join(dir, "repo"), filepath.Join(dir, "worktree")
+	repo, worktree := filepath.Join(dir, repoName), filepath.Join(dir, worktreeName)
 	runGit(t, "init", "--initial-branch=main", repo)
 	runGit(t, "-C", repo, "-c", "user.name=Sandbox Test", "-c", "user.email=sandbox@example.invalid",
 		"-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "-m", "Initial commit")
