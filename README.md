@@ -56,6 +56,17 @@ Configure network access and secrets in [launcher configuration](docs/config.md)
 New VMs deny application internet access by default. See also
 [GitHub access](docs/github.md) and [AWS credentials](docs/aws.md).
 
+## Limitations
+
+- **Global sandbox settings:** sandbox settings are global, not project-specific.
+- **OpenAI-only automatic authentication:** the launcher imports an active host
+  OpenAI subscription OAuth credential. Other providers aren't explicitly
+  blocked, but their authentication isn't set up automatically; a fresh VM
+  currently requires the OpenAI import to succeed.
+- **Model credentials are exposed to the guest:** imported OpenAI credentials
+  are stored inside the VM and can be read by sandbox code. They don't use the
+  host-proxy protection provided for custom secrets.
+
 ## Development
 
 ```sh
