@@ -5,6 +5,58 @@ Copy `docs/config.example.toml` to
 `$XDG_CONFIG_HOME/opencode-sandbox/config.toml`). This is the general launcher
 configuration; OpenCode's `opencode.json` and `cli.json` remain separate.
 
+## Repository overrides and trust
+
+Optionally add `.opencode-sandbox.toml` at the Git worktree root. Launching from
+a subdirectory uses that same root file; parent directories and nested configs
+are not merged. Each worktree has its own config and approval.
+
+Settings load in this order: built-in defaults, global `config.toml`, then repo
+config. Tables merge recursively, scalars and arrays replace, and omitted keys
+inherit. These rules apply to every setting, including named secrets. For example:
+
+```toml
+# .opencode-sandbox.toml
+[vm]
+memory_mib = 8192
+
+[network]
+allowed_hosts = []
+
+[secrets.github]
+allowed_hosts = ["api.github.com"]
+```
+
+This preserves global CPU/disk settings, disables application internet access,
+and overrides only the GitHub secret's destination list. Empty tables do not
+clear inherited entries; empty arrays replace inherited arrays. Relative secret
+file paths resolve against the directory of the config supplying the `file`
+field. Overriding another secret field does not change the inherited file's origin.
+Do not commit credential files.
+
+Before a new or changed repo config is used, an interactive launch shows its
+contents and the effective settings, and asks for approval (default: no).
+Credential values are not read during this review. Approval authorizes all
+settings, including host credential files and substitution destinations.
+Unapproved configs fail in non-interactive launches. Invalid configs fail before
+approval. An absent repo config needs no approval.
+
+Approvals are stored outside the repo at
+`$XDG_STATE_HOME/opencode-sandbox/trust.json`, defaulting to
+`~/.local/state/opencode-sandbox/trust.json`. Each record binds the canonical
+absolute worktree path to the SHA-256 hash of the exact config bytes. Any change,
+including comments, or a moved/copied checkout requires approval again. Symlink
+aliases of the same worktree share approval. The directory uses mode `700`, the
+file mode `600`, and writes replace the file atomically. Malformed trust storage
+fails launch. Delete a repo's entry (or the trust file) to require approval again.
+
+The launcher uses the same bytes it reviewed, even if the file changes while the
+prompt is open. Approval is checked before loading credentials or starting the VM,
+including when resuming an existing VM. Existing VM policies and credentials still
+require recreation to change, as described below.
+
+## Launch behaviour
+
 AWS role access is enabled per launch with `--aws-role` and optional
 `--aws-profile`, not with global configuration. See [AWS credentials](aws.md).
 
@@ -85,7 +137,8 @@ headers = ["authorization"]
 
 Add other named `[secrets.<name>]` sections in the same form. Each must have a
 unique environment variable name, a file, non-empty exact hostnames, and non-empty
-HTTP header names. Relative paths resolve against the launcher config directory;
+HTTP header names. Relative paths resolve against the config directory supplying
+the `file` field (global or repo);
 absolute paths are also accepted. Inline values and environment sources are not
 supported. Use mode `700` on the credential directory and `600` on the file.
 Symlinked paths, oversized files (over 16 KiB), empty values, multiple lines, and

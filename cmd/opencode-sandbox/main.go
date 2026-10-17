@@ -83,7 +83,7 @@ func run() (err error) {
 	if err != nil {
 		return err
 	}
-	settings, err := sandbox.LoadSettings()
+	settings, err := sandbox.LoadRepoSettings(".", approveRepoConfig)
 	if err != nil {
 		return err
 	}

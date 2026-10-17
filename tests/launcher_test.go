@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -121,6 +122,22 @@ func TestLauncherRejectsInvalidSettingsBeforeStartingVM(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, string(output), "network.allowed_hosts")
 	require.Contains(t, string(output), "config.toml")
+}
+
+func TestLauncherRejectsUntrustedRepoConfigBeforeLoadingSecrets(t *testing.T) {
+	root, _ := repoSettingsFixture(t, "[secrets.github]\nallowed_hosts = ['other.example.com']\n")
+	writeSettings(t, "[secrets.github]\nfile = 'missing-token'\nenv = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	command := exec.CommandContext(ctx, buildLauncher(t))
+	command.Dir = root
+	command.Stdin = strings.NewReader("yes\n")
+	output, err := command.CombinedOutput()
+	require.Error(t, err)
+	require.Contains(t, string(output), "untrusted repo config")
+	require.NotContains(t, string(output), "missing-token")
+	_, err = os.Stat(filepath.Join(os.Getenv("XDG_STATE_HOME"), "opencode-sandbox", "trust.json"))
+	require.True(t, os.IsNotExist(err))
 }
 
 func TestLauncherValidatesAWSFlagsBeforeStartingVM(t *testing.T) {

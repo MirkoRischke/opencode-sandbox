@@ -52,8 +52,9 @@ func validateSecrets(config map[string]SecretSettings) error {
 	return nil
 }
 
-// LoadSecrets reads only explicitly configured files. Relative paths are resolved
-// against the launcher config directory; host environment credentials are ignored.
+// LoadSecrets reads only explicitly configured files. Remaining relative paths
+// use the global config directory; repo paths are resolved by LoadRepoSettings.
+// Host environment credentials are ignored.
 func LoadSecrets(settings Settings) ([]Secret, error) {
 	if err := validateSecrets(settings.Secrets); err != nil {
 		return nil, err

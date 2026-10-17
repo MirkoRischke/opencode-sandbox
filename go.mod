@@ -9,6 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.51.4
 	github.com/stretchr/testify v1.11.1
 	github.com/superradcompany/microsandbox/sdk/go v0.7.8
+	golang.org/x/term v0.47.0
 )
 
 require (
@@ -25,5 +26,6 @@ require (
 	github.com/aws/smithy-go v1.28.5 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

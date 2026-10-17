@@ -10,6 +10,8 @@ retain installed tools and guest files for the next launch.
   explicitly configured HTTPS hosts.
 - **Custom credentials:** configure file-backed secrets, injected into selected
   HTTPS headers by the host proxy without exposing their values to the guest.
+- **Repository configuration:** override global settings with a repo-root
+  `.opencode-sandbox.toml`; new or changed configs require approval.
 - **AWS roles:** assume a role on the host and provide automatically refreshed,
   temporary credentials to the guest. Unlike proxy secrets, these are readable
   by guest code.
@@ -58,7 +60,6 @@ New VMs deny application internet access by default. See also
 
 ## Limitations
 
-- **Global sandbox settings:** sandbox settings are global, not project-specific.
 - **OpenAI-only automatic authentication:** the launcher imports an active host
   OpenAI subscription OAuth credential. Other providers aren't explicitly
   blocked, but their authentication isn't set up automatically; a fresh VM
