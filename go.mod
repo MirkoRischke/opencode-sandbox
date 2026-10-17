@@ -3,6 +3,7 @@ module opencode-sandbox
 go 1.27.2
 
 require (
+	github.com/BurntSushi/toml v1.5.0
 	github.com/stretchr/testify v1.11.1
 	github.com/superradcompany/microsandbox/sdk/go v0.7.8
 )

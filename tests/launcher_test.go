@@ -15,6 +15,7 @@ func TestLauncherRejectsDirectoriesOutsideGit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	writeSettings(t, "[network]\nallowed_hosts = []\n")
 	binary := buildLauncher(t)
 	command := exec.CommandContext(ctx, binary)
 	command.Dir = t.TempDir()
@@ -27,6 +28,7 @@ func TestLauncherRejectsDirectoriesOutsideGit(t *testing.T) {
 
 func TestLauncherAcceptsCustomConfigFlag(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	writeSettings(t, "[network]\nallowed_hosts = []\n")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	binary := buildLauncher(t)
@@ -56,6 +58,7 @@ func TestLauncherRejectsMissingCustomConfigBeforeStartingVM(t *testing.T) {
 
 func TestLauncherAcceptsCustomCLIConfigFlag(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	writeSettings(t, "[network]\nallowed_hosts = []\n")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	binary := buildLauncher(t)
@@ -81,4 +84,19 @@ func TestLauncherRejectsMissingCLIConfigBeforeStartingVM(t *testing.T) {
 
 	require.Error(t, err)
 	require.Contains(t, string(output), "read CLI config")
+}
+
+func TestLauncherRejectsInvalidSettingsBeforeStartingVM(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	writeSettings(t, "[network]\nallowed_hosts = ['*']\n")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	command := exec.CommandContext(ctx, buildLauncher(t))
+	command.Dir = newWorktree(t)
+
+	output, err := command.CombinedOutput()
+
+	require.Error(t, err)
+	require.Contains(t, string(output), "network.allowed_hosts")
+	require.Contains(t, string(output), "config.toml")
 }

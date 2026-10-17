@@ -1,0 +1,73 @@
+# Location: ~/.config/opencode-sandbox/config.toml
+# XDG_CONFIG_HOME overrides ~/.config.
+# Exact hostnames; policy permits HTTPS/WSS on TCP 443 only.
+# Applied only when creating a VM. Recreate it after changing this file.
+# Missing configuration defaults to no internet; invalid configuration fails.
+
+[network]
+allowed_hosts = [
+  # OpenAI subscription inference (legacy Codex and Sign in with ChatGPT)
+  # and OAuth token refresh. No credential inspection needed to include both.
+  "chatgpt.com",
+  "api.openai.com",
+  "auth.openai.com",
+
+  # OpenCode model catalog.
+  "models.dev",
+
+  # Context7 remote MCP. Documentation retrieval happens server-side;
+  # individual documentation sites need not be allowed for this MCP.
+  "mcp.context7.com",
+
+  # GitHub: HTTPS Git, REST/GraphQL, raw files, source archives, release assets.
+  # Credential substitution remains limited to github.com / api.github.com.
+  "github.com",
+  "api.github.com",
+  "raw.githubusercontent.com",
+  "codeload.github.com",
+  "release-assets.githubusercontent.com",
+  "objects.githubusercontent.com",
+
+  # mise's shared version metadata and Go toolchain downloads.
+  # Aqua registry metadata/releases use the GitHub hosts above.
+  "mise-versions.jdx.dev",
+  "dl.google.com",
+
+  # Public Go modules, checksum verification, and redirected module archives.
+  "proxy.golang.org",
+  "sum.golang.org",
+  "storage.googleapis.com",
+
+  # npm packages for OpenCode plugins / language tooling.
+  # Remove if unused. Node itself is already installed in the base image.
+  "registry.npmjs.org",
+
+  # Optional: installing other Node versions with mise.
+  # "nodejs.org",
+
+  # Optional: fetching OpenCode / Microsandbox / Go documentation directly.
+  # "opencode.ai",
+  # "docs.microsandbox.dev",
+  # "go.dev",
+
+  # Optional: existing fake-token echo integration test only.
+  # Not needed for normal sandbox use.
+  # "httpbingo.org",
+]
+
+# Scope / limits:
+# - Based on this repo's mise.toml and your OpenAI-only sandbox configuration.
+# - Other projects, LSP downloads, Git LFS, and Actions logs can need extra hosts.
+# - Docker builds/image imports run on the host, outside this guest policy;
+#   Docker Hub, ghcr.io, and Debian mirrors are intentionally omitted.
+# - Shared hosts (especially storage.googleapis.com, GitHub, npm) serve content
+#   from many users. An allowlist is not an exfiltration or read-only guarantee.
+# - No unrestricted web browsing/search; add destinations deliberately.
+#
+# Sources:
+# https://github.com/anomalyco/opencode/blob/v2.0.30/packages/core/src/plugin/provider/openai.ts
+# https://github.com/anomalyco/opencode/blob/v2.0.30/packages/core/src/plugin/provider/chatgpt.ts
+# https://github.com/upstash/context7#installation
+# https://github.com/jdx/mise/blob/v2026.10.12/settings.toml
+# https://github.com/jdx/mise/blob/v2026.10.12/src/aqua/aqua_registry_wrapper.rs
+# https://go.dev/ref/mod#module-proxy

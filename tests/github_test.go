@@ -54,7 +54,7 @@ func TestExistingSandboxKeepsItsOriginalGitHubCredential(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	resumed, err := sandbox.Prepare(ctx, worktree, nil, []byte("github_pat_FAKE_ROTATED"))
+	resumed, err := sandbox.Prepare(ctx, worktree, nil, []byte("github_pat_FAKE_ROTATED"), testSettings(t))
 
 	require.NoError(t, err)
 	defer resumed.Close()
@@ -70,7 +70,7 @@ func TestGitHubCredentialCanBeReusedWithoutChanges(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, []byte(token))
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, []byte(token), testSettings(t))
 
 	require.NoError(t, err)
 	defer resumed.Close()
@@ -97,7 +97,7 @@ func TestStoppedSandboxKeepsItsOriginalGitHubCredential(t *testing.T) {
 	defer cancel()
 	require.NoError(t, s.Stop(ctx))
 
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, []byte("github_pat_FAKE_ROTATED"))
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, []byte("github_pat_FAKE_ROTATED"), testSettings(t))
 
 	require.NoError(t, err)
 	defer resumed.Close()
@@ -120,7 +120,7 @@ func TestRemovingGitHubTokenFileDoesNotChangeAnExistingSandbox(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, token)
 
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, token)
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, token, testSettings(t))
 
 	require.NoError(t, err)
 	defer resumed.Close()
@@ -133,7 +133,7 @@ func TestOlderSandboxRequiresRecreationBeforeEnablingGitHub(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	_, err := sandbox.Prepare(ctx, s.Worktree, nil, []byte("github_pat_FAKE"))
+	_, err := sandbox.Prepare(ctx, s.Worktree, nil, []byte("github_pat_FAKE"), testSettings(t))
 
 	require.ErrorContains(t, err, "recreate this VM")
 	require.NotContains(t, storedSandboxConfig(t, s), "github_pat_FAKE")

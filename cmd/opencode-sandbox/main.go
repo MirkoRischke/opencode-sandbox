@@ -37,12 +37,16 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	settings, err := sandbox.LoadSettings()
+	if err != nil {
+		return err
+	}
 	githubToken, err := sandbox.LoadGitHubToken()
 	if err != nil {
 		return err
 	}
 	ctx := context.Background()
-	s, err := sandbox.Prepare(ctx, ".", config, githubToken)
+	s, err := sandbox.Prepare(ctx, ".", config, githubToken, settings)
 	if err != nil {
 		return err
 	}
