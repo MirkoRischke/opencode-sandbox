@@ -3,6 +3,21 @@
   "permissions": [
     {
       "action": "external_directory",
+      "resource": "~/.local/state/opencode-sandbox/*",
+      "effect": "allow"
+    },
+    {
+      "action": "read",
+      "resource": "~/.local/state/opencode-sandbox",
+      "effect": "allow"
+    },
+    {
+      "action": "read",
+      "resource": "~/.local/state/opencode-sandbox/*",
+      "effect": "allow"
+    },
+    {
+      "action": "external_directory",
       "resource": "~/.config/opencode-sandbox/*",
       "effect": "allow"
     },
