@@ -144,8 +144,10 @@ func (d *networkDiagnostics) run(collect func() error) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	poll := func() {
-		if err := collect(); err != nil && d.collectionFailure == "" {
+		if err := collect(); err != nil {
 			d.collectionFailure = diagnosticErrorKind(err)
+		} else {
+			d.collectionFailure = ""
 		}
 		if err := d.save(); err != nil && d.saveFailure == "" {
 			d.saveFailure = diagnosticErrorKind(err)

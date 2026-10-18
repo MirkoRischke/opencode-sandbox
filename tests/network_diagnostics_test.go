@@ -96,3 +96,59 @@ func TestNetworkDiagnosticsPreservesWorktreeHistoryAcrossVMRecreation(t *testing
 		require.Equal(t, string(data), string(after), "resuming must not replay historical raw logs")
 	}
 }
+
+func TestNetworkDiagnosticsCollectsBlockedWebsitesAfterSnapshotRestore(t *testing.T) {
+	t.Parallel()
+	state := t.TempDir()
+	settings := launcherconfig.DefaultSettings()
+	settings.Network.Diagnostics = true
+	settings.Snapshot.Command = "true"
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	root := newWorktree(t)
+	t.Cleanup(func() { assert.NoError(t, sandbox.RemoveSnapshot(context.Background(), root)) })
+	_, err := sandbox.CreateSnapshot(ctx, root, nil, settings, sandbox.DiagnosticsOptions{StateDir: state})
+	require.NoError(t, err)
+	s, err := sandbox.Prepare(ctx, root, nil, nil, settings, sandbox.DiagnosticsOptions{StateDir: state})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		assert.NoError(t, s.Remove(ctx))
+	})
+	var restoredConfig struct {
+		Network struct {
+			HTTP struct {
+				DenyResponse bool `json:"deny_response"`
+			} `json:"http"`
+		} `json:"network"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(storedSandboxConfig(t, s)), &restoredConfig))
+	assert.True(t, restoredConfig.Network.HTTP.DenyResponse, "snapshot restore must retain the denial responder required for diagnostics")
+	for _, website := range []struct{ scheme, hostname string }{
+		{"https", "example.org"},
+	} {
+		hostname := website.hostname
+		requireNetworkBlocked(t, s, website.scheme+"://"+hostname)
+		require.Eventually(t, func() bool {
+			var output bytes.Buffer
+			if sandbox.WriteNetworkDiagnostics(context.Background(), s.Worktree, state, &output) != nil {
+				return false
+			}
+			var stored struct {
+				Targets []struct {
+					Hostname string `json:"hostname"`
+				} `json:"denied_targets"`
+			}
+			if json.Unmarshal(output.Bytes(), &stored) != nil {
+				return false
+			}
+			for _, target := range stored.Targets {
+				if target.Hostname == hostname {
+					return true
+				}
+			}
+			return false
+		}, 12*time.Second, 100*time.Millisecond, "blocked website %s must appear while the VM is running", hostname)
+	}
+}

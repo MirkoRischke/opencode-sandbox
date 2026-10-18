@@ -291,6 +291,25 @@ func TestNetworkDiagnosticsDefersWarningsUntilShutdown(t *testing.T) {
 	}
 }
 
+func TestNetworkDiagnosticsClearsCollectionFailureAfterRecovery(t *testing.T) {
+	t.Parallel()
+	var captured bytes.Buffer
+	d, err := loadDiagnostics("/project", time.Now(), DiagnosticsOptions{StateDir: t.TempDir(), Output: &captured})
+	require.NoError(t, err)
+	calls := 0
+	d.run(func() error {
+		calls++
+		if calls == 1 {
+			d.once.Do(func() { close(d.stop) })
+			return context.DeadlineExceeded
+		}
+		return nil
+	})
+	d.finish()
+	require.Equal(t, 2, calls)
+	require.Empty(t, captured.String(), "a successful final collection supersedes an earlier timeout")
+}
+
 func TestDiagnosticErrorKindDoesNotExposeRuntimeDetails(t *testing.T) {
 	t.Parallel()
 	require.Equal(t, "timeout", diagnosticErrorKind(context.DeadlineExceeded))
