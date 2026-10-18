@@ -19,7 +19,7 @@ type Secret struct {
 }
 
 // LoadSecrets reads only explicitly configured files. Remaining relative paths
-// use the global config directory; repo paths are resolved by config.LoadRepoSettings.
+// are resolved by the settings loader before this function is called.
 // Host environment credentials are ignored.
 func LoadSecrets(settings config.Settings) ([]Secret, error) {
 	if err := config.ValidateSecrets(settings.Secrets); err != nil {
@@ -27,10 +27,6 @@ func LoadSecrets(settings config.Settings) ([]Secret, error) {
 	}
 	if len(settings.Secrets) == 0 {
 		return nil, nil
-	}
-	dir, err := userConfigDir()
-	if err != nil {
-		return nil, err
 	}
 	names := make([]string, 0, len(settings.Secrets))
 	for name := range settings.Secrets {
@@ -42,7 +38,7 @@ func LoadSecrets(settings config.Settings) ([]Secret, error) {
 		config := settings.Secrets[name]
 		path := config.File
 		if !filepath.IsAbs(path) {
-			path = filepath.Join(dir, "opencode-sandbox", path)
+			return nil, fmt.Errorf("secret %q: credential path must be absolute", name)
 		}
 		value, err := readSecretFile(path)
 		if err != nil {

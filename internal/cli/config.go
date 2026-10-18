@@ -19,6 +19,16 @@ func hostConfigDir(xdg, home string) (string, error) {
 	return filepath.Join(home, ".config"), nil
 }
 
+func hostStateDir(xdg, home string) (string, error) {
+	if xdg != "" {
+		return xdg, nil
+	}
+	if home == "" {
+		return "", fmt.Errorf("HOME is not defined")
+	}
+	return filepath.Join(home, ".local", "state"), nil
+}
+
 func newConfigCommand() *cobra.Command {
 	config := &cobra.Command{
 		Use:   "config",

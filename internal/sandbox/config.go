@@ -30,18 +30,6 @@ func LoadConfig(path, configDir string) ([]byte, error) {
 	return data, nil
 }
 
-func userConfigDir() (string, error) {
-	dir := os.Getenv("XDG_CONFIG_HOME")
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		dir = filepath.Join(home, ".config")
-	}
-	return dir, nil
-}
-
 // configureOpenCode writes only guest-local configuration. The marker lets us remove
 // our previous copy when no file is selected, without deleting unmanaged files.
 func (s *Sandbox) configureOpenCode(ctx context.Context, config []byte) error {

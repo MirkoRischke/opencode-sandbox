@@ -25,6 +25,29 @@ All scenarios passed: 19 top-level tests per original repetition; 17 in the
 integration package afterward, with the two fallback cases moved to `internal/cli`.
 Internal packages passed separately (CLI package 0.032s during validation).
 
+## Credential and settings isolation
+
+Resolve config/trust directories once in CLI setup. Global settings resolve
+relative credential paths against their configuration directory; repo overrides
+retain their repo origin. Secret loading accepts resolved absolute paths and
+does not discover host environment or configuration directories.
+
+GitHub, secret, VM/network, settings, and repo-trust tests use private explicit
+inputs and run in parallel. HOME-based settings/trust checks move to VM-free CLI
+tests. Keep environment-credential rejection coverage through real launcher
+subprocesses with explicit environments, sharing the existing guest-probe fixture
+with AWS tests instead of duplicating it.
+
+| Group | Before total / mean | After total / mean | Reduction |
+| --- | --- | --- | --- |
+| `github_test.go`, `secrets_test.go`, `settings_test.go`, `repo_settings_test.go`, `network_test.go`, `vm_settings_test.go` | 86.939s / 28.980s | 40.914s / 13.638s | 52.9% |
+
+All scenarios passed: 45 top-level tests per original repetition; 43 afterward
+in the integration package, plus the two fallback cases relocated to
+`internal/cli`. Preserve assertions for permissions, file/path validation,
+trust/content approval, header substitution, denied destinations, VM resource
+persistence, and rejection of inherited `GH_TOKEN` as a credential source.
+
 ## Reproduction and artifacts
 
 Freeze a binary at each revision with:

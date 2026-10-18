@@ -17,8 +17,7 @@ import (
 
 func githubTokenPath(t *testing.T) string {
 	t.Helper()
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	dir := filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "opencode-sandbox", "creds")
+	dir := filepath.Join(t.TempDir(), "opencode-sandbox", "creds")
 	require.NoError(t, os.MkdirAll(dir, 0700))
 	return filepath.Join(dir, "github-token")
 }

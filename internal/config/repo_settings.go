@@ -16,11 +16,17 @@ import (
 
 const repoConfigName = ".opencode-sandbox.toml"
 
+// Paths contains host directories resolved by CLI setup, not environment lookups.
+type Paths struct {
+	ConfigDir string
+	StateDir  string
+}
+
 // LoadRepoSettings layers repo-root settings over global settings. Approval is
 // required for each new repo path/content pair, before any credentials are read.
 // approve receives the exact file bytes and the effective settings for review.
-func LoadRepoSettings(directory string, approve func(string, []byte, Settings) error) (Settings, error) {
-	settings, err := LoadSettings()
+func (p Paths) LoadRepoSettings(directory string, approve func(string, []byte, Settings) error) (Settings, error) {
+	settings, err := LoadSettings(p.ConfigDir)
 	if err != nil {
 		return settings, err
 	}
@@ -48,7 +54,7 @@ func LoadRepoSettings(directory string, approve func(string, []byte, Settings) e
 	if err != nil {
 		return settings, fmt.Errorf("repo settings %s: %w", path, err)
 	}
-	if err := trustRepoSettings(root, data, func() error {
+	if err := trustRepoSettings(p.StateDir, root, data, func() error {
 		if approve == nil {
 			return fmt.Errorf("untrusted repo config %s; launch interactively to approve it", path)
 		}
@@ -126,16 +132,8 @@ type trustStore struct {
 	Repositories map[string]trustRecord `json:"repositories"`
 }
 
-func trustRepoSettings(root string, data []byte, approve func() error) error {
-	dir := os.Getenv("XDG_STATE_HOME")
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return err
-		}
-		dir = filepath.Join(home, ".local", "state")
-	}
-	dir = filepath.Join(dir, "opencode-sandbox")
+func trustRepoSettings(stateDir, root string, data []byte, approve func() error) error {
+	dir := filepath.Join(stateDir, "opencode-sandbox")
 	path := filepath.Join(dir, "trust.json")
 	store := trustStore{Version: 1, Repositories: map[string]trustRecord{}}
 	stored, err := os.ReadFile(path)

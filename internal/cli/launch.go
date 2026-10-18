@@ -38,7 +38,12 @@ func launch(ctx context.Context, configPath, cliConfigPath, awsRole, awsProfile 
 	if err != nil {
 		return err
 	}
-	settings, err := launcherconfig.LoadRepoSettings(".", approveRepoConfig)
+	stateDir, err := hostStateDir(os.Getenv("XDG_STATE_HOME"), os.Getenv("HOME"))
+	if err != nil {
+		return err
+	}
+	paths := launcherconfig.Paths{ConfigDir: configDir, StateDir: stateDir}
+	settings, err := paths.LoadRepoSettings(".", approveRepoConfig)
 	if err != nil {
 		return err
 	}

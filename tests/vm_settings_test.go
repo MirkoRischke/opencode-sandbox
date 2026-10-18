@@ -50,10 +50,9 @@ func TestVMMissingLocalImageFails(t *testing.T) {
 }
 
 func TestVMResourcesFollowConfigAndPersistAcrossResume(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	writeSettings(t, "[vm]\ncpus = 1\nmemory_mib = 1024\nroot_disk_mib = 5120\ndocker_disk_mib = 2048\n")
-	settings, err := launcherconfig.LoadSettings()
-	require.NoError(t, err)
+	t.Parallel()
+	settings := launcherconfig.DefaultSettings()
+	settings.VM = launcherconfig.VMSettings{Image: settings.VM.Image, CPUs: 1, MemoryMiB: 1024, RootDiskMiB: 5120, DockerDiskMiB: 2048}
 	s := startSandboxWithSettings(t, settings)
 	var config m.SandboxConfig
 	require.NoError(t, json.Unmarshal([]byte(storedSandboxConfig(t, s)), &config))

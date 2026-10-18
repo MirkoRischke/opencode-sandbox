@@ -6,15 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	launcherconfig "opencode-sandbox/internal/config"
 	"opencode-sandbox/internal/sandbox"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -94,65 +90,18 @@ func fakeAWSHost(t *testing.T, region string, response func(int) (time.Time, boo
 	}
 }
 
-// Install a guest probe instead of OpenCode. The real launcher still performs
-// credential discovery, refresh, cleanup, and shutdown. No live auth or inference.
-func prepareAWSProbe(t *testing.T) *sandbox.Sandbox {
-	t.Helper()
-	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
-	execInSandbox(t, s, "bash", "-eu", "-c", `
-touch /root/.opencode-sandbox-auth-ready
-cat > /mise/data/shims/opencode <<'PROBE'
-#!/bin/bash
-# mise inspects the shim during Prepare; only a no-argument launch runs the probe.
-if [ "$#" -gt 0 ]; then exit 0; fi
-bash -eu "$PWD/aws-probe.sh"
-status=$?
-printf '%s\n' "$status" > "$PWD/aws-probe-status"
-exit "$status"
-PROBE
-chmod 755 /mise/data/shims/opencode
-printf 'exit "$(cat "$PWD/aws-probe-status")"\n' > /root/.bashrc`)
-	return s
-}
-
 // Environment overrides belong exclusively to the launcher subprocess, never
 // the test process. A controlling terminal is required by the SDK attachment.
 func (host *awsHost) run(t *testing.T, s *sandbox.Sandbox, probe string) error {
 	t.Helper()
-	require.NoError(t, os.WriteFile(filepath.Join(s.Worktree, "aws-probe.sh"), []byte(probe), 0600))
-	args := []string{buildLauncher(t)}
+	var args []string
 	if host.options != nil {
 		args = append(args, "--aws-role", host.options.RoleARN)
 		if host.profile != "" {
 			args = append(args, "--aws-profile", host.profile)
 		}
 	}
-	var scriptArgs []string
-	switch runtime.GOOS {
-	case "linux":
-		quoted := make([]string, len(args))
-		for i, arg := range args {
-			quoted[i] = "'" + strings.ReplaceAll(arg, "'", "'\"'\"'") + "'"
-		}
-		scriptArgs = []string{"-q", "-e", "-c", strings.Join(quoted, " "), "/dev/null"}
-	case "darwin":
-		scriptArgs = append([]string{"-q", "/dev/null"}, args...)
-	default:
-		t.Skip("AWS launcher tests require a controlling terminal on Linux or macOS")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	command := exec.CommandContext(ctx, "script", scriptArgs...)
-	command.Dir = s.Worktree
-	command.Env = os.Environ()
-	for key, value := range host.env {
-		command.Env = append(command.Env, key+"="+value)
-	}
-	output, err := command.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("AWS launcher: %w: %s", err, output)
-	}
-	return nil
+	return runLauncherProbe(t, s, host.env, probe, args...)
 }
 
 func validAWSResponse(_ int) (time.Time, bool) {

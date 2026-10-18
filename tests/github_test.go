@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 )
 
 func TestGitHubCredentialStaysOnHostWhileGuestReceivesAPlaceholder(t *testing.T) {
+	t.Parallel()
 	const token = "github_pat_FAKE_TEST_CREDENTIAL"
 	path := githubTokenPath(t)
 	require.NoError(t, os.WriteFile(path, []byte(token+"\n"), 0600))
@@ -116,6 +118,7 @@ func TestStoppedSandboxKeepsItsOriginalGitHubCredential(t *testing.T) {
 }
 
 func TestRemovingGitHubTokenFileDoesNotChangeAnExistingSandbox(t *testing.T) {
+	t.Parallel()
 	path := githubTokenPath(t)
 	require.NoError(t, os.WriteFile(path, []byte("github_pat_FAKE_INITIAL"), 0600))
 	s := prepareWithGitHub(t, newWorktree(t), []byte("github_pat_FAKE_INITIAL"))
@@ -147,9 +150,9 @@ func TestOlderSandboxRequiresRecreationBeforeEnablingGitHub(t *testing.T) {
 }
 
 func TestGitHubTokenLoadsOnlyFromDedicatedCredentialFile(t *testing.T) {
+	t.Parallel()
 	path := githubTokenPath(t)
 	require.NoError(t, os.WriteFile(path, []byte("github_pat_FAKE\n"), 0600))
-	t.Setenv("GH_TOKEN", "host-gh-token-must-not-be-used")
 
 	secrets, err := sandbox.LoadSecrets(githubSecretSettings(path))
 
@@ -158,9 +161,22 @@ func TestGitHubTokenLoadsOnlyFromDedicatedCredentialFile(t *testing.T) {
 	require.NoError(t, os.Remove(path))
 	_, err = sandbox.LoadSecrets(githubSecretSettings(path))
 	require.Error(t, err)
+	// The real launcher must not fall back to GH_TOKEN when its file is missing.
+	dir := t.TempDir()
+	writeSettingsAt(t, dir, "[secrets.github]\nfile = 'missing-token'\nenv = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, buildLauncher(t))
+	command.Dir = newWorktree(t)
+	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir, "XDG_STATE_HOME="+t.TempDir(), "GH_TOKEN=host-gh-token-must-not-be-used", "HERDR_ENV=")
+	output, err := command.CombinedOutput()
+	require.Error(t, err)
+	require.Contains(t, string(output), "load secret")
+	require.NotContains(t, string(output), "host-gh-token-must-not-be-used")
 }
 
 func TestGitHubTokenRejectsUnsafePermissionsAndInvalidContents(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name              string
 		dirMode, fileMode os.FileMode
@@ -189,6 +205,7 @@ func TestGitHubTokenRejectsUnsafePermissionsAndInvalidContents(t *testing.T) {
 }
 
 func TestGitHubTokenRejectsSymlinks(t *testing.T) {
+	t.Parallel()
 	path := githubTokenPath(t)
 	target := filepath.Join(t.TempDir(), "token")
 	require.NoError(t, os.WriteFile(target, []byte("github_pat_FAKE"), 0600))

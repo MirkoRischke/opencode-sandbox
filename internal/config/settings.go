@@ -44,13 +44,9 @@ func DefaultSettings() Settings {
 
 // LoadSettings overlays the user's config.toml onto restrictive defaults.
 // A missing file uses defaults; an invalid file is an error.
-func LoadSettings() (Settings, error) {
+func LoadSettings(configDir string) (Settings, error) {
 	settings := DefaultSettings()
-	dir, err := userConfigDir()
-	if err != nil {
-		return settings, err
-	}
-	path := filepath.Join(dir, "opencode-sandbox", "config.toml")
+	path := filepath.Join(configDir, "opencode-sandbox", "config.toml")
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return settings, nil
@@ -68,19 +64,13 @@ func LoadSettings() (Settings, error) {
 	if err := settings.Validate(); err != nil {
 		return settings, fmt.Errorf("launcher settings %s: %w", path, err)
 	}
-	return settings, nil
-}
-
-func userConfigDir() (string, error) {
-	dir := os.Getenv("XDG_CONFIG_HOME")
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
+	for name, secret := range settings.Secrets {
+		if !filepath.IsAbs(secret.File) {
+			secret.File = filepath.Join(configDir, "opencode-sandbox", secret.File)
+			settings.Secrets[name] = secret
 		}
-		dir = filepath.Join(home, ".config")
 	}
-	return dir, nil
+	return settings, nil
 }
 
 // Validate rejects invalid launcher settings before runtime preparation.

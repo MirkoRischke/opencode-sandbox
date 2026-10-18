@@ -13,10 +13,9 @@ import (
 )
 
 func TestRestrictedNetworkAllowsOnlyConfiguredHTTPSHostsWithoutCredentials(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	writeSettings(t, "[network]\nallowed_hosts = ['GitHub.com']\n")
-	settings, err := launcherconfig.LoadSettings()
-	require.NoError(t, err)
+	t.Parallel()
+	settings := launcherconfig.DefaultSettings()
+	settings.Network.AllowedHosts = []string{"GitHub.com"}
 	s := startSandboxWithSettings(t, settings)
 	execInSandbox(t, s, "curl", "--noproxy", "*", "--fail", "--silent", "--show-error", "--max-time", "15", "https://github.com")
 	for _, url := range []string{
@@ -49,8 +48,8 @@ func TestEmptyNetworkAllowlistBlocksInternet(t *testing.T) {
 }
 
 func TestMissingConfigDefaultsToDenyingInternetInVM(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	settings, err := launcherconfig.LoadSettings()
+	t.Parallel()
+	settings, err := launcherconfig.LoadSettings(t.TempDir())
 	require.NoError(t, err)
 	s := startSandboxWithSettings(t, settings)
 	requireNetworkBlocked(t, s, "https://github.com")

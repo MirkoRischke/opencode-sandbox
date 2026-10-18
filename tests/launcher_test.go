@@ -155,18 +155,19 @@ func TestLauncherRejectsInvalidSettingsBeforeStartingVM(t *testing.T) {
 }
 
 func TestLauncherRejectsUntrustedRepoConfigBeforeLoadingSecrets(t *testing.T) {
-	root, _ := repoSettingsFixture(t, "[secrets.github]\nallowed_hosts = ['other.example.com']\n")
-	writeSettings(t, "[secrets.github]\nfile = 'missing-token'\nenv = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
+	root, _, paths := repoSettingsFixture(t, "[secrets.github]\nallowed_hosts = ['other.example.com']\n")
+	writeSettingsAt(t, paths.ConfigDir, "[secrets.github]\nfile = 'missing-token'\nenv = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	command := exec.CommandContext(ctx, buildLauncher(t))
 	command.Dir = root
+	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+paths.ConfigDir, "XDG_STATE_HOME="+paths.StateDir)
 	command.Stdin = strings.NewReader("yes\n")
 	output, err := command.CombinedOutput()
 	require.Error(t, err)
 	require.Contains(t, string(output), "untrusted repo config")
 	require.NotContains(t, string(output), "missing-token")
-	_, err = os.Stat(filepath.Join(os.Getenv("XDG_STATE_HOME"), "opencode-sandbox", "trust.json"))
+	_, err = os.Stat(filepath.Join(paths.StateDir, "opencode-sandbox", "trust.json"))
 	require.True(t, os.IsNotExist(err))
 }
 
