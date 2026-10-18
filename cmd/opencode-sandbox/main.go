@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -12,6 +11,8 @@ import (
 
 	launcherconfig "opencode-sandbox/internal/config"
 	"opencode-sandbox/internal/sandbox"
+
+	"github.com/spf13/cobra"
 )
 
 func main() {
@@ -21,87 +22,114 @@ func main() {
 	}
 }
 
-func run() (err error) {
-	if len(os.Args) > 1 && os.Args[1] == "diagnostics" {
-		if len(os.Args) != 3 || os.Args[2] != "network" {
-			return fmt.Errorf("usage: opencode-sandbox diagnostics network")
-		}
-		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
-		defer cancel()
-		return sandbox.WriteNetworkDiagnostics(ctx, ".", os.Stdout)
+func run() error {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	defer cancel()
+	return newCommand().ExecuteContext(ctx)
+}
+
+func newCommand() *cobra.Command {
+	var configPath, cliConfigPath, awsRole, awsProfile string
+	root := &cobra.Command{
+		Use:           "opencode-sandbox",
+		Short:         "Launch OpenCode in an isolated VM for the current Git worktree",
+		Args:          cobra.NoArgs,
+		SilenceUsage:  true,
+		SilenceErrors: true, // main prints errors once, including runtime failures.
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return launch(cmd.Context(), configPath, cliConfigPath, awsRole, awsProfile)
+		},
 	}
-	if len(os.Args) > 1 && os.Args[1] == "config" {
-		if len(os.Args) != 3 || os.Args[2] != "default" {
-			return fmt.Errorf("usage: opencode-sandbox config default")
-		}
-		return launcherconfig.WriteDefaultConfig(os.Stdout)
-	}
-	if len(os.Args) > 1 && (os.Args[1] == "list" || os.Args[1] == "ls" || os.Args[1] == "remove" || os.Args[1] == "rm") {
-		if len(os.Args) != 2 {
-			return fmt.Errorf("usage: opencode-sandbox %s", os.Args[1])
-		}
-		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
-		defer cancel()
-		if os.Args[1] == "remove" || os.Args[1] == "rm" {
-			return sandbox.Remove(ctx)
-		}
-		vms, err := sandbox.List(ctx)
-		if err != nil {
-			return err
-		}
-		if len(vms) == 0 {
-			_, err := fmt.Fprintln(os.Stdout, "No managed VMs found.")
-			return err
-		}
-		w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-		if _, err := fmt.Fprintln(w, "NAME\tSTATE"); err != nil {
-			return err
-		}
-		for _, vm := range vms {
-			if _, err := fmt.Fprintf(w, "%s\t%s\n", vm.Name(), vm.Status()); err != nil {
+	root.Flags().StringVar(&configPath, "config", "", "Guest OpenCode JSON configuration file")
+	root.Flags().StringVar(&cliConfigPath, "cli-config", "", "Guest OpenCode CLI JSON settings file")
+	root.Flags().StringVar(&awsRole, "aws-role", "", "IAM role ARN to assume for this session (optional)")
+	root.Flags().StringVar(&awsProfile, "aws-profile", "", "Optional host AWS source profile (requires --aws-role)")
+	root.AddCommand(&cobra.Command{
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   "List all managed VMs, including stopped VMs",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			vms, err := sandbox.List(cmd.Context())
+			if err != nil {
 				return err
 			}
-		}
-		return w.Flush()
+			if len(vms) == 0 {
+				_, err := fmt.Fprintln(cmd.OutOrStdout(), "No managed VMs found.")
+				return err
+			}
+			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
+			if _, err := fmt.Fprintln(w, "NAME\tSTATE"); err != nil {
+				return err
+			}
+			for _, vm := range vms {
+				if _, err := fmt.Fprintf(w, "%s\t%s\n", vm.Name(), vm.Status()); err != nil {
+					return err
+				}
+			}
+			return w.Flush()
+		},
+	}, &cobra.Command{
+		Use:     "remove",
+		Aliases: []string{"rm"},
+		Short:   "Stop and delete all managed VMs without confirmation",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return sandbox.Remove(cmd.Context())
+		},
+	})
+	config := &cobra.Command{
+		Use:   "config",
+		Short: "Inspect launcher configuration",
+		Args:  cobra.NoArgs,
+		RunE:  requireSubcommand,
 	}
-	flags := flag.NewFlagSet("opencode-sandbox", flag.ContinueOnError)
-	flags.Usage = func() {
-		//nolint:errcheck // flag.Usage cannot return output errors.
-		fmt.Fprintln(flags.Output(), `Usage: opencode-sandbox [launch flags] | list (ls) | remove (rm) | config default | diagnostics network
-  list, ls    List all managed VMs, including stopped VMs
-  remove, rm  Stop and delete all managed VMs without confirmation
-  config default  Print documented launcher defaults without loading configuration
-  diagnostics network  Print saved network diagnostics JSON for the current worktree`)
-		flags.PrintDefaults()
+	config.AddCommand(&cobra.Command{
+		Use:   "default",
+		Short: "Print documented launcher defaults without loading configuration",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return launcherconfig.WriteDefaultConfig(cmd.OutOrStdout())
+		},
+	})
+	diagnostics := &cobra.Command{
+		Use:   "diagnostics",
+		Short: "Inspect saved sandbox diagnostics",
+		Args:  cobra.NoArgs,
+		RunE:  requireSubcommand,
 	}
-	configPath := flags.String("config", "", "Guest OpenCode JSON configuration file")
-	cliConfigPath := flags.String("cli-config", "", "Guest OpenCode CLI JSON settings file")
-	awsRole := flags.String("aws-role", "", "IAM role ARN to assume for this session (optional)")
-	awsProfile := flags.String("aws-profile", "", "Optional host AWS source profile (requires --aws-role)")
-	if err := flags.Parse(os.Args[1:]); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return nil
-		}
-		return err
-	}
-	if flags.NArg() != 0 {
-		return fmt.Errorf("usage: opencode-sandbox [--config path] [--cli-config path] [--aws-role arn [--aws-profile name]] | list (ls) | remove (rm) | config default | diagnostics network (launch inside a Git worktree)")
-	}
+	diagnostics.AddCommand(&cobra.Command{
+		Use:   "network",
+		Short: "Print saved network diagnostics JSON for the current worktree",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return sandbox.WriteNetworkDiagnostics(cmd.Context(), ".", cmd.OutOrStdout())
+		},
+	})
+	root.AddCommand(config, diagnostics)
+	return root
+}
+
+func requireSubcommand(cmd *cobra.Command, _ []string) error {
+	return fmt.Errorf("a subcommand is required for %s; run '%s --help' for usage", cmd.CommandPath(), cmd.CommandPath())
+}
+
+func launch(ctx context.Context, configPath, cliConfigPath, awsRole, awsProfile string) (err error) {
 	if err := identifyHerdrAgent(); err != nil {
 		return err
 	}
 	var awsOptions *sandbox.AWSOptions
-	if *awsRole != "" || *awsProfile != "" {
-		awsOptions = &sandbox.AWSOptions{SourceProfile: *awsProfile, RoleARN: *awsRole}
+	if awsRole != "" || awsProfile != "" {
+		awsOptions = &sandbox.AWSOptions{SourceProfile: awsProfile, RoleARN: awsRole}
 		if err := awsOptions.Validate(); err != nil {
 			return err
 		}
 	}
-	config, err := sandbox.LoadConfig(*configPath)
+	config, err := sandbox.LoadConfig(configPath)
 	if err != nil {
 		return err
 	}
-	cliConfig, err := sandbox.LoadCLIConfig(*cliConfigPath)
+	cliConfig, err := sandbox.LoadCLIConfig(cliConfigPath)
 	if err != nil {
 		return err
 	}
@@ -113,8 +141,6 @@ func run() (err error) {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
-	defer cancel()
 	s, err := sandbox.Prepare(ctx, ".", config, secrets, settings)
 	if err != nil {
 		return err

@@ -63,6 +63,25 @@ Configure network access and secrets in [launcher configuration](docs/config.md)
 New VMs deny application internet access by default. See also
 [GitHub access](docs/github.md) and [AWS credentials](docs/aws.md).
 
+### Shell completion
+
+Cobra provides completion scripts for Bash, Zsh, Fish, and PowerShell. Run
+`opencode-sandbox completion <shell> --help` for installation instructions.
+
+For Zsh, add this after completion initialization (`compinit`) in `~/.zshrc`:
+
+```zsh
+source <(opencode-sandbox completion zsh)
+```
+
+Zsh normally also completes a simple alias such as `alias ocs=opencode-sandbox`.
+For Bash, add this to `~/.bashrc` after loading bash-completion and defining the alias:
+
+```bash
+source <(opencode-sandbox completion bash)
+complete -o default -F __start_opencode-sandbox ocs
+```
+
 ## Limitations
 
 - **OpenAI-only automatic authentication:** the launcher imports an active host
