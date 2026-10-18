@@ -38,12 +38,38 @@ func TestConfigCommandRejectsInvalidArguments(t *testing.T) {
 
 func TestSnapshotCommandRejectsInvalidArguments(t *testing.T) {
 	t.Parallel()
-	for _, args := range [][]string{{"snapshot"}, {"snapshot", "unknown"}, {"snapshot", "create", "extra"}, {"snapshot", "remove", "extra"}, {"snapshot", "list", "extra"}} {
+	for _, args := range [][]string{{"snapshot"}, {"snapshot", "unknown"}, {"snapshot", "create", "extra"}, {"snapshot", "remove", "extra"}, {"snapshot", "remove", "--all", "extra"}, {"snapshot", "list", "extra"}} {
 		t.Run(strings.Join(args, "/"), func(t *testing.T) {
 			if _, err := executeCommand(args...); err == nil {
 				t.Fatal("expected snapshot argument error")
 			}
 		})
+	}
+}
+
+func TestSnapshotRemoveAllFlag(t *testing.T) {
+	t.Parallel()
+	for _, all := range []bool{false, true} {
+		cmd := newSnapshotCommand()
+		remove, _, err := cmd.Find([]string{"remove"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		args := []string{}
+		if all {
+			args = append(args, "--all")
+		}
+		if err := remove.ParseFlags(args); err != nil {
+			t.Fatal(err)
+		}
+		got, err := remove.Flags().GetBool("all")
+		if err != nil || got != all {
+			t.Fatalf("expected all=%t, got %t: %v", all, got, err)
+		}
+	}
+	output, err := executeCommand("snapshot", "remove", "--help")
+	if err != nil || !strings.Contains(output, "--all") || !strings.Contains(output, "without confirmation") {
+		t.Fatalf("expected documented --all flag, got %v\n%s", err, output)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"opencode-sandbox/internal/config"
 
@@ -72,8 +73,7 @@ func TestSnapshotCreationRequiresExplicitPreparationCommand(t *testing.T) {
 	require.ErrorContains(t, err, "snapshot.command is required")
 }
 
-func TestSnapshotLockSerializesOnlyTheSameRepository(t *testing.T) {
-	t.Parallel()
+func TestSnapshotLockSerializesOnlyTheSameRepository(t *testing.T) { //nolint:paralleltest // Concurrent subprocess tests can briefly inherit flock descriptors.
 	dir := t.TempDir()
 	repo := snapshotIdentity("/projects/repo/.git")
 	unlock, err := repo.lockIn(dir)
@@ -93,4 +93,50 @@ func TestSnapshotLockSerializesOnlyTheSameRepository(t *testing.T) {
 	for _, entry := range entries {
 		require.Equal(t, ".lock", filepath.Ext(entry.Name()), "no launcher snapshot index")
 	}
+}
+
+func TestManagedSnapshotRepositoryUsesStoredIdentity(t *testing.T) {
+	t.Parallel()
+	original := snapshotIdentity("/deleted/repository/.git")
+	repo, ok := managedSnapshotRepository(original.group, original.labels())
+	require.True(t, ok)
+	require.Equal(t, original.id, repo.id)
+	require.Equal(t, original.name, repo.name)
+	require.Equal(t, original.group, repo.group)
+	require.True(t, repo.owns(original.labels()))
+
+	for _, key := range []string{"opencode-sandbox", "kind", "repo-id"} {
+		labels := original.labels()
+		delete(labels, key)
+		_, ok := managedSnapshotRepository(original.group, labels)
+		require.False(t, ok, "must not delete snapshots missing %s", key)
+	}
+	labels := original.labels()
+	labels["kind"] = "unrelated"
+	_, ok = managedSnapshotRepository(original.group, labels)
+	require.False(t, ok)
+	_, ok = managedSnapshotRepository("unrelated-group", original.labels())
+	require.False(t, ok)
+}
+
+// Run before parallel lock tests: fork briefly inherits their flock descriptors.
+func TestBulkSnapshotRemovalRespectsRepositoryLock(t *testing.T) { //nolint:paralleltest // Subprocess inheritance can delay release of parallel tests' locks.
+	if os.Getenv("OPENCODE_SANDBOX_SNAPSHOT_LOCK_TEST") != "1" {
+		executable, err := os.Executable()
+		require.NoError(t, err)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		command := exec.CommandContext(ctx, executable, "-test.run=^TestBulkSnapshotRemovalRespectsRepositoryLock$")
+		command.Env = append(os.Environ(), "OPENCODE_SANDBOX_SNAPSHOT_LOCK_TEST=1", "XDG_CACHE_HOME="+t.TempDir())
+		output, err := command.CombinedOutput()
+		require.NoError(t, err, "%s", output)
+		return
+	}
+	repo := snapshotIdentity("/deleted/repository/.git")
+	unlock, err := repo.lock()
+	require.NoError(t, err)
+	defer unlock()
+	stored, ok := managedSnapshotRepository(repo.group, repo.labels())
+	require.True(t, ok)
+	require.ErrorContains(t, stored.removeLocked(context.Background()), "another snapshot operation")
 }

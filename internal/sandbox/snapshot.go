@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -183,6 +184,68 @@ func RemoveSnapshot(ctx context.Context, directory string) error {
 	if err := configureRuntime(); err != nil {
 		return err
 	}
+	return repo.remove(ctx)
+}
+
+// RemoveAllSnapshots removes managed baselines across repositories, including
+// repositories whose working directories no longer exist. Restored VMs remain.
+func RemoveAllSnapshots(ctx context.Context) error {
+	if err := configureRuntime(); err != nil {
+		return err
+	}
+	members, err := m.Snapshot.List(ctx)
+	if err != nil {
+		return fmt.Errorf("list repository snapshots: %w", err)
+	}
+	repositories := map[string]repoSnapshot{}
+	for _, member := range members {
+		group := member.Group()
+		if group == nil || !strings.HasPrefix(*group, "oc-repo-") || member.Scope() != m.SnapshotScopeDisk {
+			continue
+		}
+		artifact, err := member.Open(ctx)
+		if err != nil {
+			return fmt.Errorf("read snapshot %s: %w", member.Reference(), err)
+		}
+		if repo, ok := managedSnapshotRepository(*group, artifact.Labels()); ok {
+			repositories[*group] = repo
+		}
+	}
+	groups := make([]string, 0, len(repositories))
+	for group := range repositories {
+		groups = append(groups, group)
+	}
+	sort.Strings(groups)
+	var errs []error
+	for _, group := range groups {
+		if err := ctx.Err(); err != nil {
+			return errors.Join(append(errs, err)...)
+		}
+		if err := repositories[group].removeLocked(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("remove %s: %w", group, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func managedSnapshotRepository(group string, labels map[string]string) (repoSnapshot, bool) {
+	_, managed := labels["opencode-sandbox"]
+	if !strings.HasPrefix(group, "oc-repo-") || !managed || labels["kind"] != "repo-baseline" || labels["repo-id"] == "" {
+		return repoSnapshot{}, false
+	}
+	return repoSnapshot{id: labels["repo-id"], name: labels["repo-name"], group: group}, true
+}
+
+func (r repoSnapshot) removeLocked(ctx context.Context) error {
+	unlock, err := r.lock()
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	return r.remove(ctx)
+}
+
+func (repo repoSnapshot) remove(ctx context.Context) error {
 	head, err := repo.head(ctx)
 	if err != nil {
 		return err

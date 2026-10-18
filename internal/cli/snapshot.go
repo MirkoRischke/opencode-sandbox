@@ -11,6 +11,18 @@ import (
 )
 
 func newSnapshotCommand() *cobra.Command {
+	var all bool
+	remove := &cobra.Command{
+		Use: "remove", Short: "Delete repository snapshots without removing worktree VMs",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if all {
+				return sandbox.RemoveAllSnapshots(cmd.Context())
+			}
+			return sandbox.RemoveSnapshot(cmd.Context(), ".")
+		},
+	}
+	remove.Flags().BoolVar(&all, "all", false, "Delete managed snapshots for all repositories without confirmation")
 	command := &cobra.Command{
 		Use: "snapshot", Short: "Manage prepared repository disk baselines",
 		Args: cobra.NoArgs, RunE: requireSubcommand,
@@ -44,12 +56,6 @@ func newSnapshotCommand() *cobra.Command {
 			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Repository snapshot created:", reference)
 			return err
 		},
-	}, &cobra.Command{
-		Use: "remove", Short: "Delete this repository's baseline without removing worktree VMs",
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return sandbox.RemoveSnapshot(cmd.Context(), ".")
-		},
-	})
+	}, remove)
 	return command
 }

@@ -62,6 +62,7 @@ opencode-sandbox diagnostics network # Print saved network diagnostics JSON for 
 opencode-sandbox snapshot create # Prepare a fresh VM and replace this repo's baseline
 opencode-sandbox snapshot list   # List all repo snapshots; current repo gets its own section
 opencode-sandbox snapshot remove # Delete this repo's baseline, leaving VMs untouched
+opencode-sandbox snapshot remove --all # Delete ALL managed repo snapshots without confirmation
 ```
 
 Configure network access and secrets in [launcher configuration](docs/config.md).
