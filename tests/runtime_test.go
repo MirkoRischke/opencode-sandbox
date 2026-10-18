@@ -11,6 +11,7 @@ import (
 )
 
 func TestSandboxWorksWithMiseShimOnPath(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("SANDBOX_TEST_MISE_SHIM") == "1" {
 		s := startSandbox(t)
 		execInSandbox(t, s, "git", "--version")
@@ -20,16 +21,17 @@ func TestSandboxWorksWithMiseShimOnPath(t *testing.T) {
 	require.NoError(t, err)
 	shimDir := t.TempDir()
 	require.NoError(t, os.Symlink(mise, filepath.Join(shimDir, "msb")))
-	t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("SANDBOX_TEST_MISE_SHIM", "1")
 	binary, err := os.Executable()
 	require.NoError(t, err)
 	command := exec.Command(binary, "-test.run=^TestSandboxWorksWithMiseShimOnPath$", "-test.v", "-test.timeout=2m")
 	for _, env := range os.Environ() {
-		if !strings.HasPrefix(env, "MSB_PATH=") && !strings.HasPrefix(env, "MSB_LIBKRUNFW_PATH=") {
+		if !strings.HasPrefix(env, "MSB_PATH=") && !strings.HasPrefix(env, "MSB_LIBKRUNFW_PATH=") && !strings.HasPrefix(env, "PATH=") {
 			command.Env = append(command.Env, env)
 		}
 	}
+	command.Env = append(command.Env,
+		"PATH="+shimDir+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"SANDBOX_TEST_MISE_SHIM=1")
 
 	output, err := command.CombinedOutput()
 

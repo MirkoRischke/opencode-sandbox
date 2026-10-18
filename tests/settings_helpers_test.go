@@ -21,11 +21,6 @@ func testSettings(t *testing.T) launcherconfig.Settings {
 	return settings
 }
 
-func writeSettings(t *testing.T, contents string) {
-	t.Helper()
-	writeSettingsAt(t, os.Getenv("XDG_CONFIG_HOME"), contents)
-}
-
 func writeSettingsAt(t *testing.T, configDir, contents string) {
 	t.Helper()
 	dir := filepath.Join(configDir, "opencode-sandbox")

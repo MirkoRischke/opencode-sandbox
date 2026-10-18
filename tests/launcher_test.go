@@ -16,17 +16,17 @@ import (
 )
 
 func TestLauncherPrintsDefaultConfigWithoutLoadingHostState(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	t.Setenv("HERDR_ENV", "1")
-	writeSettings(t, "invalid TOML [")
-	trustDir := filepath.Join(os.Getenv("XDG_STATE_HOME"), "opencode-sandbox")
+	t.Parallel()
+	configDir, stateDir := t.TempDir(), t.TempDir()
+	writeSettingsAt(t, configDir, "invalid TOML [")
+	trustDir := filepath.Join(stateDir, "opencode-sandbox")
 	require.NoError(t, os.Mkdir(trustDir, 0700))
 	trustPath := filepath.Join(trustDir, "trust.json")
 	require.NoError(t, os.WriteFile(trustPath, []byte("invalid JSON"), 0600))
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	command := exec.CommandContext(ctx, buildLauncher(t), "config", "default")
+	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+configDir, "XDG_STATE_HOME="+stateDir, "HERDR_ENV=1")
 	command.Dir = t.TempDir() // Printing defaults must work outside Git.
 	output, err := command.CombinedOutput()
 	require.NoError(t, err, "%s", output)
@@ -43,12 +43,14 @@ func TestLauncherPrintsDefaultConfigWithoutLoadingHostState(t *testing.T) {
 }
 
 func TestLauncherRejectsDirectoriesOutsideGit(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	writeSettings(t, "[network]\nallowed_hosts = []\n")
+	dir := t.TempDir()
+	writeSettingsAt(t, dir, "[network]\nallowed_hosts = []\n")
 	binary := buildLauncher(t)
 	command := exec.CommandContext(ctx, binary)
+	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir)
 	command.Dir = t.TempDir()
 
 	output, err := command.CombinedOutput()
@@ -58,14 +60,16 @@ func TestLauncherRejectsDirectoriesOutsideGit(t *testing.T) {
 }
 
 func TestLauncherListsVMsOutsideGitWithoutLoadingSettings(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	writeSettings(t, "invalid TOML [")
+	dir := t.TempDir()
+	writeSettingsAt(t, dir, "invalid TOML [")
 	binary := buildLauncher(t)
 	for _, name := range []string{"list", "ls"} {
 		t.Run(name, func(t *testing.T) {
 			command := exec.CommandContext(ctx, binary, name)
+			command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir)
 			command.Dir = t.TempDir()
 
 			output, err := command.CombinedOutput()
@@ -80,14 +84,16 @@ func TestLauncherListsVMsOutsideGitWithoutLoadingSettings(t *testing.T) {
 }
 
 func TestLauncherAcceptsCustomConfigFlag(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	writeSettings(t, "[network]\nallowed_hosts = []\n")
+	t.Parallel()
+	dir := t.TempDir()
+	writeSettingsAt(t, dir, "[network]\nallowed_hosts = []\n")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	binary := buildLauncher(t)
 	path := filepath.Join(t.TempDir(), "config.json")
 	require.NoError(t, os.WriteFile(path, []byte(`{}`), 0600))
 	command := exec.CommandContext(ctx, binary, "--config", path)
+	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir)
 	command.Dir = t.TempDir()
 
 	output, err := command.CombinedOutput()
@@ -97,11 +103,12 @@ func TestLauncherAcceptsCustomConfigFlag(t *testing.T) {
 }
 
 func TestLauncherRejectsMissingCustomConfigBeforeStartingVM(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	binary := buildLauncher(t)
 	command := exec.CommandContext(ctx, binary, "--config", filepath.Join(t.TempDir(), "missing.json"))
+	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+t.TempDir())
 
 	output, err := command.CombinedOutput()
 
@@ -110,14 +117,16 @@ func TestLauncherRejectsMissingCustomConfigBeforeStartingVM(t *testing.T) {
 }
 
 func TestLauncherAcceptsCustomCLIConfigFlag(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	writeSettings(t, "[network]\nallowed_hosts = []\n")
+	t.Parallel()
+	dir := t.TempDir()
+	writeSettingsAt(t, dir, "[network]\nallowed_hosts = []\n")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	binary := buildLauncher(t)
 	path := filepath.Join(t.TempDir(), "cli.json")
 	require.NoError(t, os.WriteFile(path, []byte(`{"theme":{"name":"tokyonight"}}`), 0600))
 	command := exec.CommandContext(ctx, binary, "--cli-config", path)
+	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir)
 	command.Dir = t.TempDir()
 
 	output, err := command.CombinedOutput()
@@ -127,11 +136,12 @@ func TestLauncherAcceptsCustomCLIConfigFlag(t *testing.T) {
 }
 
 func TestLauncherRejectsMissingCLIConfigBeforeStartingVM(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	binary := buildLauncher(t)
 	command := exec.CommandContext(ctx, binary, "--cli-config", filepath.Join(t.TempDir(), "missing.json"))
+	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+t.TempDir())
 
 	output, err := command.CombinedOutput()
 
@@ -140,12 +150,14 @@ func TestLauncherRejectsMissingCLIConfigBeforeStartingVM(t *testing.T) {
 }
 
 func TestLauncherRejectsInvalidSettingsBeforeStartingVM(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	writeSettings(t, "[network]\nallowed_hosts = ['*']\n")
+	t.Parallel()
+	dir := t.TempDir()
+	writeSettingsAt(t, dir, "[network]\nallowed_hosts = ['*']\n")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	command := exec.CommandContext(ctx, buildLauncher(t))
 	command.Dir = newWorktree(t)
+	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir)
 
 	output, err := command.CombinedOutput()
 
@@ -155,6 +167,7 @@ func TestLauncherRejectsInvalidSettingsBeforeStartingVM(t *testing.T) {
 }
 
 func TestLauncherRejectsUntrustedRepoConfigBeforeLoadingSecrets(t *testing.T) {
+	t.Parallel()
 	root, _, paths := repoSettingsFixture(t, "[secrets.github]\nallowed_hosts = ['other.example.com']\n")
 	writeSettingsAt(t, paths.ConfigDir, "[secrets.github]\nfile = 'missing-token'\nenv = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -172,6 +185,7 @@ func TestLauncherRejectsUntrustedRepoConfigBeforeLoadingSecrets(t *testing.T) {
 }
 
 func TestLauncherValidatesAWSFlagsBeforeStartingVM(t *testing.T) {
+	t.Parallel()
 	binary := buildLauncher(t)
 	for _, args := range [][]string{
 		{"--aws-role", "not-a-role"},
@@ -190,10 +204,11 @@ func TestLauncherValidatesAWSFlagsBeforeStartingVM(t *testing.T) {
 }
 
 func TestLauncherAcceptsAWSRoleWithoutProfile(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	command := exec.CommandContext(ctx, buildLauncher(t), "--aws-role", "arn:aws:iam::123456789012:role/SandboxReadOnly")
+	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+t.TempDir())
 	command.Dir = t.TempDir()
 	output, err := command.CombinedOutput()
 	require.Error(t, err)

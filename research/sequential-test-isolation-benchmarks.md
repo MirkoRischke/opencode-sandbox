@@ -66,6 +66,52 @@ companion workload: this comparison measures removal of diagnostics' serial
 barrier, not a reduction in diagnostics collection time itself. The separate
 CLI fallback/bypass check passed, as did repeated internal-package race checks.
 
+## Launcher subprocess isolation
+
+Set fixture environment variables only on the CLI subprocess rather than through
+`t.Setenv`. Use explicit settings-file paths. Run the launcher argument/config
+checks and mise-shim subprocess test in parallel. Remove the last settings helper
+that discovered its fixture directory from the test process environment.
+
+| Group | Before total / mean | After total / mean | Reduction |
+| --- | --- | --- | --- |
+| `launcher_test.go` plus `runtime_test.go` | 8.506s / 2.835s | 7.551s / 2.517s | 11.2% |
+
+All twelve scenarios passed in all three repetitions. The standalone cohort's
+gain is modest because process startup and the one-time launcher build remain.
+A separate paired integration-package run immediately before/after this last
+change passed all 105 top-level tests: **60.418s -> 57.240s** (5.3% reduction).
+That package comparison is one pair, not a statistical confidence interval.
+
+## Overall result
+
+| Integration package, four workers | Time |
+| --- | --- |
+| Initial baseline (`be39c55`) | 95.360s |
+| After configuration, credentials/settings, and diagnostics isolation | 60.418s |
+| After launcher subprocess isolation | 57.240s |
+
+The final package run takes **38.120s / 40.0% less time** than the fresh baseline.
+External-network timing still varies; cohort improvements above use three
+repetitions, while these package-level results are single runs.
+
+All **105 regular integration-package tests** now run as parallel parents
+(103 direct `t.Parallel` calls and two existing terminal wrappers). Subtests that
+share a VM remain sequential. The apparent count change from 108 is four HOME
+fallback cases moved to VM-free CLI tests, plus one new diagnostics CLI case;
+no original scenario was dropped. There are now 146 regular top-level tests
+across all packages. Live inference remains opt-in and was not run.
+
+The only remaining `t.Setenv` calls under `tests/` belong to a terminal probe
+already isolated in its child process. No lint-policy or README changes were made.
+
+Validation: repeated cohort runs, repeated internal-package race checks, and
+`golangci-lint run --build-tags live ./...` passed. The final
+`go test -race -shuffle=on -count=1 -parallel 4 -timeout 3m ./...` passed all
+packages (integration package 59.773s). An accidentally interrupted initial race
+invocation is not counted as a test result; it was confirmed stopped before
+starting its replacement.
+
 ## Reproduction and artifacts
 
 Freeze a binary at each revision with:
