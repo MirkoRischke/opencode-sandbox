@@ -192,7 +192,8 @@ func (s *Sandbox) Open(ctx context.Context) error {
 			terminalEnv[key] = value
 		}
 	}
-	code, err := s.vm.AttachWith(ctx, "opencode", nil,
+	// Keep the terminal attached until the guest shell exits, not just OpenCode.
+	code, err := s.vm.AttachWith(ctx, "bash", []string{"-c", "opencode; exec bash -i"},
 		m.WithAttachCwd(s.Worktree), m.WithAttachEnv(terminalEnv))
 	if err != nil {
 		return err
