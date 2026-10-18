@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	"github.com/BurntSushi/toml"
 )
 
 // Settings is the host-side launcher configuration, separate from OpenCode's
@@ -54,21 +52,9 @@ func LoadSettings(configDir string) (Settings, error) {
 	if err != nil {
 		return settings, fmt.Errorf("read launcher settings %s: %w", path, err)
 	}
-	metadata, err := toml.Decode(string(data), &settings)
+	settings, err = mergeSettings(settings, data, filepath.Dir(path))
 	if err != nil {
 		return settings, fmt.Errorf("decode launcher settings %s: %w", path, err)
-	}
-	if keys := metadata.Undecoded(); len(keys) != 0 {
-		return settings, fmt.Errorf("unknown launcher setting: %s", keys[0])
-	}
-	if err := settings.Validate(); err != nil {
-		return settings, fmt.Errorf("launcher settings %s: %w", path, err)
-	}
-	for name, secret := range settings.Secrets {
-		if !filepath.IsAbs(secret.File) {
-			secret.File = filepath.Join(configDir, "opencode-sandbox", secret.File)
-			settings.Secrets[name] = secret
-		}
 	}
 	return settings, nil
 }

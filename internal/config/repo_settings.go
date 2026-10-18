@@ -10,8 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-
-	"github.com/BurntSushi/toml"
 )
 
 const repoConfigName = ".opencode-sandbox.toml"
@@ -50,7 +48,7 @@ func (p Paths) LoadRepoSettings(directory string, approve func(string, []byte, S
 	if err != nil {
 		return settings, fmt.Errorf("read repo settings: %w", err)
 	}
-	settings, err = mergeRepoSettings(settings, data, root)
+	settings, err = mergeSettings(settings, data, root)
 	if err != nil {
 		return settings, fmt.Errorf("repo settings %s: %w", path, err)
 	}
@@ -63,64 +61,6 @@ func (p Paths) LoadRepoSettings(directory string, approve func(string, []byte, S
 		return settings, err
 	}
 	return settings, nil
-}
-
-func mergeRepoSettings(settings Settings, data []byte, root string) (Settings, error) {
-	// Check every repo key against the schema, even when the global layer has no
-	// corresponding value. Partial secret definitions are validated after merging.
-	var partial Settings
-	metadata, err := toml.Decode(string(data), &partial)
-	if err != nil {
-		return settings, err
-	}
-	if keys := metadata.Undecoded(); len(keys) != 0 {
-		return settings, fmt.Errorf("unknown launcher setting: %s", keys[0])
-	}
-	var base, overlay map[string]any
-	var encoded bytes.Buffer
-	if err := toml.NewEncoder(&encoded).Encode(settings); err != nil {
-		return settings, err
-	}
-	if _, err := toml.Decode(encoded.String(), &base); err != nil {
-		return settings, err
-	}
-	if _, err := toml.Decode(string(data), &overlay); err != nil {
-		return settings, err
-	}
-	// Resolve only paths supplied by this layer; inherited paths retain their
-	// global config directory origin when credentials are loaded by the sandbox.
-	if secrets, ok := overlay["secrets"].(map[string]any); ok {
-		for _, value := range secrets {
-			if secret, ok := value.(map[string]any); ok {
-				if file, ok := secret["file"].(string); ok && file != "" && !filepath.IsAbs(file) {
-					secret["file"] = filepath.Join(root, file)
-				}
-			}
-		}
-	}
-	mergeSettingsMaps(base, overlay)
-	encoded.Reset()
-	if err := toml.NewEncoder(&encoded).Encode(base); err != nil {
-		return settings, err
-	}
-	var merged Settings
-	if _, err := toml.Decode(encoded.String(), &merged); err != nil {
-		return settings, err
-	}
-	return merged, merged.Validate()
-}
-
-// Tables merge recursively; every other value (including empty arrays) replaces.
-func mergeSettingsMaps(base, overlay map[string]any) {
-	for key, value := range overlay {
-		src, srcOK := value.(map[string]any)
-		dst, dstOK := base[key].(map[string]any)
-		if srcOK && dstOK {
-			mergeSettingsMaps(dst, src)
-		} else {
-			base[key] = value
-		}
-	}
 }
 
 type trustRecord struct {

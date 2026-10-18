@@ -32,10 +32,10 @@ func TestDefaultConfigRoundTripsToRuntimeDefaults(t *testing.T) {
 
 func TestNetworkDiagnosticsConfigMerging(t *testing.T) {
 	t.Parallel()
-	settings, err := mergeRepoSettings(DefaultSettings(), []byte("[network]\ndiagnostics = true\n"), "/project")
+	settings, err := mergeSettings(DefaultSettings(), []byte("[network]\ndiagnostics = true\n"), "/project")
 	require.NoError(t, err)
 	require.True(t, settings.Network.Diagnostics)
-	settings, err = mergeRepoSettings(settings, []byte("[network]\ndiagnostics = false\n"), "/project")
+	settings, err = mergeSettings(settings, []byte("[network]\ndiagnostics = false\n"), "/project")
 	require.NoError(t, err)
 	require.False(t, settings.Network.Diagnostics)
 }
