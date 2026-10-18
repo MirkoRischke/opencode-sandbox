@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"bytes"
@@ -46,7 +46,7 @@ func TestDiagnosticsCommandRejectsInvalidArguments(t *testing.T) {
 
 func executeCommand(args ...string) (string, error) {
 	var output bytes.Buffer
-	cmd := newCommand()
+	cmd := NewCommand()
 	cmd.SetArgs(args)
 	cmd.SetOut(&output)
 	cmd.SetErr(&output)
