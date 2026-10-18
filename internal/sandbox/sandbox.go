@@ -65,7 +65,7 @@ func Prepare(ctx context.Context, directory string, config []byte, secrets []Sec
 		mounts[common] = m.Mount.Bind(common, owner)
 	}
 	opts := []m.SandboxOption{
-		m.WithImage("opencode-sandbox:poc"), m.WithPullPolicy(m.PullPolicyNever),
+		m.WithImage(settings.VM.Image), m.WithPullPolicy(m.PullPolicyNever),
 		m.WithCPUs(settings.VM.CPUs), m.WithMemory(settings.VM.MemoryMiB),
 		m.WithRootDisk(m.RootDisk.Managed(settings.VM.RootDiskMiB)),
 		m.WithWorkdir(root), m.WithMounts(mounts), m.WithDetached(),

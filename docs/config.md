@@ -118,6 +118,7 @@ the guest; the guest receives no Herdr socket access.
 
 ```toml
 [vm]
+image = "opencode-sandbox:poc"
 cpus = 2
 memory_mib = 2048
 root_disk_mib = 4096
@@ -128,10 +129,34 @@ allowed_hosts = ["github.com", "api.github.com"]
 ```
 
 VM settings default to the values above; each can be overridden independently.
-Values must be positive integers (CPUs: 1–255; memory/disk: 1–4294967295 MiB).
+Resource values must be positive integers (CPUs: 1–255; memory/disk: 1–4294967295 MiB).
 Microsandbox and host resource limits still apply. Root-disk size controls
 guest-local storage, not mounted host worktrees. Existing VMs retain their specs;
 recreate them to apply changes.
+
+### Custom VM images
+
+Set `vm.image` in global `config.toml` or repo `.opencode-sandbox.toml` to select
+your own image. It defaults to `opencode-sandbox:poc` and must not be empty.
+The image must already exist in Microsandbox's local image store. Images are never
+pulled automatically; a missing image fails launch. Docker's image store is separate,
+so building an image with Docker alone is not enough:
+
+```sh
+docker build -t my-custom-image:tag .
+docker save my-custom-image:tag | msb load
+```
+
+```toml
+[vm]
+image = "my-custom-image:tag"
+```
+
+The simplest compatible image extends the supplied image with
+`FROM opencode-sandbox:poc`. Custom images need Bash, Git, mise, and OpenCode on
+`PATH`, plus a working system CA trust store for Microsandbox's TLS inspection.
+GitHub credential integration additionally requires `gh`; AWS integration requires
+the AWS CLI. Docker is optional: images without `dockerd` skip daemon startup.
 
 ### Docker inside the VM
 

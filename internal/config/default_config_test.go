@@ -22,6 +22,7 @@ func TestDefaultConfigRoundTripsToRuntimeDefaults(t *testing.T) {
 	require.NoError(t, settings.Validate())
 	require.Empty(t, settings.Secrets, "examples must not enable credentials")
 	require.Contains(t, out.String(), "additional_allowed_hosts = []")
+	require.Contains(t, out.String(), `image = "opencode-sandbox:poc"`)
 	var again bytes.Buffer
 	require.NoError(t, WriteDefaultConfig(&again))
 	require.Equal(t, out.String(), again.String())

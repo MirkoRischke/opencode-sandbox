@@ -27,6 +27,28 @@ func repoSettingsFixture(t *testing.T, config string) (string, string) {
 
 func approveSettings(string, []byte, launcherconfig.Settings) error { return nil }
 
+func TestRepoSettingsVMImage(t *testing.T) {
+	for _, tc := range []struct {
+		name, config, want string
+	}{
+		{"override", "[vm]\nimage = 'repo-sandbox:local'\n", "repo-sandbox:local"},
+		{"inherit", "[vm]\nmemory_mib = 4096\n", "global-sandbox:local"},
+		{"reject empty", "[vm]\nimage = ''\n", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root, _ := repoSettingsFixture(t, tc.config)
+			writeSettings(t, "[vm]\nimage = 'global-sandbox:local'\n")
+			settings, err := launcherconfig.LoadRepoSettings(root, approveSettings)
+			if tc.want == "" {
+				require.ErrorContains(t, err, "vm.image")
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.want, settings.VM.Image)
+		})
+	}
+}
+
 func TestRepoSettingsAdditionalNetworkHostsMergeIndependently(t *testing.T) {
 	for _, tc := range []struct {
 		name, config        string
@@ -96,7 +118,7 @@ headers = ['authorization']
 	})
 	require.NoError(t, err)
 	require.Equal(t, 1, calls)
-	require.Equal(t, launcherconfig.VMSettings{CPUs: 4, MemoryMiB: 8192, RootDiskMiB: 9000, DockerDiskMiB: 20480}, settings.VM)
+	require.Equal(t, launcherconfig.VMSettings{Image: "opencode-sandbox:poc", CPUs: 4, MemoryMiB: 8192, RootDiskMiB: 9000, DockerDiskMiB: 20480}, settings.VM)
 	require.Empty(t, settings.Network.AllowedHosts)
 	require.Equal(t, launcherconfig.SecretSettings{
 		File: "creds/github-token", Env: "GH_TOKEN",

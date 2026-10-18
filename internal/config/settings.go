@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -20,6 +21,7 @@ type Settings struct {
 }
 
 type VMSettings struct {
+	Image         string `toml:"image" description:"VM image already loaded into Microsandbox; images are never pulled automatically."`
 	CPUs          uint8  `toml:"cpus" description:"Number of virtual CPUs (1-255)."`
 	MemoryMiB     uint32 `toml:"memory_mib" description:"Guest memory in MiB."`
 	RootDiskMiB   uint32 `toml:"root_disk_mib" description:"Persistent guest disk size in MiB; excludes mounted host worktrees."`
@@ -34,7 +36,7 @@ type NetworkSettings struct {
 // DefaultSettings denies application internet access.
 func DefaultSettings() Settings {
 	return Settings{
-		VM:      VMSettings{CPUs: 2, MemoryMiB: 2048, RootDiskMiB: 4096, DockerDiskMiB: 10240},
+		VM:      VMSettings{Image: "opencode-sandbox:poc", CPUs: 2, MemoryMiB: 2048, RootDiskMiB: 4096, DockerDiskMiB: 10240},
 		Network: NetworkSettings{AllowedHosts: []string{}, AdditionalAllowedHosts: []string{}},
 	}
 }
@@ -82,6 +84,9 @@ func userConfigDir() (string, error) {
 
 // Validate rejects invalid launcher settings before runtime preparation.
 func (s Settings) Validate() error {
+	if strings.TrimSpace(s.VM.Image) == "" {
+		return fmt.Errorf("vm.image must not be empty")
+	}
 	if s.VM.CPUs == 0 {
 		return fmt.Errorf("vm.cpus must be greater than zero")
 	}

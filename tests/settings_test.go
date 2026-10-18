@@ -48,7 +48,7 @@ func TestVMSettingsOverrideDefaultsIndependently(t *testing.T) {
 	writeSettings(t, "[vm]\nmemory_mib = 3072\n")
 	settings, err := launcherconfig.LoadSettings()
 	require.NoError(t, err)
-	require.Equal(t, launcherconfig.VMSettings{CPUs: 2, MemoryMiB: 3072, RootDiskMiB: 4096, DockerDiskMiB: 10240}, settings.VM)
+	require.Equal(t, launcherconfig.VMSettings{Image: "opencode-sandbox:poc", CPUs: 2, MemoryMiB: 3072, RootDiskMiB: 4096, DockerDiskMiB: 10240}, settings.VM)
 	require.Empty(t, settings.Network.AllowedHosts)
 }
 
@@ -63,6 +63,15 @@ func TestSettingsUseHomeWhenXDGIsUnset(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Empty(t, settings.Network.AllowedHosts)
+}
+
+func TestVMImageLoadsFromGlobalConfig(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	writeSettings(t, "[vm]\nimage = 'custom-sandbox:local'\n")
+	settings, err := launcherconfig.LoadSettings()
+	require.NoError(t, err)
+	require.Equal(t, "custom-sandbox:local", settings.VM.Image)
+	require.EqualValues(t, 2, settings.VM.CPUs)
 }
 
 func TestSettingsMissingFileUsesRestrictiveDefaults(t *testing.T) {
@@ -82,6 +91,9 @@ func TestSettingsOmittedNetworkUsesRestrictiveDefaults(t *testing.T) {
 
 func TestSettingsRejectInvalidConfiguration(t *testing.T) {
 	for name, contents := range map[string]string{
+		"empty image":          "[vm]\nimage = ''\n",
+		"blank image":          "[vm]\nimage = '   '\n",
+		"wrong image type":     "[vm]\nimage = 123\n",
 		"zero CPUs":            "[vm]\ncpus = 0\n",
 		"negative CPUs":        "[vm]\ncpus = -1\n",
 		"CPU overflow":         "[vm]\ncpus = 256\n",
