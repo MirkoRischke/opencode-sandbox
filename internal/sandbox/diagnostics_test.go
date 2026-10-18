@@ -83,6 +83,7 @@ func denialEntry(text string) m.LogEntry {
 }
 
 func TestParseNetworkDenial(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name, text, hostname, ip, protocol, reason string
 		port                                       uint16
@@ -114,6 +115,7 @@ func TestParseNetworkDenial(t *testing.T) {
 }
 
 func TestNetworkDiagnosticsIgnoreUnrelatedAndGuestLogs(t *testing.T) {
+	t.Parallel()
 	for _, text := range []string{
 		"connected sni=example.org dst=1.1.1.1:443",
 		"policy deny response not delivered dst=1.1.1.1:443",
@@ -179,6 +181,7 @@ func TestNetworkDiagnosticsHistorySurvivesRunsAndVMRecreation(t *testing.T) {
 }
 
 func TestNetworkDiagnosticsKeepDistinctPortsAndIPOnlyTargets(t *testing.T) {
+	t.Parallel()
 	d := &networkDiagnostics{}
 	for _, text := range []string{
 		"TCP egress denied by domain policy dst=1.1.1.1:443",
@@ -206,6 +209,7 @@ func TestNetworkDiagnosticsPreserveInvalidHistory(t *testing.T) {
 }
 
 func TestNetworkDiagnosticsBoundsDistinctTargets(t *testing.T) {
+	t.Parallel()
 	d := &networkDiagnostics{}
 	for port := 1; port <= 4097; port++ {
 		entry := denialEntry("TCP egress denied by domain policy dst=1.1.1.1:" + strconv.Itoa(port))
@@ -288,6 +292,7 @@ func TestNetworkDiagnosticsDefersWarningsUntilShutdown(t *testing.T) {
 }
 
 func TestDiagnosticErrorKindDoesNotExposeRuntimeDetails(t *testing.T) {
+	t.Parallel()
 	require.Equal(t, "timeout", diagnosticErrorKind(context.DeadlineExceeded))
 	require.Equal(t, "permission denied", diagnosticErrorKind(os.ErrPermission))
 	require.Equal(t, "unknown error", diagnosticErrorKind(errors.New("guest-controlled sensitive details")))

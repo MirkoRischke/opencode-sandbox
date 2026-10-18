@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//nolint:forbidigo // runInTerminal parallelizes the parent; only its isolated terminal child mutates the environment consumed by the real attachment path.
 func TestGuestTUIReceivesOnlySelectedHostTerminalVariables(t *testing.T) {
 	if runInTerminal(t) {
 		return
@@ -35,6 +36,7 @@ chmod 755 /mise/data/shims/opencode`)
 	require.Equal(t, "xterm-256color\ntruecolor\n\n", execInSandbox(t, s, "cat", s.Worktree+"/terminal-env.txt"))
 }
 
+//nolint:paralleltest // runInTerminal schedules the parent in parallel; its isolated child must not call Parallel again when exercising the controlling terminal.
 func TestOpenCodeExitFallsBackToInteractiveGuestBash(t *testing.T) {
 	if runInTerminal(t) {
 		return

@@ -11,18 +11,31 @@ linters:
     - copyloopvar
     - errcheck
     - errorlint
+    - forbidigo
     - gocritic
     - govet
     - ineffassign
     - misspell
     - nilerr
     - nolintlint
+    - paralleltest
     - staticcheck
     - testifylint
     - unconvert
     - unparam
     - unused
   settings:
+    # Independent scenarios run concurrently; shared-VM steps may stay sequential.
+    paralleltest:
+      ignore-missing-subtests: true
+    # paralleltest silently exempts Setenv/Chdir, so require explained exceptions.
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: '^testing\.T\.(Setenv|Chdir)$'
+          msg: 'Use explicit inputs or subprocess isolation; otherwise explain the exception.'
+        - pattern: '^os\.(Setenv|Unsetenv|Clearenv|Chdir)$'
+          msg: 'Use subprocess Env or explicit inputs; otherwise explain the exception.'
     errcheck:
       check-type-assertions: true
       check-blank: true
@@ -34,6 +47,11 @@ linters:
     nolintlint:
       require-explanation: true
       require-specific: true
+  exclusions:
+    rules:
+      - path-except: '_test\.go$'
+        linters:
+          - forbidigo
 
 formatters:
   enable:

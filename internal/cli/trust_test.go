@@ -10,6 +10,7 @@ import (
 )
 
 func TestConfirmRepoConfig(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []string{"y\n", "yes\n", "YES\n", "n\n", "\n", "", "yes"} {
 		t.Run(answer, func(t *testing.T) {
 			var output bytes.Buffer
@@ -34,6 +35,7 @@ func TestConfirmRepoConfig(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // Replaces process-wide os.Stdin to exercise the real approval entry point; concurrent stdin users would observe the test pipe.
 func TestApproveRepoConfigRejectsPipedInput(t *testing.T) {
 	reader, writer, err := os.Pipe()
 	if err != nil {

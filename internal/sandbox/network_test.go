@@ -10,6 +10,7 @@ import (
 )
 
 func TestNetworkPolicyCombinesAndDeduplicatesHostLists(t *testing.T) {
+	t.Parallel()
 	settings := config.NetworkSettings{
 		AllowedHosts:           []string{"GitHub.com", "api.github.com", "github.com"},
 		AdditionalAllowedHosts: []string{"API.GITHUB.COM", "registry.npmjs.org", "registry.npmjs.org"},
@@ -33,6 +34,7 @@ func TestNetworkPolicyCombinesAndDeduplicatesHostLists(t *testing.T) {
 }
 
 func TestNetworkPolicyAdditionalHostsWithoutBaseline(t *testing.T) {
+	t.Parallel()
 	settings := config.DefaultSettings()
 	settings.Network.AdditionalAllowedHosts = []string{"registry.npmjs.org"}
 	require.NoError(t, settings.Validate())
@@ -41,6 +43,7 @@ func TestNetworkPolicyAdditionalHostsWithoutBaseline(t *testing.T) {
 }
 
 func TestNetworkDiagnosticsOnlyChangesDenialResponsesNotRules(t *testing.T) {
+	t.Parallel()
 	settings := config.DefaultSettings().Network
 	settings.AllowedHosts = []string{"github.com"}
 	baseline := networkPolicy(settings)

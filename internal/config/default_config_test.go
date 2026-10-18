@@ -12,6 +12,7 @@ import (
 )
 
 func TestDefaultConfigRoundTripsToRuntimeDefaults(t *testing.T) {
+	t.Parallel()
 	var out bytes.Buffer
 	require.NoError(t, WriteDefaultConfig(&out))
 	var settings Settings
@@ -30,6 +31,7 @@ func TestDefaultConfigRoundTripsToRuntimeDefaults(t *testing.T) {
 }
 
 func TestNetworkDiagnosticsConfigMerging(t *testing.T) {
+	t.Parallel()
 	settings, err := mergeRepoSettings(DefaultSettings(), []byte("[network]\ndiagnostics = true\n"), "/project")
 	require.NoError(t, err)
 	require.True(t, settings.Network.Diagnostics)
@@ -39,6 +41,7 @@ func TestNetworkDiagnosticsConfigMerging(t *testing.T) {
 }
 
 func TestEveryConfigFieldHasDocumentation(t *testing.T) {
+	t.Parallel()
 	var out bytes.Buffer
 	require.NoError(t, WriteDefaultConfig(&out))
 	var check func(reflect.Type)
@@ -68,6 +71,7 @@ func TestEveryConfigFieldHasDocumentation(t *testing.T) {
 }
 
 func TestDefaultConfigSecretExampleIsValid(t *testing.T) {
+	t.Parallel()
 	var out bytes.Buffer
 	require.NoError(t, WriteDefaultConfig(&out))
 	lines := strings.Split(out.String(), "\n")
@@ -86,6 +90,7 @@ func TestDefaultConfigSecretExampleIsValid(t *testing.T) {
 }
 
 func TestDefaultConfigRejectsMissingMetadata(t *testing.T) {
+	t.Parallel()
 	for _, value := range []any{
 		struct {
 			Value int `toml:"value"`
@@ -105,5 +110,6 @@ type failingConfigWriter struct{}
 func (failingConfigWriter) Write([]byte) (int, error) { return 0, errors.New("write failed") }
 
 func TestDefaultConfigReportsWriteFailure(t *testing.T) {
+	t.Parallel()
 	require.ErrorContains(t, WriteDefaultConfig(failingConfigWriter{}), "write failed")
 }

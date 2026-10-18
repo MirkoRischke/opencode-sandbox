@@ -12,6 +12,7 @@ import (
 )
 
 func TestManagementCommandsRejectExtraArguments(t *testing.T) {
+	t.Parallel()
 	for _, command := range []string{"list", "ls", "remove", "rm"} {
 		for _, extra := range []string{"--all", "--yes", "vm-name"} {
 			t.Run(command+"/"+extra, func(t *testing.T) {
@@ -25,6 +26,7 @@ func TestManagementCommandsRejectExtraArguments(t *testing.T) {
 }
 
 func TestConfigCommandRejectsInvalidArguments(t *testing.T) {
+	t.Parallel()
 	for _, args := range [][]string{{"config"}, {"config", "show"}, {"config", "default", "extra"}} {
 		t.Run(strings.Join(args, "/"), func(t *testing.T) {
 			if _, err := executeCommand(args...); err == nil {
@@ -35,6 +37,7 @@ func TestConfigCommandRejectsInvalidArguments(t *testing.T) {
 }
 
 func TestDiagnosticsCommandRejectsInvalidArguments(t *testing.T) {
+	t.Parallel()
 	for _, args := range [][]string{{"diagnostics"}, {"diagnostics", "unknown"}, {"diagnostics", "network", "extra"}} {
 		t.Run(strings.Join(args, "/"), func(t *testing.T) {
 			if _, err := executeCommand(args...); err == nil {
@@ -55,6 +58,7 @@ func executeCommand(args ...string) (string, error) {
 }
 
 func TestCommandHelp(t *testing.T) {
+	t.Parallel()
 	for _, args := range [][]string{
 		{"--help"}, {"list", "--help"}, {"remove", "--help"},
 		{"config", "--help"}, {"config", "default", "--help"},
@@ -80,6 +84,7 @@ func TestCommandHelp(t *testing.T) {
 }
 
 func TestManagementAliases(t *testing.T) {
+	t.Parallel()
 	for alias, name := range map[string]string{"ls": "list", "rm": "remove"} {
 		t.Run(alias, func(t *testing.T) {
 			output, err := executeCommand(alias, "--help")
@@ -91,6 +96,7 @@ func TestManagementAliases(t *testing.T) {
 }
 
 func TestLaunchRejectsInvalidArguments(t *testing.T) {
+	t.Parallel()
 	for _, args := range [][]string{{"unknown"}, {"--unknown"}, {"--config"}} {
 		t.Run(strings.Join(args, "/"), func(t *testing.T) {
 			output, err := executeCommand(args...)
@@ -105,15 +111,27 @@ func TestLaunchRejectsInvalidArguments(t *testing.T) {
 }
 
 func TestCompletionScriptsWithoutLoadingHostState(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", dir)
-	t.Setenv("HERDR_ENV", "1")
-	t.Setenv("HERDR_AGENT", "")
-	if err := os.Mkdir(filepath.Join(dir, "opencode-sandbox"), 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "opencode-sandbox", "config.toml"), []byte("invalid TOML ["), 0600); err != nil {
-		t.Fatal(err)
+	t.Parallel()
+	if os.Getenv("OPENCODE_SANDBOX_COMPLETION_TEST") != "1" {
+		dir := t.TempDir()
+		if err := os.Mkdir(filepath.Join(dir, "opencode-sandbox"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "opencode-sandbox", "config.toml"), []byte("invalid TOML ["), 0600); err != nil {
+			t.Fatal(err)
+		}
+		executable, err := os.Executable()
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		command := exec.CommandContext(ctx, executable, "-test.run=^TestCompletionScriptsWithoutLoadingHostState$")
+		command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir, "HERDR_ENV=1", "HERDR_AGENT=", "OPENCODE_SANDBOX_COMPLETION_TEST=1")
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("completion failed: %v\n%s", err, output)
+		}
+		return
 	}
 	for _, shell := range []string{"bash", "zsh", "fish", "powershell"} {
 		t.Run(shell, func(t *testing.T) {
@@ -126,6 +144,7 @@ func TestCompletionScriptsWithoutLoadingHostState(t *testing.T) {
 }
 
 func TestCompletionSuggestions(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		prefix string
 		want   []string
@@ -148,6 +167,7 @@ func TestCompletionSuggestions(t *testing.T) {
 }
 
 func TestIdentifyHerdrAgent(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("OPENCODE_SANDBOX_HERDR_TEST") == "1" {
 		if err := identifyHerdrAgent(); err != nil {
 			t.Fatal(err)
@@ -175,17 +195,17 @@ func TestIdentifyHerdrAgent(t *testing.T) {
 		{name: "explicit hint", herdr: "1", agent: "custom", want: "custom"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("HERDR_ENV", tc.herdr)
-			t.Setenv("HERDR_AGENT", tc.agent)
-			t.Setenv("OPENCODE_SANDBOX_HERDR_TEST", "1")
-			t.Setenv("OPENCODE_SANDBOX_EXPECT_AGENT", tc.want)
 			executable, err := os.Executable()
 			if err != nil {
 				t.Fatal(err)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			output, err := exec.CommandContext(ctx, executable, "-test.run=^TestIdentifyHerdrAgent$").CombinedOutput()
+			command := exec.CommandContext(ctx, executable, "-test.run=^TestIdentifyHerdrAgent$")
+			command.Env = append(os.Environ(),
+				"HERDR_ENV="+tc.herdr, "HERDR_AGENT="+tc.agent,
+				"OPENCODE_SANDBOX_HERDR_TEST=1", "OPENCODE_SANDBOX_EXPECT_AGENT="+tc.want)
+			output, err := command.CombinedOutput()
 			if err != nil {
 				t.Fatalf("agent identification failed: %v\n%s", err, output)
 			}

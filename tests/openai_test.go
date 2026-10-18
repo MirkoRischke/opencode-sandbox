@@ -11,6 +11,7 @@ import (
 )
 
 func TestOpenCodeCanReachOpenAI(t *testing.T) {
+	t.Parallel()
 	s := startSandbox(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()

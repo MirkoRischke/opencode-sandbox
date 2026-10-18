@@ -6,7 +6,7 @@ microsandbox = "0.7.8"
 
 [tasks.lint]
 description = "Lint Go code and the Dockerfile"
-run = ["golangci-lint run ./...", "hadolint Dockerfile"]
+run = ["golangci-lint run --build-tags live ./...", "hadolint Dockerfile"]
 
 [tasks.fmt]
 description = "Format Go code"
