@@ -15,6 +15,8 @@ retain installed tools and guest files for the next launch.
 - **Read-only host mounts:** explicitly share selected files or directories,
   including OpenCode configuration, instructions, and skills. No extra host files
   are shared by default. See [mount configuration](docs/config.md#read-only-host-mounts).
+- **Sandbox-aware instructions:** OpenCode gets information about the sandbox
+  it is running in.
 - **AWS roles:** assume a role on the host and provide automatically refreshed,
   temporary credentials to the guest. Unlike proxy secrets, these are readable
   by guest code.

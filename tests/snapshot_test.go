@@ -38,7 +38,14 @@ func TestRepositorySnapshotWithoutPreparationCommand(t *testing.T) {
 	skills := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(skills, "SKILL.md"), []byte("current skill"), 0600))
 	settings.Mounts = append(settings.Mounts, config.MountSettings{Source: skills, Target: "/opt/skills"})
+	settings.Network.AllowedHosts = []string{"example.com"}
+	settings.Network.AdditionalAllowedHosts = nil
 	child := prepareSnapshotChild(t, ctx, worktree, settings)
+	instructions := execInSandbox(t, child, "cat", guestInstructions)
+	require.Contains(t, instructions, `"/opt/instructions.md"`)
+	require.Contains(t, instructions, `"/opt/skills"`)
+	require.Contains(t, instructions, "- example.com")
+	require.NotContains(t, instructions, "- github.com")
 	execInSandbox(t, child, "docker", "info")
 	require.Equal(t, "current host contents", execInSandbox(t, child, "cat", "/opt/instructions.md"))
 	require.Equal(t, "current skill", execInSandbox(t, child, "cat", "/opt/skills/SKILL.md"))

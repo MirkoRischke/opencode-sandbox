@@ -48,12 +48,20 @@ func Prepare(ctx context.Context, directory string, secrets []Secret, settings l
 	}
 	s := &Sandbox{Name: sandboxName(paths.root, paths.common), Worktree: paths.root}
 	started := time.Now().UTC()
-	s.vm, err = connectOrRestore(ctx, s.Name, paths, secrets, settings, sandboxOptions(paths, paths.root, settings))
+	var created bool
+	s.vm, created, err = connectOrRestore(ctx, s.Name, paths, secrets, settings, sandboxOptions(paths, paths.root, settings))
 	if err != nil {
 		return nil, fmt.Errorf("prepare sandbox: %w", err)
 	}
 	if settings.Network.Diagnostics {
 		s.diagnostics = startNetworkDiagnostics(s.vm, paths.root, started, diagnosticOptions)
+	}
+	if created {
+		if err := s.configureEnvironment(ctx, settings); err != nil {
+			cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			return nil, errors.Join(err, s.Remove(cleanup))
+		}
 	}
 	if err := s.initializeProject(ctx, secrets); err != nil {
 		return nil, errors.Join(err, s.Shutdown())

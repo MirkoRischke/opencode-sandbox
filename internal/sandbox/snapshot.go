@@ -167,6 +167,11 @@ func createPreparationVM(ctx context.Context, paths worktreePaths, name string, 
 	if settings.Network.Diagnostics {
 		prep.diagnostics = startNetworkDiagnostics(vm, paths.root, started, diagnostics)
 	}
+	if err := prep.configureEnvironment(ctx, settings); err != nil {
+		cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return nil, errors.Join(err, prep.Remove(cleanup))
+	}
 	if err := prep.initializeProject(ctx, secrets); err != nil {
 		cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -321,34 +326,44 @@ func (r repoSnapshot) removeMembers(ctx context.Context, keepID string, observer
 	return nil
 }
 
-func connectOrRestore(ctx context.Context, name string, paths worktreePaths, secrets []Secret, settings config.Settings, opts []m.SandboxOption) (*m.Sandbox, error) {
+func connectOrRestore(ctx context.Context, name string, paths worktreePaths, secrets []Secret, settings config.Settings, opts []m.SandboxOption) (*m.Sandbox, bool, error) {
 	_, err := m.GetSandbox(ctx, name)
 	if err == nil {
-		return connectWithSecrets(ctx, name, secrets, opts)
+		vm, err := connectWithSecrets(ctx, name, secrets, opts)
+		return vm, false, err
 	}
 	if !m.IsKind(err, m.ErrSandboxNotFound) {
-		return nil, fmt.Errorf("find worktree VM (runtime details suppressed)")
+		return nil, false, fmt.Errorf("find worktree VM (runtime details suppressed)")
 	}
 	repo := snapshotIdentity(paths.common)
 	unlock, err := repo.lock()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer unlock()
 	// A concurrent launch may have created this VM before we took the lock.
 	if _, err := m.GetSandbox(ctx, name); err == nil {
-		return connectWithSecrets(ctx, name, secrets, opts)
+		vm, err := connectWithSecrets(ctx, name, secrets, opts)
+		return vm, false, err
 	} else if !m.IsKind(err, m.ErrSandboxNotFound) {
-		return nil, fmt.Errorf("find worktree VM (runtime details suppressed)")
+		return nil, false, fmt.Errorf("find worktree VM (runtime details suppressed)")
 	}
 	head, err := repo.head(ctx)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if head == nil {
-		return connectWithSecrets(ctx, name, secrets, opts)
+		for _, secret := range secrets {
+			opts = append(opts, m.WithSecrets(secret.entry))
+		}
+		vm, err := m.CreateSandbox(ctx, name, opts...)
+		if err != nil {
+			return nil, false, fmt.Errorf("create worktree VM (runtime details suppressed)")
+		}
+		return vm, true, nil
 	}
-	return restoreWorktree(ctx, head, name, paths, secrets, settings)
+	vm, err := restoreWorktree(ctx, head, name, paths, secrets, settings)
+	return vm, err == nil, err
 }
 
 func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, paths worktreePaths, secrets []Secret, settings config.Settings) (*m.Sandbox, error) {

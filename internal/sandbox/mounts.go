@@ -10,7 +10,7 @@ import (
 
 func validateMounts(paths worktreePaths, settings config.Settings) error {
 	for i, mount := range settings.Mounts {
-		for _, reserved := range []string{paths.root, paths.common, snapshotWorktree, "/var/lib/docker", "/proc", "/sys", "/dev"} {
+		for _, reserved := range []string{paths.root, paths.common, snapshotWorktree, "/var/lib/docker", "/proc", "/sys", "/dev", "/etc/opencode", "/etc/opencode-sandbox"} {
 			if config.MountTargetsOverlap(mount.Target, reserved) {
 				return fmt.Errorf("mounts[%d].target %q overlaps launcher/runtime mount %q", i, mount.Target, reserved)
 			}

@@ -59,7 +59,7 @@ if rm /root/.config/opencode/skills/example/SKILL.md; then exit 1; fi
 func TestNoImplicitOpenCodeMounts(t *testing.T) {
 	t.Parallel()
 	s := startSandbox(t)
-	for _, target := range []string{"/etc/opencode/opencode.json", "/root/.config/opencode/cli.json", "/root/.config/opencode/AGENTS.md", "/root/.config/opencode/skills"} {
+	for _, target := range []string{"/root/.config/opencode/opencode.json", "/root/.config/opencode/cli.json", "/root/.config/opencode/AGENTS.md", "/root/.config/opencode/skills"} {
 		execInSandbox(t, s, "test", "!", "-e", target)
 	}
 }

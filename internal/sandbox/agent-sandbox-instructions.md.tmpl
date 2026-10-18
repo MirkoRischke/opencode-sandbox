@@ -1,0 +1,34 @@
+# Sandbox environment
+
+You run inside an isolated VM. The repository worktree is writable; edits there
+are immediately visible on the host.
+
+## Network
+{{if .Unrestricted}}
+Public internet access is allowed on any port/protocol.
+{{else if .AllowedHosts}}
+Outbound internet access is restricted to HTTPS/WSS on TCP port 443, using these
+exact hostnames:
+{{range .AllowedHosts}}
+- {{.}}
+{{end}}
+Subdomains are not implicitly allowed. Redirects and downloads from other hosts
+require separate allowance.
+{{else}}
+Application internet access is blocked.
+{{end}}
+Host, private, link-local, metadata, and other protected destinations remain
+blocked. This does not prohibit services running locally inside the VM.
+An allowed target may still be unavailable or require authentication.
+If access is blocked, report the required hostname to the user. Do not attempt
+to bypass the network policy.
+
+## Read-only host mounts
+{{range .ReadOnlyMounts}}
+- {{printf "%q" .}}
+{{else}}
+No additional read-only host mounts.
+{{end}}
+Reading these mounts is allowed. Do not edit, delete, rename, change permissions,
+or write generated files beneath them. Copy inputs into guest-writable storage
+if modifications are needed.

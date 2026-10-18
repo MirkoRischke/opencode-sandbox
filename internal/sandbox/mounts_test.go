@@ -26,7 +26,7 @@ func TestConfiguredMountsAreReadOnly(t *testing.T) {
 func TestMountsCannotOverlapManagedMounts(t *testing.T) {
 	t.Parallel()
 	paths := worktreePaths{root: "/host/repo", common: "/host/main/.git"}
-	for _, target := range []string{"/host", "/host/repo", "/host/repo/subdir", "/host/main/.git", "/workspace", "/var/lib", "/var/lib/docker/subdir", "/proc/file", "/sys", "/dev"} {
+	for _, target := range []string{"/host", "/host/repo", "/host/repo/subdir", "/host/main/.git", "/workspace", "/var/lib", "/var/lib/docker/subdir", "/proc/file", "/sys", "/dev", "/etc", "/etc/opencode", systemOpenCodeConfig, "/etc/opencode-sandbox", sandboxInstructions} {
 		t.Run(target, func(t *testing.T) {
 			settings := config.DefaultSettings()
 			settings.Mounts = []config.MountSettings{{Source: t.TempDir(), Target: target}}
