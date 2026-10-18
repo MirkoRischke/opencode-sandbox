@@ -171,7 +171,7 @@ func createPreparationVM(ctx context.Context, paths worktreePaths, name string, 
 }
 
 // RemoveSnapshot removes this repository's members, not any restored VMs.
-func RemoveSnapshot(ctx context.Context, directory string) error {
+func RemoveSnapshot(ctx context.Context, directory string, observers ...RemovalObserver) error {
 	repo, err := snapshotRepo(ctx, directory)
 	if err != nil {
 		return err
@@ -184,12 +184,12 @@ func RemoveSnapshot(ctx context.Context, directory string) error {
 	if err := configureRuntime(); err != nil {
 		return err
 	}
-	return repo.remove(ctx)
+	return repo.remove(ctx, observers...)
 }
 
 // RemoveAllSnapshots removes managed baselines across repositories, including
 // repositories whose working directories no longer exist. Restored VMs remain.
-func RemoveAllSnapshots(ctx context.Context) error {
+func RemoveAllSnapshots(ctx context.Context, observers ...RemovalObserver) error {
 	if err := configureRuntime(); err != nil {
 		return err
 	}
@@ -221,7 +221,7 @@ func RemoveAllSnapshots(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return errors.Join(append(errs, err)...)
 		}
-		if err := repositories[group].removeLocked(ctx); err != nil {
+		if err := repositories[group].removeLocked(ctx, observers...); err != nil {
 			errs = append(errs, fmt.Errorf("remove %s: %w", group, err))
 		}
 	}
@@ -236,16 +236,16 @@ func managedSnapshotRepository(group string, labels map[string]string) (repoSnap
 	return repoSnapshot{id: labels["repo-id"], name: labels["repo-name"], group: group}, true
 }
 
-func (r repoSnapshot) removeLocked(ctx context.Context) error {
+func (r repoSnapshot) removeLocked(ctx context.Context, observers ...RemovalObserver) error {
 	unlock, err := r.lock()
 	if err != nil {
 		return err
 	}
 	defer unlock()
-	return r.remove(ctx)
+	return r.remove(ctx, observers...)
 }
 
-func (repo repoSnapshot) remove(ctx context.Context) error {
+func (repo repoSnapshot) remove(ctx context.Context, observers ...RemovalObserver) error {
 	head, err := repo.head(ctx)
 	if err != nil {
 		return err
@@ -255,13 +255,15 @@ func (repo repoSnapshot) remove(ctx context.Context) error {
 		keep = head.ID()
 	}
 	// Native deletion refuses to remove HEAD while other members still exist.
-	if err := repo.removeMembers(ctx, keep); err != nil {
+	if err := repo.removeMembers(ctx, keep, observers...); err != nil {
 		return err
 	}
 	if head != nil {
+		size := head.SizeBytes()
 		if err := head.Remove(ctx, false); err != nil {
 			return fmt.Errorf("remove repository snapshot: %w", err)
 		}
+		notifyRemoval(observers, head.Reference(), size)
 	}
 	return nil
 }
@@ -284,7 +286,7 @@ func (r repoSnapshot) head(ctx context.Context) (*m.SnapshotHandle, error) {
 	return head, nil
 }
 
-func (r repoSnapshot) removeMembers(ctx context.Context, keepID string) error {
+func (r repoSnapshot) removeMembers(ctx context.Context, keepID string, observers ...RemovalObserver) error {
 	members, err := m.Snapshot.List(ctx)
 	if err != nil {
 		return err
@@ -305,9 +307,11 @@ func (r repoSnapshot) removeMembers(ctx context.Context, keepID string) error {
 		targets = append(targets, member)
 	}
 	for _, member := range targets {
+		size := member.SizeBytes()
 		if err := member.Remove(ctx, true); err != nil {
 			return fmt.Errorf("remove old repository snapshot: %w", err)
 		}
+		notifyRemoval(observers, member.Reference(), size)
 	}
 	return nil
 }

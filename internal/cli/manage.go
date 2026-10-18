@@ -46,10 +46,12 @@ func newRemoveCommand() *cobra.Command {
 		Short:   "Stop and delete this worktree's VM without confirmation",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if all {
-				return sandbox.RemoveAll(cmd.Context())
-			}
-			return sandbox.Remove(cmd.Context(), ".")
+			return reportRemovals(cmd.OutOrStdout(), "VM", func(observer sandbox.RemovalObserver) error {
+				if all {
+					return sandbox.RemoveAll(cmd.Context(), observer)
+				}
+				return sandbox.Remove(cmd.Context(), ".", observer)
+			})
 		},
 	}
 	command.Flags().BoolVar(&all, "all", false, "Delete all managed VMs without confirmation")
