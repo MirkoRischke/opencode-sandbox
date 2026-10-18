@@ -55,7 +55,8 @@ mise run load    # Build and import the sandbox image
 ```sh
 opencode-sandbox        # Launch from inside a Git worktree
 opencode-sandbox list   # List managed VMs (alias: ls)
-opencode-sandbox remove # Delete ALL managed VMs without confirmation (alias: rm)
+opencode-sandbox remove # Delete this worktree's VM without confirmation (alias: rm)
+opencode-sandbox remove --all # Delete ALL managed VMs without confirmation
 opencode-sandbox --help # Show launch options
 opencode-sandbox config default # Print documented launcher defaults
 opencode-sandbox diagnostics network # Print saved network diagnostics JSON for this worktree

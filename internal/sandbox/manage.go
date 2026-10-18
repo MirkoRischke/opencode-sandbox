@@ -36,8 +36,31 @@ func List(ctx context.Context) ([]*m.SandboxHandle, error) {
 	return vms, nil
 }
 
-// Remove stops and deletes all labeled VMs, attempting every target on failure.
-func Remove(ctx context.Context) error {
+// Remove stops and deletes only the managed VM for the given Git worktree.
+// Missing VMs are a no-op; repository snapshots are left untouched.
+func Remove(ctx context.Context, directory string) error {
+	paths, err := discoverWorktree(ctx, directory)
+	if err != nil {
+		return err
+	}
+	vms, err := List(ctx)
+	if err != nil {
+		return err
+	}
+	name := sandboxName(paths.root, paths.common)
+	for _, vm := range vms {
+		if vm.Name() == name {
+			if err := vm.Destroy(ctx, m.WithDestroyTimeout(30*time.Second)); err != nil {
+				return fmt.Errorf("remove %s: %w", name, err)
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
+// RemoveAll stops and deletes all labeled VMs, attempting every target on failure.
+func RemoveAll(ctx context.Context) error {
 	// Collect all pages before deleting, so removal cannot disturb pagination.
 	vms, err := List(ctx)
 	if err != nil {

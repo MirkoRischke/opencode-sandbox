@@ -14,13 +14,46 @@ import (
 func TestManagementCommandsRejectExtraArguments(t *testing.T) {
 	t.Parallel()
 	for _, command := range []string{"list", "ls", "remove", "rm"} {
-		for _, extra := range []string{"--all", "--yes", "vm-name"} {
+		extras := []string{"--yes", "vm-name"}
+		if command == "list" || command == "ls" {
+			extras = append(extras, "--all")
+		}
+		for _, extra := range extras {
 			t.Run(command+"/"+extra, func(t *testing.T) {
 				_, err := executeCommand(command, extra)
 				if err == nil {
 					t.Fatal("expected management argument error")
 				}
 			})
+		}
+	}
+	for _, command := range []string{"remove", "rm"} {
+		if _, err := executeCommand(command, "--all", "extra"); err == nil {
+			t.Fatal("expected argument error with --all")
+		}
+	}
+}
+
+func TestRemoveAllFlag(t *testing.T) {
+	t.Parallel()
+	for _, all := range []bool{false, true} {
+		cmd := newRemoveCommand()
+		args := []string{}
+		if all {
+			args = append(args, "--all")
+		}
+		if err := cmd.ParseFlags(args); err != nil {
+			t.Fatal(err)
+		}
+		got, err := cmd.Flags().GetBool("all")
+		if err != nil || got != all {
+			t.Fatalf("expected all=%t, got %t: %v", all, got, err)
+		}
+	}
+	for _, command := range []string{"remove", "rm"} {
+		output, err := executeCommand(command, "--help")
+		if err != nil || !strings.Contains(output, "--all") || !strings.Contains(output, "this worktree's VM") {
+			t.Fatalf("expected current-worktree help and --all flag, got %v\n%s", err, output)
 		}
 	}
 }
