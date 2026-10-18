@@ -26,6 +26,12 @@ func networkPolicy(n config.NetworkSettings) *m.NetworkConfig {
 			Action: m.PolicyActionDeny, Direction: m.PolicyDirectionEgress, Destination: destination,
 		})
 	}
+	if n.Unrestricted {
+		policy.Rules = append(policy.Rules, m.PolicyRule{
+			Action: m.PolicyActionAllow, Direction: m.PolicyDirectionEgress, Destination: "public",
+		})
+		return policy
+	}
 	seen := make(map[string]bool)
 	for _, hosts := range [][]string{n.AllowedHosts, n.AdditionalAllowedHosts} {
 		for _, host := range hosts {

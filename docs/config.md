@@ -63,7 +63,8 @@ The effective network allowlist is the union of `allowed_hosts` and
 Both fields follow the same inheritance/replacement rules: repo additions replace
 global additions, not append to them. Keep your shared baseline in global
 `allowed_hosts`. To deny all application internet access, set **both** lists to
-`[]`. Neither list expands a secret's credential substitution scope.
+`[]` and keep `unrestricted = false`. Neither list expands a secret's credential
+substitution scope.
 
 Before a new or changed repo config is used, an interactive launch shows its
 contents and the effective settings, and asks for approval (default: no).
@@ -198,13 +199,33 @@ make HTTPS requests through the inspected network must trust that CA themselves.
 
 ### Network policy
 
-Only exact DNS hostnames are accepted. Connections are limited to TCP port 443
+By default, only exact DNS hostnames are accepted. Connections are limited to TCP port 443
 with strict hostname checks and verified TLS inspection. Other outbound traffic
 is denied, apart from DNS through Microsandbox's gateway. Host/private networks,
 loopback, link-local and metadata destinations remain blocked. Both host lists
-must be empty to deny application internet access. Missing files or omitted
+must be empty and `unrestricted` must be false to deny application internet access. Missing files or omitted
 network settings use empty allowlists by default. Malformed TOML, unknown keys,
 and invalid values fail launch before VM startup.
+
+Opt in to unrestricted **public internet** globally or in an approved repo config:
+
+```toml
+[network]
+unrestricted = true
+```
+
+Default: `false`. This allows public destinations on any port/protocol supported
+by Microsandbox, including plain HTTP and direct IP connections. Both
+`allowed_hosts` and `additional_allowed_hosts` are ignored, not rejected; their
+values take effect again when `unrestricted` is disabled. Configured hostnames
+must still be valid. Host/private networks, loopback, link-local, metadata,
+multicast, and unspecified addresses remain blocked, apart from gateway DNS.
+Guest-local loopback is internal to the VM and is unaffected by egress policy.
+Inbound access remains denied. TLS inspection and verified upstream TLS remain
+enabled, and secret substitution stays limited to its configured hosts/headers.
+Unrestricted access does not expand any credential's substitution scope.
+Existing TLS inspection limitations still apply: direct-IP HTTPS can fail even
+though the public IP is allowed; use hostname-based HTTPS instead.
 
 Settings apply **only when creating a VM**. Existing VMs keep their old policy,
 including VMs created before this feature with public internet access. No policy

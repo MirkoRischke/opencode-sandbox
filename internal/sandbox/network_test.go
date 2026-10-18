@@ -42,6 +42,28 @@ func TestNetworkPolicyAdditionalHostsWithoutBaseline(t *testing.T) {
 	require.Equal(t, "registry.npmjs.org", policy.Rules[len(policy.Rules)-1].Destination)
 }
 
+func TestUnrestrictedNetworkAllowsOnlyPublicDestinationsAndIgnoresHostLists(t *testing.T) {
+	t.Parallel()
+	settings := config.DefaultSettings().Network
+	settings.Unrestricted = true
+	policy := networkPolicy(settings)
+	baseline := networkPolicy(config.DefaultSettings().Network)
+	require.Equal(t, m.PolicyActionDeny, policy.DefaultEgress)
+	require.Equal(t, m.PolicyActionDeny, policy.DefaultIngress)
+	require.False(t, policy.DisableStrict)
+	require.Equal(t, baseline.Rules, policy.Rules[:len(baseline.Rules)])
+	require.Equal(t, append(baseline.Rules, m.PolicyRule{
+		Action: m.PolicyActionAllow, Direction: m.PolicyDirectionEgress, Destination: "public",
+	}), policy.Rules)
+	settings.AllowedHosts = []string{"github.com"}
+	settings.AdditionalAllowedHosts = []string{"registry.npmjs.org"}
+	require.Equal(t, policy, networkPolicy(settings))
+	settings.Unrestricted = false
+	restricted := networkPolicy(settings)
+	require.Equal(t, "github.com", restricted.Rules[len(baseline.Rules)].Destination)
+	require.Equal(t, "registry.npmjs.org", restricted.Rules[len(baseline.Rules)+1].Destination)
+}
+
 func TestNetworkDiagnosticsOnlyChangesDenialResponsesNotRules(t *testing.T) {
 	t.Parallel()
 	settings := config.DefaultSettings().Network

@@ -47,6 +47,26 @@ func TestEmptyNetworkAllowlistBlocksInternet(t *testing.T) {
 	requireNetworkBlocked(t, s, "https://github.com")
 }
 
+func TestUnrestrictedNetworkAllowsPublicInternetButBlocksProtectedDestinations(t *testing.T) {
+	t.Parallel()
+	settings := launcherconfig.DefaultSettings()
+	settings.Network.Unrestricted = true
+	settings.Network.AllowedHosts = []string{"github.com"}
+	settings.Network.AdditionalAllowedHosts = []string{"api.github.com"}
+	s := startSandboxWithSettings(t, settings)
+	for _, url := range []string{"https://example.org", "http://example.org", "http://1.1.1.1"} {
+		t.Run(url, func(t *testing.T) {
+			execInSandbox(t, s, "curl", "--noproxy", "*", "--fail", "--silent", "--show-error", "--max-time", "15", url)
+		})
+	}
+	for _, url := range []string{
+		"http://host.microsandbox.internal", "http://192.168.1.1", "http://10.0.0.1",
+		"http://169.254.169.254", "http://169.254.1.1", "http://[fc00::1]",
+	} {
+		t.Run(url, func(t *testing.T) { requireNetworkBlocked(t, s, url) })
+	}
+}
+
 func TestMissingConfigDefaultsToDenyingInternetInVM(t *testing.T) {
 	t.Parallel()
 	settings, err := launcherconfig.LoadSettings(t.TempDir())

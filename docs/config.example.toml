@@ -1,6 +1,6 @@
 # Location: ~/.config/opencode-sandbox/config.toml
 # XDG_CONFIG_HOME overrides ~/.config.
-# Exact hostnames; policy permits HTTPS/WSS on TCP 443 only.
+# Unless unrestricted is enabled: exact hostnames, HTTPS/WSS on TCP 443 only.
 # Applied only when creating a VM. Recreate it after changing this file.
 # Missing configuration defaults to no internet; invalid configuration fails.
 
@@ -24,6 +24,10 @@ root_disk_mib = 4096
 docker_disk_mib = 10240
 
 [network]
+# Allow any public destination/port/protocol, ignoring both host lists.
+# Host/private, loopback, link-local, metadata and multicast remain blocked.
+# Secret substitution scopes are unchanged.
+unrestricted = false
 # Best-effort cumulative denied-target summary per worktree. Also enables all
 # Microsandbox runtime debug logs (rotating, about 40 MiB) and HTTP 403 denial
 # responses instead of resets where supported. Recreate VM on change.

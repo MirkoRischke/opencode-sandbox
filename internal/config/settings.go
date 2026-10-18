@@ -14,7 +14,7 @@ import (
 // guest JSON configuration. Add new launcher settings as fields or sections.
 type Settings struct {
 	VM      VMSettings                `toml:"vm" description:"VM resources. Recreate the VM after changing these settings."`
-	Network NetworkSettings           `toml:"network" description:"Allowed HTTPS destinations. Recreate the VM after policy changes."`
+	Network NetworkSettings           `toml:"network" description:"Outbound network access. Recreate the VM after policy changes."`
 	Secrets map[string]SecretSettings `toml:"secrets" description:"Optional file-backed secrets, substituted by the host proxy. Uncomment and adjust the example to enable."`
 }
 
@@ -27,9 +27,10 @@ type VMSettings struct {
 }
 
 type NetworkSettings struct {
+	Unrestricted           bool     `toml:"unrestricted" description:"Allow public internet on any port/protocol, ignoring both host lists. Protected destinations remain blocked; secret scopes are unchanged."`
 	Diagnostics            bool     `toml:"diagnostics" description:"Collect cumulative denied-target diagnostics per worktree. Enables full rotating runtime debug logs and HTTP denial responses; recreate the VM after changing this setting."`
 	AllowedHosts           []string `toml:"allowed_hosts" description:"Baseline exact DNS hostnames; HTTPS/WSS on TCP port 443 only."`
-	AdditionalAllowedHosts []string `toml:"additional_allowed_hosts" description:"Extra hostnames, combined with allowed_hosts after merging. Both lists must be empty to deny internet access. Each list replaces its inherited value when specified."`
+	AdditionalAllowedHosts []string `toml:"additional_allowed_hosts" description:"Extra hostnames, combined with allowed_hosts after merging. With unrestricted disabled, both lists must be empty to deny internet access. Each list replaces its inherited value when specified."`
 }
 
 // DefaultSettings denies application internet access.

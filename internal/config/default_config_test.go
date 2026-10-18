@@ -24,6 +24,7 @@ func TestDefaultConfigRoundTripsToRuntimeDefaults(t *testing.T) {
 	require.Empty(t, settings.Secrets, "examples must not enable credentials")
 	require.Contains(t, out.String(), "additional_allowed_hosts = []")
 	require.Contains(t, out.String(), "diagnostics = false")
+	require.Contains(t, out.String(), "unrestricted = false")
 	require.Contains(t, out.String(), `image = "opencode-sandbox:poc"`)
 	var again bytes.Buffer
 	require.NoError(t, WriteDefaultConfig(&again))
@@ -38,6 +39,28 @@ func TestNetworkDiagnosticsConfigMerging(t *testing.T) {
 	settings, err = mergeSettings(settings, []byte("[network]\ndiagnostics = false\n"), "/project")
 	require.NoError(t, err)
 	require.False(t, settings.Network.Diagnostics)
+}
+
+func TestUnrestrictedNetworkConfigMerging(t *testing.T) {
+	t.Parallel()
+	settings := DefaultSettings()
+	require.False(t, settings.Network.Unrestricted)
+	settings.Network.AllowedHosts = []string{"github.com"}
+	settings.Network.AdditionalAllowedHosts = []string{"registry.npmjs.org"}
+	settings, err := mergeSettings(settings, []byte("[network]\nunrestricted = true\n"), "/project")
+	require.NoError(t, err)
+	require.True(t, settings.Network.Unrestricted)
+	require.NoError(t, settings.Validate())
+	settings, err = mergeSettings(settings, []byte("[network]\ndiagnostics = true\n"), "/project")
+	require.NoError(t, err)
+	require.True(t, settings.Network.Unrestricted, "omitted fields inherit")
+	settings, err = mergeSettings(settings, []byte("[network]\nunrestricted = false\n"), "/project")
+	require.NoError(t, err)
+	require.False(t, settings.Network.Unrestricted)
+	require.Equal(t, []string{"github.com"}, settings.Network.AllowedHosts)
+	require.Equal(t, []string{"registry.npmjs.org"}, settings.Network.AdditionalAllowedHosts)
+	_, err = mergeSettings(settings, []byte("[network]\nunrestricted = 'true'\n"), "/project")
+	require.Error(t, err)
 }
 
 func TestEveryConfigFieldHasDocumentation(t *testing.T) {
