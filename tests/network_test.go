@@ -43,6 +43,7 @@ func TestRestrictedNetworkAllowsOnlyConfiguredHTTPSHostsWithoutCredentials(t *te
 }
 
 func TestEmptyNetworkAllowlistBlocksInternet(t *testing.T) {
+	t.Parallel()
 	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
 	requireNetworkBlocked(t, s, "https://github.com")
 }
@@ -58,6 +59,7 @@ func TestMissingConfigDefaultsToDenyingInternetInVM(t *testing.T) {
 }
 
 func TestExistingSandboxRetainsItsNetworkPolicy(t *testing.T) {
+	t.Parallel()
 	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

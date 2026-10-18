@@ -15,6 +15,7 @@ import (
 )
 
 func TestSandboxEditsAreVisibleOnHost(t *testing.T) {
+	t.Parallel()
 	s := startSandbox(t)
 	file := filepath.Join(s.Worktree, "guest.txt")
 
@@ -26,6 +27,7 @@ func TestSandboxEditsAreVisibleOnHost(t *testing.T) {
 }
 
 func TestSandboxCanBeSelectedByMarkerLabel(t *testing.T) {
+	t.Parallel()
 	s := startSandbox(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -39,6 +41,7 @@ func TestSandboxCanBeSelectedByMarkerLabel(t *testing.T) {
 }
 
 func TestGitStatusWorksInMountedWorktree(t *testing.T) {
+	t.Parallel()
 	s := startSandbox(t)
 	err := os.WriteFile(filepath.Join(s.Worktree, "host.txt"), []byte("written on host\n"), 0644)
 	require.NoError(t, err)
@@ -49,6 +52,7 @@ func TestGitStatusWorksInMountedWorktree(t *testing.T) {
 }
 
 func TestPreparingAgainReusesSandboxState(t *testing.T) {
+	t.Parallel()
 	s := startSandbox(t)
 	execInSandbox(t, s, "touch", "/root/persistent-state")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -64,6 +68,7 @@ func TestPreparingAgainReusesSandboxState(t *testing.T) {
 }
 
 func TestClosingSandboxConnectionDoesNotRestartVM(t *testing.T) {
+	t.Parallel()
 	worktree := newWorktree(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -78,6 +83,7 @@ func TestClosingSandboxConnectionDoesNotRestartVM(t *testing.T) {
 }
 
 func TestPreparingStoppedSandboxResumesState(t *testing.T) {
+	t.Parallel()
 	s := startSandbox(t)
 	execInSandbox(t, s, "touch", "/root/persistent-state")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -94,6 +100,7 @@ func TestPreparingStoppedSandboxResumesState(t *testing.T) {
 }
 
 func TestShutdownStopsSandboxAndPreservesGuestState(t *testing.T) {
+	t.Parallel()
 	s := startSandbox(t)
 	execInSandbox(t, s, "touch", "/root/persistent-state")
 	require.NoError(t, s.Shutdown())
@@ -110,6 +117,7 @@ func TestShutdownStopsSandboxAndPreservesGuestState(t *testing.T) {
 }
 
 func TestPreparingAgainInstallsNewProjectTools(t *testing.T) {
+	t.Parallel()
 	s := startSandbox(t)
 	require.NoError(t, os.WriteFile(filepath.Join(s.Worktree, ".mise.toml"), []byte("[tools]\nbun = \"1.3.14\"\n"), 0644))
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -122,7 +130,16 @@ func TestPreparingAgainInstallsNewProjectTools(t *testing.T) {
 	execInSandbox(t, resumed, "bun", "--version")
 }
 
+func TestPreparingInstallsProjectTools(t *testing.T) {
+	t.Parallel()
+	worktree := newWorktree(t)
+	require.NoError(t, os.WriteFile(filepath.Join(worktree, "mise.toml"), []byte("[tools]\nbun = \"1.3.14\"\n"), 0644))
+	s := prepareSandbox(t, worktree)
+	require.Equal(t, "1.3.14\n", execInSandbox(t, s, "bun", "--version"))
+}
+
 func TestProjectMiseEnvironmentIsTrustedBeforeLoading(t *testing.T) {
+	t.Parallel()
 	worktree := newWorktree(t)
 	config := "[env]\n_.path = [\"./bin\"]\n"
 	require.NoError(t, os.WriteFile(filepath.Join(worktree, "mise.toml"), []byte(config), 0644))

@@ -11,6 +11,7 @@ import (
 )
 
 func TestSandboxCommandReceivesStdin(t *testing.T) {
+	t.Parallel()
 	s := startSandbox(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -24,6 +25,7 @@ func TestSandboxCommandReceivesStdin(t *testing.T) {
 }
 
 func TestSandboxCommandFailureIsReported(t *testing.T) {
+	t.Parallel()
 	s := startSandbox(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

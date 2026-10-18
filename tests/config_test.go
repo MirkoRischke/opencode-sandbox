@@ -90,6 +90,7 @@ func TestInvalidOrMissingExplicitConfigIsRejected(t *testing.T) {
 }
 
 func TestGuestConfigUpdatesOnEveryPreparation(t *testing.T) {
+	t.Parallel()
 	worktree := newWorktree(t)
 	config := []byte(`{"model":"openai/gpt-6.1-sol"}`)
 	s := prepareSandboxWithConfig(t, worktree, config)
@@ -106,6 +107,7 @@ func TestGuestConfigUpdatesOnEveryPreparation(t *testing.T) {
 }
 
 func TestRemovingCustomConfigClearsManagedGuestConfig(t *testing.T) {
+	t.Parallel()
 	worktree := newWorktree(t)
 	s := prepareSandboxWithConfig(t, worktree, []byte(`{"model":"openai/gpt-6.1-sol"}`))
 	execInSandbox(t, s, "test", "-f", "/etc/opencode/opencode.json")
@@ -119,6 +121,7 @@ func TestRemovingCustomConfigClearsManagedGuestConfig(t *testing.T) {
 }
 
 func TestNoCustomConfigPreservesUnmanagedGuestConfig(t *testing.T) {
+	t.Parallel()
 	s := startSandbox(t)
 	execInSandbox(t, s, "bash", "-eu", "-c", `mkdir -p /etc/opencode; printf '{}' > /etc/opencode/opencode.json`)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)

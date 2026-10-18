@@ -33,7 +33,22 @@ description = "Build and import the image into Microsandbox"
 depends = ["build"]
 run = "bash -o pipefail -c 'docker save opencode-sandbox:poc | msb load'"
 
-[tasks.test]
-description = "Build, import, and smoke-test the image in a fresh VM"
+[tasks."test:prepare"]
+description = "Build and import the base and custom test images (once, or after image changes)"
 depends = ["load"]
-run = "go test -count=1 -v -timeout 10m ./..."
+run = [
+  "docker build --pull=false -t opencode-sandbox:test-custom tests/fixtures/custom-image",
+  "bash -o pipefail -c 'docker save opencode-sandbox:test-custom | msb load'",
+]
+
+[tasks."test:unit"]
+description = "Run fast tests without VMs or external services"
+run = "go test -count=1 -timeout 10s ./internal/..."
+
+[tasks.test]
+description = "Run tests using prepared images (no image builds or imports)"
+run = "go test -count=1 -v -parallel 4 -timeout 10m ./..."
+
+[tasks."test:live"]
+description = "Run the opt-in OpenAI authentication smoke test using host credentials"
+run = "go test -count=1 -v -tags live -run '^TestOpenCodeCanReachOpenAI$' -timeout 1m ./tests"

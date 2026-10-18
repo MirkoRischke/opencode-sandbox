@@ -3,13 +3,16 @@ package sandbox
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/require"
@@ -223,6 +226,39 @@ func TestNetworkDiagnosticsBoundsDistinctTargets(t *testing.T) {
 	require.True(t, d.overview.Overflow)
 	d.observe(denialEntry("TCP egress denied by domain policy dst=1.1.1.1:1"))
 	require.EqualValues(t, 2, d.overview.DeniedTargets[0].Observations)
+}
+
+func TestNetworkDiagnosticsCollectsOnEveryPoll(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	synctest.Test(t, func(t *testing.T) {
+		d, err := loadDiagnostics("/project", time.Now())
+		require.NoError(t, err)
+		var calls atomic.Int32
+		go d.run(func() error {
+			calls.Add(1)
+			d.observe(denialEntry("TLS egress denied by domain policy sni=example.org dst=1.1.1.1:443"))
+			return nil
+		})
+		defer d.finish()
+
+		synctest.Wait()
+		require.EqualValues(t, 1, calls.Load(), "collect immediately on startup")
+		for want := 2; want <= 3; want++ {
+			// synctest advances virtual time; no wall-clock sleep or shorter
+			// production polling interval is needed.
+			time.Sleep(5 * time.Second)
+			synctest.Wait()
+			require.EqualValues(t, want, calls.Load(), "collect again on each polling tick")
+			data, err := os.ReadFile(d.path)
+			require.NoError(t, err)
+			var stored networkOverview
+			require.NoError(t, json.Unmarshal(data, &stored))
+			require.Len(t, stored.DeniedTargets, 1)
+			require.EqualValues(t, want, stored.DeniedTargets[0].Observations, "save each poll before shutdown")
+		}
+		d.finish()
+		require.EqualValues(t, 4, calls.Load(), "drain one final snapshot on shutdown")
+	})
 }
 
 func TestNetworkDiagnosticsDefersWarningsUntilShutdown(t *testing.T) {

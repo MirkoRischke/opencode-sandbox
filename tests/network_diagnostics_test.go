@@ -18,6 +18,7 @@ import (
 )
 
 func TestNetworkDiagnosticsPreservesWorktreeHistoryAcrossVMRecreation(t *testing.T) {
+	// Sequential: replaces process-wide stderr and the state-directory environment.
 	stderr := os.Stderr
 	captured, err := os.CreateTemp(t.TempDir(), "diagnostics-stderr")
 	require.NoError(t, err)
@@ -61,16 +62,13 @@ func TestNetworkDiagnosticsPreservesWorktreeHistoryAcrossVMRecreation(t *testing
 			requireNetworkBlocked(t, s, "http://169.254.169.254")
 		}
 		requireNetworkBlocked(t, s, "https://example.org")
-		if iteration == 0 {
-			execInSandbox(t, s, "sleep", "6")
-		}
 		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 		err = s.Stop(ctx)
 		cancel()
 		require.NoError(t, err)
 		messages, err := os.ReadFile(captured.Name())
 		require.NoError(t, err)
-		require.NotContains(t, string(messages), "warning:", "diagnostics should continue working after the next polling cycle")
+		require.NotContains(t, string(messages), "warning:", "diagnostics should collect and save without warnings")
 
 		identity := sha256.Sum256([]byte(s.Worktree))
 		path := filepath.Join(state, "opencode-sandbox", "diagnostics", fmt.Sprintf("%x", identity[:16]), "network.json")

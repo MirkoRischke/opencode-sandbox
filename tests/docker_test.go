@@ -16,6 +16,7 @@ import (
 )
 
 func TestDockerBuildComposeAndPersistence(t *testing.T) {
+	t.Parallel()
 	s := startSandbox(t)
 	execInSandbox(t, s, "docker", "buildx", "version")
 	execInSandbox(t, s, "docker", "compose", "version")
@@ -88,6 +89,7 @@ volumes:
 }
 
 func TestDockerStartupWithoutDockerd(t *testing.T) {
+	t.Parallel()
 	s := startSandbox(t)
 	// Rename only this VM's writable copy, never the shared base image. A cold
 	// restart makes sure no old daemon can disguise the missing-binary case.
@@ -103,18 +105,22 @@ func TestDockerStartupWithoutDockerd(t *testing.T) {
 }
 
 func TestDockerStartupFailureReportsLogs(t *testing.T) {
+	t.Parallel()
 	s := startSandbox(t)
 	execInSandbox(t, s, "sh", "-ec", `printf '{invalid-json' > /etc/docker/daemon.json`)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	require.NoError(t, s.Stop(ctx))
 	_, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, testSettings(t))
+	require.NoError(t, ctx.Err(), "Docker startup failures must be reported before the deadline")
 	require.ErrorContains(t, err, "initialize guest Docker")
+	require.ErrorContains(t, err, "Docker exited before becoming ready")
 	require.ErrorContains(t, err, "daemon.json")
 	require.ErrorContains(t, err, "invalid character")
 }
 
 func TestDockerRestartClearsPreviousBootPIDFiles(t *testing.T) {
+	t.Parallel()
 	s := startSandbox(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -134,6 +140,7 @@ func TestDockerRestartClearsPreviousBootPIDFiles(t *testing.T) {
 }
 
 func TestDockerDiskIsPrivateAndRemovedWithVM(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	worktree := newWorktree(t)

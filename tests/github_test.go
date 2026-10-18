@@ -30,6 +30,7 @@ printf 'protocol=https\nhost=github.com\n\n' | git credential fill | grep '^pass
 }
 
 func TestGitHubInjectionIsRestrictedToAuthorizationOnExactGitHubHosts(t *testing.T) {
+	t.Parallel()
 	s := prepareWithGitHub(t, newWorktree(t), []byte("github_pat_FAKE"))
 	var config map[string]any
 	require.NoError(t, json.Unmarshal([]byte(storedSandboxConfig(t, s)), &config))
@@ -52,6 +53,7 @@ func TestGitHubInjectionIsRestrictedToAuthorizationOnExactGitHubHosts(t *testing
 }
 
 func TestExistingSandboxKeepsItsOriginalGitHubCredential(t *testing.T) {
+	t.Parallel()
 	worktree := newWorktree(t)
 	s := prepareWithGitHub(t, worktree, []byte("github_pat_FAKE_INITIAL"))
 	bootID := execInSandbox(t, s, "cat", "/proc/sys/kernel/random/boot_id")
@@ -69,6 +71,7 @@ func TestExistingSandboxKeepsItsOriginalGitHubCredential(t *testing.T) {
 }
 
 func TestGitHubCredentialCanBeReusedWithoutChanges(t *testing.T) {
+	t.Parallel()
 	const token = "github_pat_FAKE_UNCHANGED"
 	s := prepareWithGitHub(t, newWorktree(t), []byte(token))
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -82,6 +85,7 @@ func TestGitHubCredentialCanBeReusedWithoutChanges(t *testing.T) {
 }
 
 func TestGitHubCredentialSubstitutionWorksOutsideGuestAndExcludesOtherHeaders(t *testing.T) {
+	t.Parallel()
 	const token = "github_pat_FAKE_ECHO_TEST_ONLY"
 	s := prepareWithGitHub(t, newWorktree(t), []byte(token))
 
@@ -96,6 +100,7 @@ func TestGitHubCredentialSubstitutionWorksOutsideGuestAndExcludesOtherHeaders(t 
 }
 
 func TestStoppedSandboxKeepsItsOriginalGitHubCredential(t *testing.T) {
+	t.Parallel()
 	s := prepareWithGitHub(t, newWorktree(t), []byte("github_pat_FAKE_INITIAL"))
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -130,6 +135,7 @@ func TestRemovingGitHubTokenFileDoesNotChangeAnExistingSandbox(t *testing.T) {
 }
 
 func TestOlderSandboxRequiresRecreationBeforeEnablingGitHub(t *testing.T) {
+	t.Parallel()
 	s := startSandbox(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

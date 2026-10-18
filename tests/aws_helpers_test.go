@@ -22,6 +22,7 @@ type awsRequest struct {
 
 // A real host AWS SDK talks only to this local fake STS. Never load developer
 // profiles, SSO caches, or real credentials in these tests.
+// Callers must stay sequential: this helper changes process-wide environment.
 func fakeAWSHost(t *testing.T, region string, response func(int) (time.Time, bool)) (*sandbox.AWSOptions, <-chan awsRequest) {
 	t.Helper()
 	dir := t.TempDir()

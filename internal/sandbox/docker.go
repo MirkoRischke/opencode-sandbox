@@ -43,9 +43,16 @@ mkdir -p /var/log/opencode-sandbox
 log=/var/log/opencode-sandbox/dockerd.log
 # A new session and closed exec pipes/lock keep the daemon independent of the
 # SDK command's process group, transport, and timeout. Never truncate its log.
-setsid -f dockerd </dev/null >>"$log" 2>&1 9>&-
+# --wait keeps the tracked process alive until dockerd exits even if setsid forks.
+setsid --wait dockerd </dev/null >>"$log" 2>&1 9>&- &
+docker_pid=$!
 deadline=$((SECONDS + 60))
 until ready; do
+  if ! kill -0 "$docker_pid" 2>/dev/null; then
+    echo 'Docker exited before becoming ready. Recent daemon logs:' >&2
+    tail -n 80 "$log" >&2
+    exit 1
+  fi
   if (( SECONDS >= deadline )); then
     echo 'Docker did not become ready within 60 seconds. Recent daemon logs:' >&2
     tail -n 80 "$log" >&2

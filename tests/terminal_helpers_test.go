@@ -19,6 +19,8 @@ func runInTerminal(t *testing.T) bool {
 	if os.Getenv("SANDBOX_TERMINAL_TEST_CHILD") == "1" {
 		return false
 	}
+	// Only the parent runs in parallel; environment changes stay in its child.
+	t.Parallel()
 	binary, err := os.Executable()
 	require.NoError(t, err)
 	args := []string{"-test.run=^" + t.Name() + "$", "-test.v", "-test.timeout=2m"}

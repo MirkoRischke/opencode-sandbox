@@ -105,6 +105,7 @@ headers = ['X-Api-Key']
 }
 
 func TestSecretHostDoesNotExpandNetworkAllowlist(t *testing.T) {
+	t.Parallel()
 	settings := githubSecretSettings("unused")
 	secrets := githubSecrets(t, []byte("github_pat_FAKE_NETWORK_SCOPE"))
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -116,6 +117,7 @@ func TestSecretHostDoesNotExpandNetworkAllowlist(t *testing.T) {
 }
 
 func TestSecretIsNotSubstitutedOnAnUnlistedHost(t *testing.T) {
+	t.Parallel()
 	settings := launcherconfig.DefaultSettings()
 	settings.Network.AllowedHosts = []string{"httpbingo.org"}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
