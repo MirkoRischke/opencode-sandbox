@@ -36,6 +36,7 @@ func TestNetworkPolicyCombinesAndDeduplicatesHostLists(t *testing.T) {
 func TestNetworkPolicyAdditionalHostsWithoutBaseline(t *testing.T) {
 	t.Parallel()
 	settings := config.DefaultSettings()
+	settings.Network.AllowedHosts = []string{}
 	settings.Network.AdditionalAllowedHosts = []string{"registry.npmjs.org"}
 	require.NoError(t, settings.Validate())
 	policy := networkPolicy(settings.Network)
@@ -47,7 +48,7 @@ func TestUnrestrictedNetworkAllowsOnlyPublicDestinationsAndIgnoresHostLists(t *t
 	settings := config.DefaultSettings().Network
 	settings.Unrestricted = true
 	policy := networkPolicy(settings)
-	baseline := networkPolicy(config.DefaultSettings().Network)
+	baseline := networkPolicy(config.NetworkSettings{})
 	require.Equal(t, m.PolicyActionDeny, policy.DefaultEgress)
 	require.Equal(t, m.PolicyActionDeny, policy.DefaultIngress)
 	require.False(t, policy.DisableStrict)

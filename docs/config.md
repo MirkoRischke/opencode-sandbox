@@ -14,9 +14,10 @@ opencode-sandbox config default > .opencode-sandbox.toml
 
 This works outside Git and does not load user configuration, trust state, or
 credential files, or start a VM. Values come from the same `DefaultSettings()`
-used at runtime; descriptions come from configuration struct tags. The host lists
-are empty because built-in defaults deny internet access. Use
-`docs/config.example.toml` for a suggested network-enabled configuration instead.
+used at runtime; descriptions come from configuration struct tags. The built-in
+allowlist includes OpenAI, the OpenCode model catalog, Context7 and AWS Knowledge
+MCPs, GitHub, mise metadata, Go downloads/modules, npm, Docker Hub, and ECR Public.
+Diagnostics and unrestricted access are disabled; no credentials are enabled.
 For repo overrides, keep only settings you want to override: saving all defaults
 also overrides your global values with those defaults.
 
@@ -277,9 +278,9 @@ The Docker socket is guest-local, never the host's socket; there is no TCP daemo
 listener configured by the supplied image. Compose networks and published
 container ports work inside the VM, with no port forwarding to the host.
 
-`docs/config.example.toml` allows public Docker Hub and Amazon ECR Public pulls,
-including Docker Hub's authentication and image-download hosts. Built-in network
-defaults remain deny-all. Guest builds and containers still obey the VM network
+The built-in defaults and `docs/config.example.toml` allow public Docker Hub and
+Amazon ECR Public pulls, including Docker Hub's authentication and image-download
+hosts. Guest builds and containers still obey the VM network
 policy: package repositories and other download hosts need separate approval.
 Containers do not automatically inherit the guest's injected TLS CA; images that
 make HTTPS requests through the inspected network must trust that CA themselves.
@@ -291,7 +292,7 @@ with strict hostname checks and verified TLS inspection. Other outbound traffic
 is denied, apart from DNS through Microsandbox's gateway. Host/private networks,
 loopback, link-local and metadata destinations remain blocked. Both host lists
 must be empty and `unrestricted` must be false to deny application internet access. Missing files or omitted
-network settings use empty allowlists by default. Malformed TOML, unknown keys,
+network settings use the built-in development-service allowlist. Malformed TOML, unknown keys,
 and invalid values fail launch before VM startup.
 
 Opt in to unrestricted **public internet** globally or in an approved repo config:

@@ -6,8 +6,8 @@ retain installed tools and guest files for the next launch.
 
 ## Features
 
-- **Network blocking:** deny application internet access by default; allow only
-  explicitly configured HTTPS hosts.
+- **Network allowlist:** allow common development services over HTTPS by default;
+  customize allowed hosts or deny all application internet access.
 - **Custom credentials:** configure file-backed secrets, injected into selected
   HTTPS headers by the host proxy without exposing their values to the guest.
 - **Repository configuration:** override global settings with a repo-root
@@ -64,7 +64,7 @@ opencode-sandbox snapshot remove # Delete this repo's baseline, leaving VMs unto
 ```
 
 Configure network access and secrets in [launcher configuration](docs/config.md).
-New VMs deny application internet access by default. See also
+New VMs use a built-in development-service allowlist by default. See also
 [GitHub access](docs/github.md) and [AWS credentials](docs/aws.md).
 
 ### Prepared repository snapshots

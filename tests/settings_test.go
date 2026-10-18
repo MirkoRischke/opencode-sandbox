@@ -26,7 +26,7 @@ func TestSettingsLoadAdditionalNetworkHosts(t *testing.T) {
 	writeSettingsAt(t, dir, "[network]\nadditional_allowed_hosts = ['registry.npmjs.org']\n")
 	settings, err := launcherconfig.LoadSettings(dir)
 	require.NoError(t, err)
-	require.Empty(t, settings.Network.AllowedHosts)
+	require.Equal(t, launcherconfig.DefaultSettings().Network.AllowedHosts, settings.Network.AllowedHosts)
 	require.Equal(t, []string{"registry.npmjs.org"}, settings.Network.AdditionalAllowedHosts)
 }
 
@@ -52,7 +52,7 @@ func TestVMSettingsOverrideDefaultsIndependently(t *testing.T) {
 	settings, err := launcherconfig.LoadSettings(dir)
 	require.NoError(t, err)
 	require.Equal(t, launcherconfig.VMSettings{Image: "opencode-sandbox:poc", CPUs: 2, MemoryMiB: 3072, RootDiskMiB: 4096, DockerDiskMiB: 10240}, settings.VM)
-	require.Empty(t, settings.Network.AllowedHosts)
+	require.Equal(t, launcherconfig.DefaultSettings().Network.AllowedHosts, settings.Network.AllowedHosts)
 }
 
 func TestVMImageLoadsFromGlobalConfig(t *testing.T) {
@@ -65,14 +65,14 @@ func TestVMImageLoadsFromGlobalConfig(t *testing.T) {
 	require.EqualValues(t, 2, settings.VM.CPUs)
 }
 
-func TestSettingsMissingFileUsesRestrictiveDefaults(t *testing.T) {
+func TestSettingsMissingFileUsesBuiltInDefaults(t *testing.T) {
 	t.Parallel()
 	settings, err := launcherconfig.LoadSettings(t.TempDir())
 	require.NoError(t, err)
 	require.Equal(t, launcherconfig.DefaultSettings(), settings)
 }
 
-func TestSettingsOmittedNetworkUsesRestrictiveDefaults(t *testing.T) {
+func TestSettingsOmittedNetworkUsesBuiltInDefaults(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	writeSettingsAt(t, dir, "")
@@ -124,6 +124,7 @@ func TestExampleSettingsLoad(t *testing.T) {
 	data, err := os.ReadFile("../docs/config.example.toml")
 	require.NoError(t, err)
 	writeSettingsAt(t, dir, string(data))
-	_, err = launcherconfig.LoadSettings(dir)
+	settings, err := launcherconfig.LoadSettings(dir)
 	require.NoError(t, err)
+	require.Equal(t, launcherconfig.DefaultSettings().Network, settings.Network)
 }

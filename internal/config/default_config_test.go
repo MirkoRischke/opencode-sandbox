@@ -41,6 +41,30 @@ func TestNetworkDiagnosticsConfigMerging(t *testing.T) {
 	require.False(t, settings.Network.Diagnostics)
 }
 
+func TestDefaultNetworkAllowlist(t *testing.T) {
+	t.Parallel()
+	settings := DefaultSettings()
+	require.Equal(t, []string{
+		"chatgpt.com", "api.openai.com", "auth.openai.com",
+		"models.dev", "mcp.context7.com", "knowledge-mcp.global.api.aws",
+		"github.com", "api.github.com", "raw.githubusercontent.com",
+		"codeload.github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com",
+		"mise-versions.jdx.dev", "dl.google.com", "proxy.golang.org",
+		"sum.golang.org", "storage.googleapis.com", "registry.npmjs.org",
+		"auth.docker.io", "registry-1.docker.io", "production.cloudflare.docker.com",
+		"production.cloudfront.docker.com",
+		"docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com",
+		"public.ecr.aws",
+	}, settings.Network.AllowedHosts)
+	require.Empty(t, settings.Network.AdditionalAllowedHosts)
+	require.False(t, settings.Network.Diagnostics)
+	require.False(t, settings.Network.Unrestricted)
+	require.Empty(t, settings.Secrets)
+
+	settings.Network.AllowedHosts[0] = "changed.example.com"
+	require.Equal(t, "chatgpt.com", DefaultSettings().Network.AllowedHosts[0])
+}
+
 func TestSnapshotCommandConfigMerging(t *testing.T) {
 	t.Parallel()
 	settings, err := mergeSettings(DefaultSettings(), []byte("[snapshot]\ncommand = './scripts/prepare.sh'\n"), "/project")

@@ -38,15 +38,34 @@ type NetworkSettings struct {
 	AdditionalAllowedHosts []string `toml:"additional_allowed_hosts" description:"Extra hostnames, combined with allowed_hosts after merging. With unrestricted disabled, both lists must be empty to deny internet access. Each list replaces its inherited value when specified."`
 }
 
-// DefaultSettings denies application internet access.
+// DefaultSettings allows common development services over HTTPS.
 func DefaultSettings() Settings {
 	return Settings{
-		VM:      VMSettings{Image: "opencode-sandbox:poc", CPUs: 2, MemoryMiB: 2048, RootDiskMiB: 4096, DockerDiskMiB: 10240},
-		Network: NetworkSettings{AllowedHosts: []string{}, AdditionalAllowedHosts: []string{}},
+		VM: VMSettings{Image: "opencode-sandbox:poc", CPUs: 2, MemoryMiB: 2048, RootDiskMiB: 4096, DockerDiskMiB: 10240},
+		Network: NetworkSettings{
+			AllowedHosts: []string{
+				// OpenAI inference and authentication.
+				"chatgpt.com", "api.openai.com", "auth.openai.com",
+				// Model catalog and remote documentation MCPs.
+				"models.dev", "mcp.context7.com", "knowledge-mcp.global.api.aws",
+				// GitHub source, APIs, and release downloads.
+				"github.com", "api.github.com", "raw.githubusercontent.com",
+				"codeload.github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com",
+				// mise metadata, Go toolchains/modules, and npm packages.
+				"mise-versions.jdx.dev", "dl.google.com", "proxy.golang.org",
+				"sum.golang.org", "storage.googleapis.com", "registry.npmjs.org",
+				// Docker Hub and Amazon ECR Public image pulls.
+				"auth.docker.io", "registry-1.docker.io", "production.cloudflare.docker.com",
+				"production.cloudfront.docker.com",
+				"docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com",
+				"public.ecr.aws",
+			},
+			AdditionalAllowedHosts: []string{},
+		},
 	}
 }
 
-// LoadSettings overlays the user's config.toml onto restrictive defaults.
+// LoadSettings overlays the user's config.toml onto built-in defaults.
 // A missing file uses defaults; an invalid file is an error.
 func LoadSettings(configDir string) (Settings, error) {
 	settings := DefaultSettings()

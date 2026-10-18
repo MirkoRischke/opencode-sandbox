@@ -2,7 +2,7 @@
 # XDG_CONFIG_HOME overrides ~/.config.
 # Unless unrestricted is enabled: exact hostnames, HTTPS/WSS on TCP 443 only.
 # Applied only when creating a VM. Recreate it after changing this file.
-# Missing configuration defaults to no internet; invalid configuration fails.
+# Missing configuration uses the built-in host allowlist; invalid configuration fails.
 
 # This example enables GitHub authentication and requires the file below.
 # Remove this section to disable loading the credential for new VMs.
@@ -50,6 +50,9 @@ allowed_hosts = [
   # Context7 remote MCP. Documentation retrieval happens server-side;
   # individual documentation sites need not be allowed for this MCP.
   "mcp.context7.com",
+
+  # AWS Knowledge remote MCP. Documentation retrieval happens server-side.
+  "knowledge-mcp.global.api.aws",
 
   # GitHub: HTTPS Git, REST/GraphQL, raw files, source archives, release assets.
   # Credential substitution remains limited to github.com / api.github.com.
@@ -117,6 +120,7 @@ allowed_hosts = [
 # https://github.com/anomalyco/opencode/blob/v2.0.30/packages/core/src/plugin/provider/openai.ts
 # https://github.com/anomalyco/opencode/blob/v2.0.30/packages/core/src/plugin/provider/chatgpt.ts
 # https://github.com/upstash/context7#installation
+# https://awslabs.github.io/mcp/servers/aws-knowledge-mcp-server
 # https://github.com/jdx/mise/blob/v2026.10.12/settings.toml
 # https://github.com/jdx/mise/blob/v2026.10.12/src/aqua/aqua_registry_wrapper.rs
 # https://go.dev/ref/mod#module-proxy
