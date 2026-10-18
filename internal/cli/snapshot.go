@@ -12,10 +12,10 @@ import (
 
 func newSnapshotCommand() *cobra.Command {
 	command := &cobra.Command{
-		Use: "snapshot", Short: "Manage the prepared disk baseline shared by this repository's worktrees",
+		Use: "snapshot", Short: "Manage prepared repository disk baselines",
 		Args: cobra.NoArgs, RunE: requireSubcommand,
 	}
-	command.AddCommand(&cobra.Command{
+	command.AddCommand(newSnapshotListCommand(), &cobra.Command{
 		Use: "create", Short: "Run snapshot.command in a fresh VM and replace this repository's baseline",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

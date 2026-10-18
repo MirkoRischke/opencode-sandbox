@@ -60,6 +60,7 @@ opencode-sandbox --help # Show launch options
 opencode-sandbox config default # Print documented launcher defaults
 opencode-sandbox diagnostics network # Print saved network diagnostics JSON for this worktree
 opencode-sandbox snapshot create # Prepare a fresh VM and replace this repo's baseline
+opencode-sandbox snapshot list   # List all repo snapshots; current repo gets its own section
 opencode-sandbox snapshot remove # Delete this repo's baseline, leaving VMs untouched
 ```
 

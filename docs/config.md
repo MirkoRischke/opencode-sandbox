@@ -181,6 +181,7 @@ want cloned, including containers with automatic restart policies.
 
 ```sh
 opencode-sandbox snapshot create
+opencode-sandbox snapshot list
 opencode-sandbox snapshot remove
 ```
 
@@ -227,6 +228,14 @@ Labels include `opencode-sandbox`, `kind=repo-baseline`, `repo-name`, `repo-id`,
 snapshot store. Group/head lookup needs no launcher JSON index. Launcher cache
 contains only per-repository lock files to prevent concurrent create/remove/restore
 operations; a conflicting operation reports an error rather than racing cleanup.
+
+`snapshot list` shows all managed repository snapshots, with a dedicated current
+repository section and other snapshots grouped by repository. Outside Git, it
+shows a single all-repositories section. Each row includes the snapshot reference,
+creation time (UTC), human-readable runtime-reported size (`—` if unavailable),
+and whether it is the current baseline used for new VMs. Reported size is not a
+guarantee of disk space reclaimed on deletion. Listing needs no configuration
+approval or credential reads and does not start VMs.
 
 `snapshot remove` needs no configuration approval or credential reads. It deletes
 only that repository's managed snapshot members, old members before the head;

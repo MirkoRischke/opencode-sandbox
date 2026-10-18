@@ -50,6 +50,27 @@ echo host-modified > prepared-on-host
 	require.NoError(t, err)
 	require.Equal(t, "repo", artifact.Labels()["repo-name"])
 	require.Equal(t, m.SnapshotScopeDisk, artifact.Scope())
+	listing, err := sandbox.ListSnapshots(ctx, second)
+	require.NoError(t, err)
+	require.NotNil(t, listing.Current)
+	require.Equal(t, repo, listing.Current.Path)
+	require.Len(t, listing.Current.Snapshots, 1)
+	require.Equal(t, first, listing.Current.Snapshots[0].Reference)
+	require.True(t, listing.Current.Snapshots[0].Baseline)
+	require.Equal(t, head.SizeBytes(), listing.Current.Snapshots[0].SizeBytes)
+	require.Equal(t, head.CreatedAt(), listing.Current.Snapshots[0].CreatedAt)
+	// Outside Git, all managed repositories remain visible without a current section.
+	listing, err = sandbox.ListSnapshots(ctx, t.TempDir())
+	require.NoError(t, err)
+	require.Nil(t, listing.Current)
+	require.Condition(t, func() bool {
+		for _, r := range listing.Repositories {
+			if r.Path == repo {
+				return len(r.Snapshots) == 1 && r.Snapshots[0].Reference == first
+			}
+		}
+		return false
+	})
 
 	// A failed fresh preparation must not replace the previous head.
 	settings.Snapshot.Command = "exit 23"
@@ -92,6 +113,10 @@ echo host-modified > prepared-on-host
 	// Removing the baseline does not affect either existing VM, even cold boot.
 	require.NoError(t, sandbox.RemoveSnapshot(ctx, second))
 	require.NoError(t, sandbox.RemoveSnapshot(ctx, second), "removal should be idempotent")
+	listing, err = sandbox.ListSnapshots(ctx, worktree)
+	require.NoError(t, err)
+	require.NotNil(t, listing.Current)
+	require.Empty(t, listing.Current.Snapshots)
 	require.NoError(t, a.Stop(ctx))
 	resumed, err := sandbox.Prepare(ctx, worktree, nil, nil, settings)
 	require.NoError(t, err)
