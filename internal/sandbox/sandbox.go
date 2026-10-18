@@ -36,11 +36,7 @@ func Prepare(ctx context.Context, directory string, config []byte, secrets []Sec
 		}
 		return strings.TrimSpace(string(out)), nil
 	}
-	root, err := git("rev-parse", "--show-toplevel")
-	if err != nil {
-		return nil, err
-	}
-	root, err = filepath.EvalSymlinks(root)
+	root, err := worktreeRoot(ctx, directory)
 	if err != nil {
 		return nil, err
 	}

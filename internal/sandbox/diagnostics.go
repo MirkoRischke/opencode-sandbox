@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -51,6 +53,36 @@ type networkDiagnostics struct {
 	reportOnce        sync.Once
 	collectionFailure string
 	saveFailure       string
+}
+
+func worktreeRoot(ctx context.Context, directory string) (string, error) {
+	out, err := exec.CommandContext(ctx, "git", "-C", directory, "rev-parse", "--show-toplevel").CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("discover worktree: %w: %s", err, out)
+	}
+	return filepath.EvalSymlinks(strings.TrimSpace(string(out)))
+}
+
+// WriteNetworkDiagnostics prints the worktree's saved JSON without starting a VM
+// or loading configuration. The saved bytes are preserved unchanged.
+func WriteNetworkDiagnostics(ctx context.Context, directory string, w io.Writer) error {
+	root, err := worktreeRoot(ctx, directory)
+	if err != nil {
+		return err
+	}
+	path, err := diagnosticsPath(root)
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("no saved network diagnostics for %s; enable network.diagnostics and launch the sandbox to collect them", root)
+	}
+	if err != nil {
+		return fmt.Errorf("read network diagnostics: %w", err)
+	}
+	_, err = w.Write(data)
+	return err
 }
 
 func diagnosticsPath(worktree string) (string, error) {

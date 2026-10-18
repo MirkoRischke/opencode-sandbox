@@ -22,6 +22,14 @@ func main() {
 }
 
 func run() (err error) {
+	if len(os.Args) > 1 && os.Args[1] == "diagnostics" {
+		if len(os.Args) != 3 || os.Args[2] != "network" {
+			return fmt.Errorf("usage: opencode-sandbox diagnostics network")
+		}
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+		defer cancel()
+		return sandbox.WriteNetworkDiagnostics(ctx, ".", os.Stdout)
+	}
 	if len(os.Args) > 1 && os.Args[1] == "config" {
 		if len(os.Args) != 3 || os.Args[2] != "default" {
 			return fmt.Errorf("usage: opencode-sandbox config default")
@@ -59,10 +67,11 @@ func run() (err error) {
 	flags := flag.NewFlagSet("opencode-sandbox", flag.ContinueOnError)
 	flags.Usage = func() {
 		//nolint:errcheck // flag.Usage cannot return output errors.
-		fmt.Fprintln(flags.Output(), `Usage: opencode-sandbox [launch flags] | list (ls) | remove (rm) | config default
+		fmt.Fprintln(flags.Output(), `Usage: opencode-sandbox [launch flags] | list (ls) | remove (rm) | config default | diagnostics network
   list, ls    List all managed VMs, including stopped VMs
   remove, rm  Stop and delete all managed VMs without confirmation
-  config default  Print documented launcher defaults without loading configuration`)
+  config default  Print documented launcher defaults without loading configuration
+  diagnostics network  Print saved network diagnostics JSON for the current worktree`)
 		flags.PrintDefaults()
 	}
 	configPath := flags.String("config", "", "Guest OpenCode JSON configuration file")
@@ -76,7 +85,7 @@ func run() (err error) {
 		return err
 	}
 	if flags.NArg() != 0 {
-		return fmt.Errorf("usage: opencode-sandbox [--config path] [--cli-config path] [--aws-role arn [--aws-profile name]] | list (ls) | remove (rm) (launch inside a Git worktree)")
+		return fmt.Errorf("usage: opencode-sandbox [--config path] [--cli-config path] [--aws-role arn [--aws-profile name]] | list (ls) | remove (rm) | config default | diagnostics network (launch inside a Git worktree)")
 	}
 	if err := identifyHerdrAgent(); err != nil {
 		return err

@@ -1,9 +1,11 @@
 package sandbox
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -13,6 +15,65 @@ import (
 	"github.com/stretchr/testify/require"
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
+
+func TestWriteNetworkDiagnostics(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+	repo := t.TempDir()
+	out, err := exec.Command("git", "-C", repo, "init").CombinedOutput()
+	require.NoError(t, err, string(out))
+	root, err := filepath.EvalSymlinks(repo)
+	require.NoError(t, err)
+	subdir := filepath.Join(repo, "nested")
+	require.NoError(t, os.Mkdir(subdir, 0700))
+	alias := filepath.Join(t.TempDir(), "alias")
+	require.NoError(t, os.Symlink(repo, alias))
+	path, err := diagnosticsPath(root)
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
+	data := []byte("{\n  \"denied_targets\": [], \"worktree\": \"example\"\n}\n")
+	require.NoError(t, os.WriteFile(path, data, 0600))
+	// Neither global nor unapproved repo configuration should be loaded.
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	configDir := filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "opencode-sandbox")
+	require.NoError(t, os.MkdirAll(configDir, 0700))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.toml"), []byte("invalid = ["), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(repo, ".opencode-sandbox.toml"), []byte("invalid = ["), 0600))
+
+	for _, directory := range []string{repo, subdir, alias} {
+		t.Run(directory, func(t *testing.T) {
+			var output bytes.Buffer
+			require.NoError(t, WriteNetworkDiagnostics(context.Background(), directory, &output))
+			require.Equal(t, data, output.Bytes())
+		})
+	}
+
+	t.Run("writer error", func(t *testing.T) {
+		err := WriteNetworkDiagnostics(context.Background(), repo, diagnosticsErrorWriter{})
+		require.ErrorIs(t, err, os.ErrPermission)
+	})
+	t.Run("missing history", func(t *testing.T) {
+		require.NoError(t, os.Remove(path))
+		var output bytes.Buffer
+		err := WriteNetworkDiagnostics(context.Background(), subdir, &output)
+		require.ErrorContains(t, err, "no saved network diagnostics")
+		require.Empty(t, output.String())
+		_, err = os.Stat(path)
+		require.True(t, os.IsNotExist(err))
+	})
+	t.Run("outside Git", func(t *testing.T) {
+		var output bytes.Buffer
+		err := WriteNetworkDiagnostics(context.Background(), t.TempDir(), &output)
+		require.ErrorContains(t, err, "discover worktree")
+		require.Empty(t, output.String())
+	})
+}
+
+type diagnosticsErrorWriter struct{}
+
+func (diagnosticsErrorWriter) Write([]byte) (int, error) {
+	return 0, os.ErrPermission
+}
 
 func denialEntry(text string) m.LogEntry {
 	return m.LogEntry{

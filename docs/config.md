@@ -258,6 +258,18 @@ not while OpenCode owns the terminal. Warnings distinguish collection from save
 failures and include a safe error category. They do not prevent VM use; malformed history is not
 overwritten. Disabled diagnostics leave existing summaries untouched.
 
+Print the saved JSON unchanged from anywhere inside the worktree:
+
+```sh
+opencode-sandbox diagnostics network
+opencode-sandbox diagnostics network | jq '.denied_targets'
+```
+
+This read-only command does not start a VM or load configuration, trust state, or
+credentials. It works after VM deletion and shows the latest saved snapshot, not
+live logs. Missing history is an error reported on stderr with a nonzero exit.
+Running `opencode-sandbox diagnostics` shows usage and the available category.
+
 `denied_targets` contains optional `hostname`, `ip`, `port`, `protocol`, and `reason`,
 plus `observations`, `first_seen`, and `last_seen`. Hostnames group independently of
 changing destination IPs; unknown hostnames use the IP instead. Different ports,
