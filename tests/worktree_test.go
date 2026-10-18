@@ -58,7 +58,7 @@ func TestPreparingAgainReusesSandboxState(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, testSettings(t))
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, testSettings(t))
 
 	require.NoError(t, err)
 	assert.Equal(t, s.Name, resumed.Name)
@@ -72,7 +72,7 @@ func TestClosingSandboxConnectionDoesNotRestartVM(t *testing.T) {
 	worktree := newWorktree(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	first, err := sandbox.Prepare(ctx, worktree, nil, nil, testSettings(t))
+	first, err := sandbox.Prepare(ctx, worktree, nil, testSettings(t))
 	require.NoError(t, err)
 	bootID := execInSandbox(t, first, "cat", "/proc/sys/kernel/random/boot_id")
 	require.NoError(t, first.Close())
@@ -91,7 +91,7 @@ func TestPreparingStoppedSandboxResumesState(t *testing.T) {
 	// Simulate the user stopping a persistent VM outside the launcher.
 	require.NoError(t, s.Stop(ctx))
 
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, testSettings(t))
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, testSettings(t))
 
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, resumed.Close()) })
@@ -110,7 +110,7 @@ func TestShutdownStopsSandboxAndPreservesGuestState(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, m.SandboxStatusStopped, handle.Status())
 
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, testSettings(t))
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, testSettings(t))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, resumed.Close()) })
 	execInSandbox(t, resumed, "test", "-f", "/root/persistent-state")
@@ -123,7 +123,7 @@ func TestPreparingAgainInstallsNewProjectTools(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, testSettings(t))
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, testSettings(t))
 
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, resumed.Close()) })

@@ -83,12 +83,18 @@ func CreateSnapshot(ctx context.Context, directory string, secrets []Secret, set
 	if err := settings.Validate(); err != nil {
 		return "", err
 	}
+	if err := settings.ValidateMountSources(); err != nil {
+		return "", err
+	}
 	diagnosticOptions, err := resolveDiagnostics(settings.Network.Diagnostics, diagnostics)
 	if err != nil {
 		return "", err
 	}
 	paths, err := discoverWorktree(ctx, directory)
 	if err != nil {
+		return "", err
+	}
+	if err := validateMounts(paths, settings); err != nil {
 		return "", err
 	}
 	repo := snapshotIdentity(paths.common)
@@ -358,6 +364,7 @@ func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, p
 			paths.common:     m.Mount.Bind(paths.common, owner),
 		},
 	}
+	addReadOnlyMounts(restore.Volumes, settings)
 	if settings.Network.Diagnostics {
 		restore.LogLevel = m.LogLevelDebug
 	}

@@ -97,6 +97,72 @@ The launcher always stops its VM on exit, including errors and handled terminati
 signals. It never removes the VM: installed tools and guest files persist for the
 next launch. Forced termination (`SIGKILL`) or a host crash cannot run cleanup.
 
+### Read-only host mounts
+
+Explicitly expose host files or directories with `[[mounts]]` entries in global
+`config.toml` or an approved repo `.opencode-sandbox.toml`. No extra host files,
+OpenCode configuration, instructions, or skills are shared by default.
+
+```toml
+[[mounts]]
+source = "~/.config/opencode/AGENTS.md"
+target = "/root/.config/opencode/AGENTS.md"
+
+[[mounts]]
+source = "~/.config/opencode/skills"
+target = "/root/.config/opencode/skills"
+
+[[mounts]]
+source = "~/.config/opencode-sandbox/opencode.json"
+target = "/etc/opencode/opencode.json"
+
+[[mounts]]
+source = "~/.config/opencode/cli.json"
+target = "/root/.config/opencode/cli.json"
+```
+
+Sources must exist as regular files or directories. `~/` expands to the host
+home directory; relative sources resolve against the configuration file supplying
+the list. Targets must be clean absolute guest paths. Missing sources fail launch
+before VM startup, with the entry index and host path. There are no globs or
+optional mounts. Both files and directories are always read-only, even for guest
+root; mounting one file does not expose its host siblings. Mounting a directory
+exposes its contents, including skill scripts and references. Read-only prevents
+guest modification, **not reading or exfiltration**. Host edits remain visible;
+OpenCode's own reload behavior still applies. Its settings UI cannot save to a
+read-only `cli.json`.
+
+Mount arrays replace, rather than append, across configuration layers. Use
+`mounts = []` at the top level of a repo config to disable inherited mounts.
+New/changed repo configuration requires the normal approval, which authorizes
+the displayed host paths. Duplicate or nested targets and overlaps with the
+worktree, Git metadata, Docker storage, or runtime mounts are rejected.
+
+Mappings apply at VM creation; recreate the VM after adding, removing, or changing
+them. Configured mounts are also available during snapshot preparation and are
+explicitly rebound on restore; their host contents are not copied into the snapshot.
+Recreate a prepared baseline when removing/changing its required mount targets.
+Each mapping consumes a runtime device, so mounts are not unlimited; a handful
+of configuration/skill mounts is well below the runtime device budget.
+
+OpenCode interprets the mounted paths normally. `/etc/opencode/opencode.json` is
+system configuration and overrides project settings; mount at
+`/root/.config/opencode/opencode.json` instead for user-level configuration.
+For additional sandbox-specific instructions, mount a separate Markdown file
+and reference its **guest path** from your mounted OpenCode configuration:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["/etc/opencode/sandbox-instructions.md"]
+}
+```
+
+The launcher does not load or copy `opencode.json` / `cli.json` implicitly and has
+no `--config` / `--cli-config` flags. Authentication remains separate.
+
+### VM management
+
 New VMs carry the label `app=opencode-sandbox` for bulk management. Run from any
 directory, without loading launch configuration or secrets:
 

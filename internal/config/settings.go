@@ -13,6 +13,7 @@ import (
 // Settings is the host-side launcher configuration, separate from OpenCode's
 // guest JSON configuration. Add new launcher settings as fields or sections.
 type Settings struct {
+	Mounts   []MountSettings           `toml:"mounts" description:"Explicit read-only host file/directory mounts. No files are shared by default. Recreate the VM after changing mappings."`
 	VM       VMSettings                `toml:"vm" description:"VM resources. Recreate the VM after changing these settings."`
 	Network  NetworkSettings           `toml:"network" description:"Outbound network access. Recreate the VM after policy changes."`
 	Snapshot SnapshotSettings          `toml:"snapshot" description:"Optional per-repository prepared disk baseline. Created and removed explicitly with the snapshot commands."`
@@ -41,7 +42,8 @@ type NetworkSettings struct {
 // DefaultSettings allows common development services over HTTPS.
 func DefaultSettings() Settings {
 	return Settings{
-		VM: VMSettings{Image: "opencode-sandbox:poc", CPUs: 2, MemoryMiB: 2048, RootDiskMiB: 4096, DockerDiskMiB: 10240},
+		Mounts: []MountSettings{},
+		VM:     VMSettings{Image: "opencode-sandbox:poc", CPUs: 2, MemoryMiB: 2048, RootDiskMiB: 4096, DockerDiskMiB: 10240},
 		Network: NetworkSettings{
 			AllowedHosts: []string{
 				// OpenAI inference and authentication.
@@ -105,6 +107,9 @@ func (s Settings) Validate() error {
 		return fmt.Errorf("vm.docker_disk_mib must be greater than zero")
 	}
 	if err := s.Network.validate(); err != nil {
+		return err
+	}
+	if err := validateMounts(s.Mounts); err != nil {
 		return err
 	}
 	return ValidateSecrets(s.Secrets)

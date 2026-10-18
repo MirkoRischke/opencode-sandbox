@@ -31,7 +31,7 @@ func confirmRepoConfig(input io.Reader, output io.Writer, path string, data []by
 	quoteConfig(&prompt, data)
 	fmt.Fprintln(&prompt, "Effective settings (credential values are never loaded for this review):")
 	quoteConfig(&prompt, effective.Bytes())
-	fmt.Fprint(&prompt, "Trust this repo configuration, including host credential access? [y/N] ")
+	fmt.Fprint(&prompt, "Trust this repo configuration, including host file mounts and host credential access? [y/N] ")
 	if _, err := output.Write(prompt.Bytes()); err != nil {
 		return err
 	}

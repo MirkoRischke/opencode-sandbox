@@ -15,7 +15,7 @@ import (
 	"opencode-sandbox/internal/sandbox"
 )
 
-func launch(ctx context.Context, configPath, cliConfigPath, awsRole, awsProfile string) (err error) {
+func launch(ctx context.Context, awsRole, awsProfile string) (err error) {
 	if err := identifyHerdrAgent(); err != nil {
 		return err
 	}
@@ -27,14 +27,6 @@ func launch(ctx context.Context, configPath, cliConfigPath, awsRole, awsProfile 
 		}
 	}
 	configDir, err := hostConfigDir(os.Getenv("XDG_CONFIG_HOME"), os.Getenv("HOME"))
-	if err != nil {
-		return err
-	}
-	config, err := sandbox.LoadConfig(configPath, configDir)
-	if err != nil {
-		return err
-	}
-	cliConfig, err := sandbox.LoadCLIConfig(cliConfigPath, configDir)
 	if err != nil {
 		return err
 	}
@@ -51,7 +43,7 @@ func launch(ctx context.Context, configPath, cliConfigPath, awsRole, awsProfile 
 	if err != nil {
 		return err
 	}
-	s, err := sandbox.Prepare(ctx, ".", config, secrets, settings, sandbox.DiagnosticsOptions{StateDir: stateDir, Output: os.Stderr})
+	s, err := sandbox.Prepare(ctx, ".", secrets, settings, sandbox.DiagnosticsOptions{StateDir: stateDir, Output: os.Stderr})
 	if err != nil {
 		return err
 	}
@@ -77,9 +69,6 @@ func launch(ctx context.Context, configPath, cliConfigPath, awsRole, awsProfile 
 		return err
 	}
 	defer stopAWS()
-	if err := s.SyncTUIConfig(ctx, cliConfig); err != nil {
-		return err
-	}
 	if err := s.ImportOpenAI(ctx); err != nil {
 		return err
 	}

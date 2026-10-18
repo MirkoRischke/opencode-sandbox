@@ -62,7 +62,7 @@ func TestExistingSandboxKeepsItsOriginalGitHubCredential(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	resumed, err := sandbox.Prepare(ctx, worktree, nil, githubSecrets(t, []byte("github_pat_FAKE_ROTATED")), testSettings(t))
+	resumed, err := sandbox.Prepare(ctx, worktree, githubSecrets(t, []byte("github_pat_FAKE_ROTATED")), testSettings(t))
 
 	require.NoError(t, err)
 	defer func() { require.NoError(t, resumed.Close()) }()
@@ -79,7 +79,7 @@ func TestGitHubCredentialCanBeReusedWithoutChanges(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, githubSecrets(t, []byte(token)), testSettings(t))
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, githubSecrets(t, []byte(token)), testSettings(t))
 
 	require.NoError(t, err)
 	defer func() { require.NoError(t, resumed.Close()) }()
@@ -108,7 +108,7 @@ func TestStoppedSandboxKeepsItsOriginalGitHubCredential(t *testing.T) {
 	defer cancel()
 	require.NoError(t, s.Stop(ctx))
 
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, githubSecrets(t, []byte("github_pat_FAKE_ROTATED")), testSettings(t))
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, githubSecrets(t, []byte("github_pat_FAKE_ROTATED")), testSettings(t))
 
 	require.NoError(t, err)
 	defer func() { require.NoError(t, resumed.Close()) }()
@@ -129,7 +129,7 @@ func TestRemovingGitHubTokenFileDoesNotChangeAnExistingSandbox(t *testing.T) {
 	_, err := sandbox.LoadSecrets(githubSecretSettings(path))
 	require.Error(t, err)
 
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, testSettings(t))
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, testSettings(t))
 
 	require.NoError(t, err)
 	defer func() { require.NoError(t, resumed.Close()) }()
@@ -143,7 +143,7 @@ func TestOlderSandboxRequiresRecreationBeforeEnablingGitHub(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	_, err := sandbox.Prepare(ctx, s.Worktree, nil, githubSecrets(t, []byte("github_pat_FAKE")), testSettings(t))
+	_, err := sandbox.Prepare(ctx, s.Worktree, githubSecrets(t, []byte("github_pat_FAKE")), testSettings(t))
 
 	require.ErrorContains(t, err, "recreate this VM")
 	require.NotContains(t, storedSandboxConfig(t, s), "github_pat_FAKE")

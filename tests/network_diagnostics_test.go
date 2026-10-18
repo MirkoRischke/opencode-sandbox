@@ -47,7 +47,7 @@ func TestNetworkDiagnosticsPreservesWorktreeHistoryAcrossVMRecreation(t *testing
 			settings.Network.AllowedHosts = []string{"github.com"}
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		s, err := sandbox.Prepare(ctx, root, nil, nil, settings, diagnostics)
+		s, err := sandbox.Prepare(ctx, root, nil, settings, diagnostics)
 		cancel()
 		require.NoError(t, err)
 		current = s
@@ -82,7 +82,7 @@ func TestNetworkDiagnosticsPreservesWorktreeHistoryAcrossVMRecreation(t *testing
 		// Resume the same VM without making requests. Old raw logs must not be
 		// counted again, and deleting the VM must preserve the overview.
 		ctx, cancel = context.WithTimeout(context.Background(), time.Minute)
-		resumed, err := sandbox.Prepare(ctx, root, nil, nil, settings, diagnostics)
+		resumed, err := sandbox.Prepare(ctx, root, nil, settings, diagnostics)
 		cancel()
 		require.NoError(t, err)
 		current = resumed
@@ -109,7 +109,7 @@ func TestNetworkDiagnosticsCollectsBlockedWebsitesAfterSnapshotRestore(t *testin
 	t.Cleanup(func() { assert.NoError(t, sandbox.RemoveSnapshot(context.Background(), root)) })
 	_, err := sandbox.CreateSnapshot(ctx, root, nil, settings, sandbox.DiagnosticsOptions{StateDir: state})
 	require.NoError(t, err)
-	s, err := sandbox.Prepare(ctx, root, nil, nil, settings, sandbox.DiagnosticsOptions{StateDir: state})
+	s, err := sandbox.Prepare(ctx, root, nil, settings, sandbox.DiagnosticsOptions{StateDir: state})
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

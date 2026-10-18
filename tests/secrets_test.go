@@ -91,7 +91,7 @@ headers = ['X-Api-Key']
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	worktree := newWorktree(t)
-	s, err := sandbox.Prepare(ctx, worktree, nil, secrets, settings)
+	s, err := sandbox.Prepare(ctx, worktree, secrets, settings)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, s.Remove(context.Background())) })
 	guestEnv := execInSandbox(t, s, "env")
@@ -118,7 +118,7 @@ func TestSecretHostDoesNotExpandNetworkAllowlist(t *testing.T) {
 	secrets := githubSecrets(t, []byte("github_pat_FAKE_NETWORK_SCOPE"))
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	s, err := sandbox.Prepare(ctx, newWorktree(t), nil, secrets, settings)
+	s, err := sandbox.Prepare(ctx, newWorktree(t), secrets, settings)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, s.Remove(context.Background())) })
 	requireNetworkBlocked(t, s, "https://github.com")
@@ -130,7 +130,7 @@ func TestSecretIsNotSubstitutedOnAnUnlistedHost(t *testing.T) {
 	settings.Network.AllowedHosts = []string{"httpbingo.org"}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	s, err := sandbox.Prepare(ctx, newWorktree(t), nil, githubSecrets(t, []byte("FAKE_HOST_RESTRICTED_SECRET")), settings)
+	s, err := sandbox.Prepare(ctx, newWorktree(t), githubSecrets(t, []byte("FAKE_HOST_RESTRICTED_SECRET")), settings)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, s.Remove(context.Background())) })
 	// Prove the echo destination itself is reachable; the secret permits only GitHub.

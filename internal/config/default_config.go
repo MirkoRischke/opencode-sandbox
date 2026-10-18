@@ -10,9 +10,12 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Examples document dynamic named sections without configuring them by default.
+// Examples document optional mounts and named sections without enabling them.
 // Values are serialized by the same encoder as actual defaults.
 var configExamples = map[reflect.Type]any{
+	reflect.TypeFor[MountSettings](): MountSettings{
+		Source: "~/.config/opencode/skills", Target: "/root/.config/opencode/skills",
+	},
 	reflect.TypeFor[SecretSettings](): SecretSettings{
 		File: "creds/token", Env: "API_TOKEN",
 		AllowedHosts: []string{"api.example.com"}, Headers: []string{"authorization"},
@@ -52,6 +55,17 @@ func writeConfigTable(out *bytes.Buffer, value reflect.Value, path string, comme
 			fieldPath = path + "." + name
 		}
 		fieldValue := value.Field(i)
+		if fieldValue.Kind() == reflect.Slice && fieldValue.Type().Elem().Kind() == reflect.Struct {
+			example, ok := configExamples[fieldValue.Type().Elem()]
+			if !ok {
+				return fmt.Errorf("config section %s requires an example", fieldPath)
+			}
+			fmt.Fprintf(out, "# %s\n%s%s = []\n\n# Remove the empty list above to enable this example.\n# [[%s]]\n", description, prefix, name, fieldPath)
+			if err := writeConfigTable(out, reflect.ValueOf(example), fieldPath, true); err != nil {
+				return err
+			}
+			continue
+		}
 		switch fieldValue.Kind() {
 		case reflect.Struct:
 			fmt.Fprintf(out, "\n# %s\n%s[%s]\n", description, prefix, fieldPath)

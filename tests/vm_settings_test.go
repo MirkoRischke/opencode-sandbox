@@ -21,7 +21,7 @@ func TestVMUsesCustomLocalImage(t *testing.T) {
 	settings.VM.Image = "opencode-sandbox:test-custom"
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	s, err := sandbox.Prepare(ctx, newWorktree(t), nil, nil, settings)
+	s, err := sandbox.Prepare(ctx, newWorktree(t), nil, settings)
 	require.NoError(t, err, "prepare test images with 'mise run test:prepare' before running VM tests")
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -37,7 +37,7 @@ func TestVMMissingLocalImageFails(t *testing.T) {
 	settings.VM.Image = fmt.Sprintf("opencode-sandbox-missing-test:%d", time.Now().UnixNano())
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	s, err := sandbox.Prepare(ctx, newWorktree(t), nil, nil, settings)
+	s, err := sandbox.Prepare(ctx, newWorktree(t), nil, settings)
 	if s != nil {
 		t.Cleanup(func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -65,7 +65,7 @@ func TestVMResourcesFollowConfigAndPersistAcrossResume(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	require.NoError(t, s.Stop(ctx))
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, launcherconfig.DefaultSettings())
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, launcherconfig.DefaultSettings())
 	require.NoError(t, err)
 	defer func() { require.NoError(t, resumed.Close()) }()
 	require.NoError(t, json.Unmarshal([]byte(storedSandboxConfig(t, resumed)), &config))

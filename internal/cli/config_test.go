@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	launcherconfig "opencode-sandbox/internal/config"
-	"opencode-sandbox/internal/sandbox"
 
 	"github.com/stretchr/testify/require"
 )
@@ -54,30 +53,4 @@ func TestRepoSettingsTrustFallsBackToHome(t *testing.T) {
 	require.NoError(t, err)
 	_, err = os.Stat(filepath.Join(home, ".local/state/opencode-sandbox/trust.json"))
 	require.NoError(t, err)
-}
-
-func TestSandboxConfigDefaultsToHomeConfigDirectory(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	path := filepath.Join(home, ".config", "opencode-sandbox", "opencode.json")
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
-	require.NoError(t, os.WriteFile(path, []byte(`{}`), 0600))
-	dir, err := hostConfigDir("", home)
-	require.NoError(t, err)
-	config, err := sandbox.LoadConfig("", dir)
-	require.NoError(t, err)
-	require.JSONEq(t, `{}`, string(config))
-}
-
-func TestHostTUIConfigUsesHomeWhenXDGIsUnset(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	path := filepath.Join(home, ".config", "opencode", "cli.json")
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
-	require.NoError(t, os.WriteFile(path, []byte(`{"mouse":false}`), 0600))
-	dir, err := hostConfigDir("", home)
-	require.NoError(t, err)
-	config, err := sandbox.LoadCLIConfig("", dir)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"mouse":false}`, string(config))
 }

@@ -16,7 +16,7 @@ func startSandboxWithSettings(t *testing.T, settings launcherconfig.Settings) *s
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	s, err := sandbox.Prepare(ctx, newWorktree(t), nil, nil, settings)
+	s, err := sandbox.Prepare(ctx, newWorktree(t), nil, settings)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

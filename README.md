@@ -12,6 +12,9 @@ retain installed tools and guest files for the next launch.
   HTTPS headers by the host proxy without exposing their values to the guest.
 - **Repository configuration:** override global settings with a repo-root
   `.opencode-sandbox.toml`; new or changed configs require approval.
+- **Read-only host mounts:** explicitly share selected files or directories,
+  including OpenCode configuration, instructions, and skills. No extra host files
+  are shared by default. See [mount configuration](docs/config.md#read-only-host-mounts).
 - **AWS roles:** assume a role on the host and provide automatically refreshed,
   temporary credentials to the guest. Unlike proxy secrets, these are readable
   by guest code.

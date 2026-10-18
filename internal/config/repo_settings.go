@@ -43,13 +43,16 @@ func (p Paths) LoadRepoSettings(directory string, approve func(string, []byte, S
 	path := filepath.Join(root, repoConfigName)
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return settings, nil
+		return settings, settings.ValidateMountSources()
 	}
 	if err != nil {
 		return settings, fmt.Errorf("read repo settings: %w", err)
 	}
 	settings, err = mergeSettings(settings, data, root)
 	if err != nil {
+		return settings, fmt.Errorf("repo settings %s: %w", path, err)
+	}
+	if err := settings.ValidateMountSources(); err != nil {
 		return settings, fmt.Errorf("repo settings %s: %w", path, err)
 	}
 	if err := trustRepoSettings(p.StateDir, root, data, func() error {

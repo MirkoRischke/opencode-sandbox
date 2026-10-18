@@ -85,7 +85,7 @@ func TestExistingSandboxRetainsItsNetworkPolicy(t *testing.T) {
 	require.NoError(t, s.Stop(ctx))
 	settings := launcherconfig.DefaultSettings()
 	settings.Network.AllowedHosts = []string{"github.com"}
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, settings)
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, settings)
 	require.NoError(t, err)
 	defer func() { require.NoError(t, resumed.Close()) }()
 	requireNetworkBlocked(t, resumed, "https://github.com")

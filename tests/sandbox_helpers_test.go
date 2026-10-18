@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	launcherconfig "opencode-sandbox/internal/config"
 	"opencode-sandbox/internal/sandbox"
 
 	"github.com/stretchr/testify/assert"
@@ -36,14 +37,14 @@ func newNamedWorktree(t *testing.T, repoName, worktreeName string) string {
 
 func prepareSandbox(t *testing.T, worktree string) *sandbox.Sandbox {
 	t.Helper()
-	return prepareSandboxWithConfig(t, worktree, nil)
+	return prepareSandboxWithSettings(t, worktree, testSettings(t))
 }
 
-func prepareSandboxWithConfig(t *testing.T, worktree string, config []byte) *sandbox.Sandbox {
+func prepareSandboxWithSettings(t *testing.T, worktree string, settings launcherconfig.Settings) *sandbox.Sandbox {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	s, err := sandbox.Prepare(ctx, worktree, config, nil, testSettings(t))
+	s, err := sandbox.Prepare(ctx, worktree, nil, settings)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

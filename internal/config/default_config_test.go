@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -22,6 +23,7 @@ func TestDefaultConfigRoundTripsToRuntimeDefaults(t *testing.T) {
 	require.Equal(t, DefaultSettings(), settings)
 	require.NoError(t, settings.Validate())
 	require.Empty(t, settings.Secrets, "examples must not enable credentials")
+	require.Empty(t, settings.Mounts, "examples must not expose host files")
 	require.Contains(t, out.String(), "additional_allowed_hosts = []")
 	require.Contains(t, out.String(), "diagnostics = false")
 	require.Contains(t, out.String(), "unrestricted = false")
@@ -121,6 +123,12 @@ func TestEveryConfigFieldHasDocumentation(t *testing.T) {
 			case reflect.Map:
 				require.Contains(t, configExamples, field.Type.Elem(), "%s needs an example", name)
 				check(field.Type.Elem())
+			case reflect.Slice:
+				require.Contains(t, out.String(), name+" =", "%s must be included", name)
+				if field.Type.Elem().Kind() == reflect.Struct {
+					require.Contains(t, configExamples, field.Type.Elem())
+					check(field.Type.Elem())
+				}
 			default:
 				require.Contains(t, out.String(), name+" =", "%s must be included", name)
 			}
@@ -135,6 +143,9 @@ func TestDefaultConfigSecretExampleIsValid(t *testing.T) {
 	require.NoError(t, WriteDefaultConfig(&out))
 	lines := strings.Split(out.String(), "\n")
 	for i, line := range lines {
+		if strings.HasPrefix(line, "# [[mounts]]") || strings.HasPrefix(line, "# source =") || strings.HasPrefix(line, "# target =") {
+			continue
+		}
 		if content, ok := strings.CutPrefix(line, "# "); ok &&
 			(strings.HasPrefix(content, "[") || strings.Contains(content, " = ")) {
 			lines[i] = content
@@ -146,6 +157,36 @@ func TestDefaultConfigSecretExampleIsValid(t *testing.T) {
 	require.Empty(t, metadata.Undecoded())
 	require.NoError(t, settings.Validate())
 	require.Equal(t, configExamples[reflect.TypeFor[SecretSettings]()], settings.Secrets["example"])
+}
+
+func TestDefaultConfigMountExampleIsValid(t *testing.T) {
+	t.Parallel()
+	var out bytes.Buffer
+	require.NoError(t, WriteDefaultConfig(&out))
+	lines := strings.Split(out.String(), "\n")
+	inMount := false
+	for i, line := range lines {
+		if line == "mounts = []" {
+			lines[i] = ""
+		}
+		if line == "# [[mounts]]" {
+			inMount = true
+		}
+		if inMount {
+			if strings.HasPrefix(line, "[") {
+				break
+			}
+			if content, ok := strings.CutPrefix(line, "# "); ok &&
+				(strings.HasPrefix(content, "[[") || strings.Contains(content, " = ")) {
+				lines[i] = content
+			}
+		}
+	}
+	settings, err := mergeSettings(DefaultSettings(), []byte(strings.Join(lines, "\n")), t.TempDir())
+	require.NoError(t, err)
+	require.Len(t, settings.Mounts, 1)
+	require.Equal(t, "/root/.config/opencode/skills", settings.Mounts[0].Target)
+	require.True(t, filepath.IsAbs(settings.Mounts[0].Source))
 }
 
 func TestDefaultConfigRejectsMissingMetadata(t *testing.T) {

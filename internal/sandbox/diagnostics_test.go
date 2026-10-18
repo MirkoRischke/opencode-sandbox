@@ -321,6 +321,6 @@ func TestPreparingDiagnosticsRequiresExplicitHostState(t *testing.T) {
 	t.Parallel()
 	settings := launcherconfig.DefaultSettings()
 	settings.Network.Diagnostics = true
-	_, err := Prepare(context.Background(), t.TempDir(), nil, nil, settings)
+	_, err := Prepare(context.Background(), t.TempDir(), nil, settings)
 	require.ErrorContains(t, err, "explicit host state directory")
 }

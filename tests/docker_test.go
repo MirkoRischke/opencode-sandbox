@@ -79,7 +79,7 @@ volumes:
 	execInSandbox(t, s, "docker", "create", "--name", "retained", "sandbox-docker-test:local")
 	execInSandbox(t, s, append(append([]string{}, compose...), "down")...)
 	require.NoError(t, s.Stop(ctx))
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, testSettings(t))
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, testSettings(t))
 	require.NoError(t, err)
 	defer func() { require.NoError(t, resumed.Close()) }()
 	require.Equal(t, "docker-ok", execInSandbox(t, resumed, "docker", "run", "--rm", "sandbox-docker-test:local"))
@@ -97,7 +97,7 @@ func TestDockerStartupWithoutDockerd(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	require.NoError(t, s.Stop(ctx))
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, testSettings(t))
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, testSettings(t))
 	require.NoError(t, err, "missing Docker is optional, not a launch failure")
 	defer func() { require.NoError(t, resumed.Close()) }()
 	execInSandbox(t, resumed, "sh", "-ec", "! command -v dockerd; ! docker info >/dev/null 2>&1")
@@ -111,7 +111,7 @@ func TestDockerStartupFailureReportsLogs(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	require.NoError(t, s.Stop(ctx))
-	_, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, testSettings(t))
+	_, err := sandbox.Prepare(ctx, s.Worktree, nil, testSettings(t))
 	require.NoError(t, ctx.Err(), "Docker startup failures must be reported before the deadline")
 	require.ErrorContains(t, err, "initialize guest Docker")
 	require.ErrorContains(t, err, "Docker exited before becoming ready")
@@ -133,7 +133,7 @@ func TestDockerRestartClearsPreviousBootPIDFiles(t *testing.T) {
 	out, err := vm.Exec(ctx, "sh", []string{"-ec", "echo 1 > /var/run/docker.pid; echo 1 > /var/run/docker/containerd/containerd.pid"})
 	require.NoError(t, err)
 	require.Zero(t, out.ExitCode())
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, testSettings(t))
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, testSettings(t))
 	require.NoError(t, err, "previous-boot PID files must not prevent startup")
 	defer func() { require.NoError(t, resumed.Close()) }()
 	execInSandbox(t, resumed, "docker", "info")
@@ -145,7 +145,7 @@ func TestDockerDiskIsPrivateAndRemovedWithVM(t *testing.T) {
 	defer cancel()
 	worktree := newWorktree(t)
 	settings := testSettings(t)
-	s, err := sandbox.Prepare(ctx, worktree, nil, nil, settings)
+	s, err := sandbox.Prepare(ctx, worktree, nil, settings)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		if s != nil {
@@ -187,7 +187,7 @@ func TestDockerDiskIsPrivateAndRemovedWithVM(t *testing.T) {
 	require.Error(t, err)
 	require.FileExists(t, proof)
 	// Same worktree, new VM: no old disk data is reused.
-	s, err = sandbox.Prepare(ctx, worktree, nil, nil, settings)
+	s, err = sandbox.Prepare(ctx, worktree, nil, settings)
 	require.NoError(t, err)
 	execInSandbox(t, s, "test", "!", "-e", "/var/lib/docker/old-vm-proof")
 }

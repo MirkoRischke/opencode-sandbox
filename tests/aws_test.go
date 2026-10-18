@@ -132,7 +132,7 @@ func TestAWSReplacesCredentialsOnReuseAndClearsThemWhenDisabled(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	require.NoError(t, s.Stop(ctx))
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, launcherconfig.DefaultSettings())
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, launcherconfig.DefaultSettings())
 	require.NoError(t, err)
 	defer func() { require.NoError(t, resumed.Close()) }()
 	stop, err = resumed.StartAWS(ctx, host.options)

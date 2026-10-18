@@ -17,7 +17,7 @@ func TestSandboxNameRemainsStableWhenBranchChanges(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, testSettings(t))
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, testSettings(t))
 
 	require.NoError(t, err)
 	defer func() { require.NoError(t, resumed.Close()) }()

@@ -23,6 +23,9 @@ func TestRepositorySnapshotWithoutPreparationCommand(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.VM.CPUs, settings.VM.MemoryMiB = 1, 768
 	settings.VM.RootDiskMiB, settings.VM.DockerDiskMiB = 512, 256
+	source := filepath.Join(t.TempDir(), "instructions.md")
+	require.NoError(t, os.WriteFile(source, []byte("before snapshot"), 0600))
+	settings.Mounts = []config.MountSettings{{Source: source, Target: "/opt/instructions.md"}}
 	t.Cleanup(func() {
 		cleanup, done := context.WithTimeout(context.Background(), time.Minute)
 		defer done()
@@ -31,8 +34,15 @@ func TestRepositorySnapshotWithoutPreparationCommand(t *testing.T) {
 	reference, err := sandbox.CreateSnapshot(ctx, worktree, nil, settings)
 	require.NoError(t, err)
 	require.NotEmpty(t, reference)
+	require.NoError(t, os.WriteFile(source, []byte("current host contents"), 0600))
+	skills := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(skills, "SKILL.md"), []byte("current skill"), 0600))
+	settings.Mounts = append(settings.Mounts, config.MountSettings{Source: skills, Target: "/opt/skills"})
 	child := prepareSnapshotChild(t, ctx, worktree, settings)
 	execInSandbox(t, child, "docker", "info")
+	require.Equal(t, "current host contents", execInSandbox(t, child, "cat", "/opt/instructions.md"))
+	require.Equal(t, "current skill", execInSandbox(t, child, "cat", "/opt/skills/SKILL.md"))
+	execInSandbox(t, child, "bash", "-eu", "-c", `if printf changed > /opt/instructions.md; then exit 1; fi; if touch /opt/skills/new; then exit 1; fi`)
 }
 
 func TestRepositorySnapshotLifecycle(t *testing.T) {
@@ -138,7 +148,7 @@ echo host-modified > prepared-on-host
 	require.NotNil(t, listing.Current)
 	require.Empty(t, listing.Current.Snapshots)
 	require.NoError(t, a.Stop(ctx))
-	resumed, err := sandbox.Prepare(ctx, worktree, nil, nil, settings)
+	resumed, err := sandbox.Prepare(ctx, worktree, nil, settings)
 	require.NoError(t, err)
 	defer func() { require.NoError(t, resumed.Close()) }()
 	require.Equal(t, "first\n", execInSandbox(t, resumed, "docker", "image", "inspect", "snapshot-proof:local", "--format", `{{index .Config.Labels "snapshot-proof"}}`))
@@ -149,7 +159,7 @@ echo host-modified > prepared-on-host
 
 func prepareSnapshotChild(t *testing.T, ctx context.Context, directory string, settings config.Settings, secrets ...sandbox.Secret) *sandbox.Sandbox {
 	t.Helper()
-	s, err := sandbox.Prepare(ctx, directory, nil, secrets, settings)
+	s, err := sandbox.Prepare(ctx, directory, secrets, settings)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)

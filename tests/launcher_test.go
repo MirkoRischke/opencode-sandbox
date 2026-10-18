@@ -83,70 +83,21 @@ func TestLauncherListsVMsOutsideGitWithoutLoadingSettings(t *testing.T) {
 	}
 }
 
-func TestLauncherAcceptsCustomConfigFlag(t *testing.T) {
+func TestLauncherRejectsMissingMountBeforeStartingVM(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	writeSettingsAt(t, dir, "[network]\nallowed_hosts = []\n")
+	writeSettingsAt(t, dir, "[[mounts]]\nsource = 'missing.json'\ntarget = '/etc/opencode/opencode.json'\n")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	binary := buildLauncher(t)
-	path := filepath.Join(t.TempDir(), "config.json")
-	require.NoError(t, os.WriteFile(path, []byte(`{}`), 0600))
-	command := exec.CommandContext(ctx, binary, "--config", path)
+	command := exec.CommandContext(ctx, buildLauncher(t))
+	command.Dir = newWorktree(t)
 	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir)
-	command.Dir = t.TempDir()
 
 	output, err := command.CombinedOutput()
 
 	require.Error(t, err)
-	require.Contains(t, string(output), "discover worktree", "config must be accepted before worktree discovery")
-}
-
-func TestLauncherRejectsMissingCustomConfigBeforeStartingVM(t *testing.T) {
-	t.Parallel()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	binary := buildLauncher(t)
-	command := exec.CommandContext(ctx, binary, "--config", filepath.Join(t.TempDir(), "missing.json"))
-	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+t.TempDir())
-
-	output, err := command.CombinedOutput()
-
-	require.Error(t, err)
-	require.Contains(t, string(output), "read sandbox config")
-}
-
-func TestLauncherAcceptsCustomCLIConfigFlag(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	writeSettingsAt(t, dir, "[network]\nallowed_hosts = []\n")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	binary := buildLauncher(t)
-	path := filepath.Join(t.TempDir(), "cli.json")
-	require.NoError(t, os.WriteFile(path, []byte(`{"theme":{"name":"tokyonight"}}`), 0600))
-	command := exec.CommandContext(ctx, binary, "--cli-config", path)
-	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir)
-	command.Dir = t.TempDir()
-
-	output, err := command.CombinedOutput()
-
-	require.Error(t, err)
-	require.Contains(t, string(output), "discover worktree", "CLI config must be accepted before worktree discovery")
-}
-
-func TestLauncherRejectsMissingCLIConfigBeforeStartingVM(t *testing.T) {
-	t.Parallel()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	binary := buildLauncher(t)
-	command := exec.CommandContext(ctx, binary, "--cli-config", filepath.Join(t.TempDir(), "missing.json"))
-	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+t.TempDir())
-
-	output, err := command.CombinedOutput()
-
-	require.Error(t, err)
-	require.Contains(t, string(output), "read CLI config")
+	require.Contains(t, string(output), "mounts[0].source")
+	require.Contains(t, string(output), filepath.Join(dir, "opencode-sandbox", "missing.json"))
 }
 
 func TestLauncherRejectsInvalidSettingsBeforeStartingVM(t *testing.T) {

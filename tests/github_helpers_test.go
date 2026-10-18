@@ -26,7 +26,7 @@ func prepareWithGitHub(t *testing.T, worktree string, token []byte) *sandbox.San
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	s, err := sandbox.Prepare(ctx, worktree, nil, githubSecrets(t, token), testSettings(t))
+	s, err := sandbox.Prepare(ctx, worktree, githubSecrets(t, token), testSettings(t))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

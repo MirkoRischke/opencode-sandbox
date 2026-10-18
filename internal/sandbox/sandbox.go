@@ -25,8 +25,11 @@ type Sandbox struct {
 // Prepare creates or resumes one VM per worktree and initializes project tools.
 // GitHub credentials stay in the host proxy; the guest gets only a placeholder.
 // When diagnostics are enabled, supply exactly one host diagnostics configuration.
-func Prepare(ctx context.Context, directory string, config []byte, secrets []Secret, settings launcherconfig.Settings, diagnostics ...DiagnosticsOptions) (*Sandbox, error) {
+func Prepare(ctx context.Context, directory string, secrets []Secret, settings launcherconfig.Settings, diagnostics ...DiagnosticsOptions) (*Sandbox, error) {
 	if err := settings.Validate(); err != nil {
+		return nil, err
+	}
+	if err := settings.ValidateMountSources(); err != nil {
 		return nil, err
 	}
 	diagnosticOptions, err := resolveDiagnostics(settings.Network.Diagnostics, diagnostics)
@@ -35,6 +38,9 @@ func Prepare(ctx context.Context, directory string, config []byte, secrets []Sec
 	}
 	paths, err := discoverWorktree(ctx, directory)
 	if err != nil {
+		return nil, err
+	}
+	if err := validateMounts(paths, settings); err != nil {
 		return nil, err
 	}
 	if err := configureRuntime(); err != nil {
@@ -52,9 +58,6 @@ func Prepare(ctx context.Context, directory string, config []byte, secrets []Sec
 	if err := s.initializeProject(ctx, secrets); err != nil {
 		return nil, errors.Join(err, s.Shutdown())
 	}
-	if err := s.configureOpenCode(ctx, config); err != nil {
-		return nil, errors.Join(fmt.Errorf("configure guest OpenCode: %w", err), s.Shutdown())
-	}
 	return s, nil
 }
 
@@ -68,6 +71,7 @@ func sandboxOptions(paths worktreePaths, guestRoot string, settings launcherconf
 	if guestRoot != paths.root || !strings.HasPrefix(paths.common, paths.root+string(filepath.Separator)) {
 		mounts[paths.common] = m.Mount.Bind(paths.common, owner)
 	}
+	addReadOnlyMounts(mounts, settings)
 	opts := []m.SandboxOption{
 		m.WithImage(settings.VM.Image), m.WithPullPolicy(m.PullPolicyNever),
 		m.WithCPUs(settings.VM.CPUs), m.WithMemory(settings.VM.MemoryMiB),

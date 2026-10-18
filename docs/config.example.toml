@@ -4,6 +4,25 @@
 # Applied only when creating a VM. Recreate it after changing this file.
 # Missing configuration uses the built-in host allowlist; invalid configuration fails.
 
+# Optional read-only host mounts. Nothing is mounted implicitly.
+# Sources must exist. ~/ means the host home; relative paths use this config's directory.
+# Repo mount lists replace the global list; top-level mounts = [] disables inheritance.
+# [[mounts]]
+# source = "~/.config/opencode/AGENTS.md"
+# target = "/root/.config/opencode/AGENTS.md"
+#
+# [[mounts]]
+# source = "~/.config/opencode/skills"
+# target = "/root/.config/opencode/skills"
+#
+# [[mounts]]
+# source = "~/.config/opencode-sandbox/opencode.json"
+# target = "/etc/opencode/opencode.json"
+#
+# [[mounts]]
+# source = "~/.config/opencode/cli.json"
+# target = "/root/.config/opencode/cli.json"
+
 # This example enables GitHub authentication and requires the file below.
 # Remove this section to disable loading the credential for new VMs.
 # Relative file paths are resolved against this config's directory.

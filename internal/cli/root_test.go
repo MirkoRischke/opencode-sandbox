@@ -143,7 +143,7 @@ func TestCommandHelp(t *testing.T) {
 				t.Fatalf("expected command help, got %v\n%s", err, output)
 			}
 			if len(args) == 1 {
-				for _, flag := range []string{"--config", "--cli-config", "--aws-role", "--aws-profile"} {
+				for _, flag := range []string{"--aws-role", "--aws-profile"} {
 					if !strings.Contains(output, flag) {
 						t.Errorf("root help missing %s", flag)
 					}
