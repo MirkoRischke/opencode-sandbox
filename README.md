@@ -102,6 +102,12 @@ complete -o default -F __start_opencode-sandbox ocs
 
 ## Limitations
 
+- **Incomplete network diagnostics after snapshot restore:** with Microsandbox
+  v0.7.8, restored VMs lose the HTTP denial responder required to log blocked
+  HTTPS destinations. Network blocking still works, but those requests are
+  missing from `diagnostics network`. Denials collected during snapshot
+  preparation remain in the report. Use a fresh VM without snapshot restore
+  when complete blocked-HTTPS diagnostics are needed.
 - **OpenAI-only automatic authentication:** the launcher imports an active host
   OpenAI subscription OAuth credential. Other providers aren't explicitly
   blocked, but their authentication isn't set up automatically; a fresh VM
