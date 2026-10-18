@@ -18,7 +18,7 @@ func List(ctx context.Context) ([]*m.SandboxHandle, error) {
 	var vms []*m.SandboxHandle
 	cursor := ""
 	for {
-		opts := []m.SandboxListOption{m.WithListLabels(map[string]string{"app": "opencode-sandbox"})}
+		opts := []m.SandboxListOption{m.WithListLabels(map[string]string{"opencode-sandbox": ""})}
 		if cursor != "" {
 			opts = append(opts, m.WithListCursor(cursor))
 		}

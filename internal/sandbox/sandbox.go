@@ -70,7 +70,7 @@ func Prepare(ctx context.Context, directory string, config []byte, secrets []Sec
 		m.WithRootDisk(m.RootDisk.Managed(settings.VM.RootDiskMiB)),
 		m.WithWorkdir(root), m.WithMounts(mounts), m.WithDetached(),
 		m.WithNetwork(networkPolicy(settings.Network)), m.WithInterceptTLS(),
-		m.WithLabel("app", "opencode-sandbox"),
+		m.WithLabel("opencode-sandbox", ""),
 	}
 	s.vm, err = connectWithSecrets(ctx, s.Name, secrets, opts)
 	if err != nil {

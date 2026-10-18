@@ -25,11 +25,11 @@ func TestSandboxEditsAreVisibleOnHost(t *testing.T) {
 	assert.Equal(t, "written in sandbox\n", string(contents))
 }
 
-func TestSandboxCanBeSelectedByAppLabel(t *testing.T) {
+func TestSandboxCanBeSelectedByMarkerLabel(t *testing.T) {
 	s := startSandbox(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	page, err := m.ListSandboxesWith(ctx, m.WithListLabels(map[string]string{"app": "opencode-sandbox"}))
+	page, err := m.ListSandboxesWith(ctx, m.WithListLabels(map[string]string{"opencode-sandbox": ""}))
 	require.NoError(t, err)
 	names := make([]string, 0, len(page.Sandboxes))
 	for _, handle := range page.Sandboxes {
