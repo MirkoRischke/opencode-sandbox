@@ -12,16 +12,12 @@ import (
 
 // LoadCLIConfig selects an explicit file, then sandbox CLI settings, then host
 // CLI settings. No file means OpenCode should use its own defaults.
-func LoadCLIConfig(path string) ([]byte, error) {
+func LoadCLIConfig(path, configDir string) ([]byte, error) {
 	if path != "" {
 		return readCLIConfig(path)
 	}
-	dir, err := userConfigDir()
-	if err != nil {
-		return nil, fmt.Errorf("locate CLI config: %w", err)
-	}
 	for _, name := range []string{"opencode-sandbox", "opencode"} {
-		config, err := readCLIConfig(filepath.Join(dir, name, "cli.json"))
+		config, err := readCLIConfig(filepath.Join(configDir, name, "cli.json"))
 		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}

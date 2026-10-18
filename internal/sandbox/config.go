@@ -11,14 +11,10 @@ import (
 
 // LoadConfig selects an explicit file, then the user's sandbox configuration.
 // A missing implicit file means OpenCode should use its own defaults.
-func LoadConfig(path string) ([]byte, error) {
+func LoadConfig(path, configDir string) ([]byte, error) {
 	explicit := path != ""
 	if !explicit {
-		var err error
-		path, err = userConfigPath()
-		if err != nil {
-			return nil, fmt.Errorf("locate sandbox config: %w", err)
-		}
+		path = filepath.Join(configDir, "opencode-sandbox", "opencode.json")
 	}
 	data, err := os.ReadFile(path)
 	if !explicit && os.IsNotExist(err) {
@@ -32,14 +28,6 @@ func LoadConfig(path string) ([]byte, error) {
 		return nil, fmt.Errorf("sandbox config must be a JSON object: %s", path)
 	}
 	return data, nil
-}
-
-func userConfigPath() (string, error) {
-	dir, err := userConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "opencode-sandbox", "opencode.json"), nil
 }
 
 func userConfigDir() (string, error) {

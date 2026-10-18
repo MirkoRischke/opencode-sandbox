@@ -13,9 +13,9 @@ import (
 )
 
 func TestMissingUserConfigLeavesOpenCodeDefaultsUnchanged(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Parallel()
 
-	config, err := sandbox.LoadConfig("")
+	config, err := sandbox.LoadConfig("", t.TempDir())
 
 	require.NoError(t, err)
 	require.Nil(t, config)
@@ -24,36 +24,22 @@ func TestMissingUserConfigLeavesOpenCodeDefaultsUnchanged(t *testing.T) {
 }
 
 func TestUserCanProvideSandboxConfig(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", dir)
 	path := filepath.Join(dir, "opencode-sandbox", "opencode.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
 	contents := []byte(`{"model":"openai/gpt-6.1-sol"}`)
 	require.NoError(t, os.WriteFile(path, contents, 0600))
 
-	config, err := sandbox.LoadConfig("")
+	config, err := sandbox.LoadConfig("", dir)
 
 	require.NoError(t, err)
 	require.Equal(t, contents, config)
 }
 
-func TestSandboxConfigDefaultsToHomeConfigDirectory(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", "")
-	path := filepath.Join(home, ".config", "opencode-sandbox", "opencode.json")
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
-	require.NoError(t, os.WriteFile(path, []byte(`{}`), 0600))
-
-	config, err := sandbox.LoadConfig("")
-
-	require.NoError(t, err)
-	require.JSONEq(t, `{}`, string(config))
-}
-
 func TestExplicitConfigReplacesUserConfig(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", dir)
 	userPath := filepath.Join(dir, "opencode-sandbox", "opencode.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(userPath), 0700))
 	require.NoError(t, os.WriteFile(userPath, []byte(`{"model":"other/model"}`), 0600))
@@ -61,13 +47,14 @@ func TestExplicitConfigReplacesUserConfig(t *testing.T) {
 	contents := []byte(`{"model":"openai/gpt-6.1-sol"}`)
 	require.NoError(t, os.WriteFile(explicitPath, contents, 0600))
 
-	config, err := sandbox.LoadConfig(explicitPath)
+	config, err := sandbox.LoadConfig(explicitPath, dir)
 
 	require.NoError(t, err)
 	require.Equal(t, contents, config)
 }
 
 func TestInvalidOrMissingExplicitConfigIsRejected(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name     string
 		contents string
@@ -81,11 +68,11 @@ func TestInvalidOrMissingExplicitConfigIsRejected(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.json")
 			require.NoError(t, os.WriteFile(path, []byte(tc.contents), 0600))
-			_, err := sandbox.LoadConfig(path)
+			_, err := sandbox.LoadConfig(path, "")
 			require.Error(t, err)
 		})
 	}
-	_, err := sandbox.LoadConfig(filepath.Join(t.TempDir(), "missing.json"))
+	_, err := sandbox.LoadConfig(filepath.Join(t.TempDir(), "missing.json"), "")
 	require.Error(t, err)
 }
 

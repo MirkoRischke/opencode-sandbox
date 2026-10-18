@@ -1,10 +1,23 @@
 package cli
 
 import (
+	"fmt"
+	"path/filepath"
+
 	launcherconfig "opencode-sandbox/internal/config"
 
 	"github.com/spf13/cobra"
 )
+
+func hostConfigDir(xdg, home string) (string, error) {
+	if xdg != "" {
+		return xdg, nil
+	}
+	if home == "" {
+		return "", fmt.Errorf("HOME is not defined")
+	}
+	return filepath.Join(home, ".config"), nil
+}
 
 func newConfigCommand() *cobra.Command {
 	config := &cobra.Command{

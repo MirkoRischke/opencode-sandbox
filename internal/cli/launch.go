@@ -26,11 +26,15 @@ func launch(ctx context.Context, configPath, cliConfigPath, awsRole, awsProfile 
 			return err
 		}
 	}
-	config, err := sandbox.LoadConfig(configPath)
+	configDir, err := hostConfigDir(os.Getenv("XDG_CONFIG_HOME"), os.Getenv("HOME"))
 	if err != nil {
 		return err
 	}
-	cliConfig, err := sandbox.LoadCLIConfig(cliConfigPath)
+	config, err := sandbox.LoadConfig(configPath, configDir)
+	if err != nil {
+		return err
+	}
+	cliConfig, err := sandbox.LoadCLIConfig(cliConfigPath, configDir)
 	if err != nil {
 		return err
 	}

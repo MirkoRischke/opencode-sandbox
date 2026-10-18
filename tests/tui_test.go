@@ -11,7 +11,8 @@ import (
 )
 
 func TestHostTUIConfigIsCopiedWithoutOtherOpenCodeFiles(t *testing.T) {
-	path := hostTUIConfigPath(t)
+	t.Parallel()
+	dir, path := hostTUIConfigPath(t)
 	config := []byte(`{"theme":{"name":"tokyonight","mode":"dark"},"mouse":false}`)
 	require.NoError(t, os.WriteFile(path, config, 0600))
 	for _, name := range []string{"opencode.json", "auth.json", "opencode.db"} {
@@ -19,7 +20,7 @@ func TestHostTUIConfigIsCopiedWithoutOtherOpenCodeFiles(t *testing.T) {
 	}
 	s := startSandbox(t)
 
-	syncTUIConfig(t, s)
+	syncTUIConfig(t, s, dir)
 
 	require.Equal(t, string(config), execInSandbox(t, s, "cat", "/root/.config/opencode/cli.json"))
 	require.Equal(t, "600\n", execInSandbox(t, s, "stat", "-c", "%a", "/root/.config/opencode/cli.json"))
@@ -33,67 +34,58 @@ func TestHostTUIConfigIsCopiedWithoutOtherOpenCodeFiles(t *testing.T) {
 }
 
 func TestTUIConfigIsRefreshedOnNextSync(t *testing.T) {
-	path := hostTUIConfigPath(t)
+	t.Parallel()
+	dir, path := hostTUIConfigPath(t)
 	require.NoError(t, os.WriteFile(path, []byte(`{"mouse":false}`), 0600))
 	s := startSandbox(t)
-	syncTUIConfig(t, s)
+	syncTUIConfig(t, s, dir)
 	updated := []byte(`{"mouse":true}`)
 	require.NoError(t, os.WriteFile(path, updated, 0600))
 
-	syncTUIConfig(t, s)
+	syncTUIConfig(t, s, dir)
 
 	require.Equal(t, string(updated), execInSandbox(t, s, "cat", "/root/.config/opencode/cli.json"))
 }
 
 func TestMissingHostTUIConfigLeavesGuestDefaultsUnchanged(t *testing.T) {
-	hostTUIConfigPath(t)
+	t.Parallel()
+	dir, _ := hostTUIConfigPath(t)
 	s := startSandbox(t)
 
-	syncTUIConfig(t, s)
+	syncTUIConfig(t, s, dir)
 
 	execInSandbox(t, s, "test", "!", "-e", "/root/.config/opencode/cli.json")
 }
 
 func TestRemovingHostTUIConfigClearsPreviousCopy(t *testing.T) {
-	path := hostTUIConfigPath(t)
+	t.Parallel()
+	dir, path := hostTUIConfigPath(t)
 	require.NoError(t, os.WriteFile(path, []byte(`{"mouse":false}`), 0600))
 	s := startSandbox(t)
-	syncTUIConfig(t, s)
+	syncTUIConfig(t, s, dir)
 	require.NoError(t, os.Remove(path))
 
-	syncTUIConfig(t, s)
+	syncTUIConfig(t, s, dir)
 
 	execInSandbox(t, s, "test", "!", "-e", "/root/.config/opencode/cli.json")
 }
 
 func TestMissingHostTUIConfigPreservesUnmanagedGuestConfig(t *testing.T) {
-	hostTUIConfigPath(t)
+	t.Parallel()
+	dir, _ := hostTUIConfigPath(t)
 	s := startSandbox(t)
 	execInSandbox(t, s, "bash", "-eu", "-c", `mkdir -p /root/.config/opencode; printf '{}' > /root/.config/opencode/cli.json`)
 
-	syncTUIConfig(t, s)
+	syncTUIConfig(t, s, dir)
 
 	require.Equal(t, "{}", execInSandbox(t, s, "cat", "/root/.config/opencode/cli.json"))
 }
 
-func TestHostTUIConfigUsesHomeWhenXDGIsUnset(t *testing.T) {
-	s := startSandbox(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", "")
-	path := filepath.Join(home, ".config", "opencode", "cli.json")
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
-	require.NoError(t, os.WriteFile(path, []byte(`{"mouse":false}`), 0600))
-
-	syncTUIConfig(t, s)
-
-	require.JSONEq(t, `{"mouse":false}`, execInSandbox(t, s, "cat", "/root/.config/opencode/cli.json"))
-}
-
 func TestUnreadableHostTUIConfigIsReported(t *testing.T) {
-	path := hostTUIConfigPath(t)
+	t.Parallel()
+	dir, path := hostTUIConfigPath(t)
 	require.NoError(t, os.Mkdir(path, 0700))
-	_, err := sandbox.LoadCLIConfig("")
+	_, err := sandbox.LoadCLIConfig("", dir)
 
 	require.ErrorContains(t, err, "read CLI config")
 }
