@@ -3,7 +3,9 @@ package sandbox_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,37 +18,43 @@ import (
 )
 
 func TestAWSIsNotConfiguredGlobally(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	writeSettings(t, "[aws]\nsource_profile = 'sandbox-test'\nrole_arn = 'arn:aws:iam::123456789012:role/SandboxReadOnly'\n")
-	_, err := launcherconfig.LoadSettings()
-	require.ErrorContains(t, err, "unknown launcher setting")
+	t.Parallel()
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "opencode-sandbox"), 0700))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "opencode-sandbox", "config.toml"), []byte("[aws]\nsource_profile = 'sandbox-test'\nrole_arn = 'arn:aws:iam::123456789012:role/SandboxReadOnly'\n"), 0600))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, buildLauncher(t))
+	command.Dir = newWorktree(t)
+	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir, "XDG_STATE_HOME="+dir, "HERDR_ENV=")
+	output, err := command.CombinedOutput()
+	require.Error(t, err)
+	require.Contains(t, string(output), "unknown launcher setting")
 }
 
 func TestAWSRoleCanUseDefaultHostCredentialsWithoutProfileFlag(t *testing.T) {
-	settings, requests := fakeAWSHost(t, "", validAWSResponse)
-	settings.SourceProfile = ""
-	// The normal host chain selects the default profile when no profile is set.
-	require.NoError(t, os.WriteFile(os.Getenv("AWS_CONFIG_FILE"), []byte("[default]\n"), 0600))
-	require.NoError(t, os.WriteFile(os.Getenv("AWS_SHARED_CREDENTIALS_FILE"), []byte("[default]\naws_access_key_id = FAKE_DEFAULT_SOURCE_KEY\naws_secret_access_key = FAKE_DEFAULT_SOURCE_SECRET\n"), 0600))
-	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
-	stop, err := s.StartAWS(context.Background(), settings)
-	require.NoError(t, err)
-	defer stop()
-	require.Contains(t, (<-requests).Authorization, "Credential=FAKE_DEFAULT_SOURCE_KEY/")
+	t.Parallel()
+	host := fakeAWSHost(t, "", validAWSResponse)
+	host.profile = ""
+	require.NoError(t, os.WriteFile(host.env["AWS_CONFIG_FILE"], []byte("[default]\n"), 0600))
+	require.NoError(t, os.WriteFile(host.env["AWS_SHARED_CREDENTIALS_FILE"], []byte("[default]\naws_access_key_id = FAKE_DEFAULT_SOURCE_KEY\naws_secret_access_key = FAKE_DEFAULT_SOURCE_SECRET\n"), 0600))
+	s := prepareAWSProbe(t)
+	require.NoError(t, host.run(t, s, "true"))
+	require.Contains(t, (<-host.requests).Authorization, "Credential=FAKE_DEFAULT_SOURCE_KEY/")
 }
 
 func TestAWSRoleUsesHostProfileEnvironmentWhenNoProfileFlagIsGiven(t *testing.T) {
-	settings, requests := fakeAWSHost(t, "", validAWSResponse)
-	settings.SourceProfile = ""
-	t.Setenv("AWS_PROFILE", "sandbox-test")
-	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
-	stop, err := s.StartAWS(context.Background(), settings)
-	require.NoError(t, err)
-	defer stop()
-	require.Contains(t, (<-requests).Authorization, "Credential=FAKE_HOST_SOURCE_KEY/")
+	t.Parallel()
+	host := fakeAWSHost(t, "", validAWSResponse)
+	host.profile = ""
+	host.env["AWS_PROFILE"] = "sandbox-test"
+	s := prepareAWSProbe(t)
+	require.NoError(t, host.run(t, s, "true"))
+	require.Contains(t, (<-host.requests).Authorization, "Credential=FAKE_HOST_SOURCE_KEY/")
 }
 
 func TestAWSWritesOnlyRoleCredentialsAndUsesHostRegion(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, profileRegion, envRegion, defaultEnvRegion, want string }{
 		{"profile", "us-east-2", "", "", "us-east-2"},
 		{"environment", "us-east-2", "eu-central-1", "", "eu-central-1"},
@@ -54,48 +62,48 @@ func TestAWSWritesOnlyRoleCredentialsAndUsesHostRegion(t *testing.T) {
 		{"fallback", "", "", "", "eu-west-1"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			settings, requests := fakeAWSHost(t, tc.profileRegion, validAWSResponse)
-			t.Setenv("AWS_REGION", tc.envRegion)
-			t.Setenv("AWS_DEFAULT_REGION", tc.defaultEnvRegion)
-			s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
-			stop, err := s.StartAWS(context.Background(), settings)
-			require.NoError(t, err)
-			defer stop()
-			request := <-requests
+			t.Parallel()
+			host := fakeAWSHost(t, tc.profileRegion, validAWSResponse)
+			host.env["AWS_REGION"] = tc.envRegion
+			host.env["AWS_DEFAULT_REGION"] = tc.defaultEnvRegion
+			s := prepareAWSProbe(t)
+			require.NoError(t, host.run(t, s, fmt.Sprintf(`
+grep -q '^aws_access_key_id = FAKE_ROLE_KEY_1$' /root/.aws/credentials
+grep -q '^aws_secret_access_key = FAKE_ROLE_SECRET_1$' /root/.aws/credentials
+grep -q '^aws_session_token = FAKE_ROLE_SESSION_1$' /root/.aws/credentials
+if grep -q FAKE_HOST_SOURCE /root/.aws/credentials; then exit 1; fi
+test "$(stat -c '%%a' /root/.aws /root/.aws/credentials /root/.aws/config)" = $'700\n600\n600'
+test "$(aws configure get aws_access_key_id)" = FAKE_ROLE_KEY_1
+test "$(aws configure get region)" = '%s'
+test -z "${AWS_SHARED_CREDENTIALS_FILE+x}"
+test ! -e '%s'
+`, tc.want, host.env["AWS_SHARED_CREDENTIALS_FILE"])))
+			request := <-host.requests
 			require.Equal(t, "3600", request.Duration)
-			require.Equal(t, settings.RoleARN, request.Role)
+			require.Equal(t, host.options.RoleARN, request.Role)
 			require.Equal(t, s.Name, request.Session)
 			require.Contains(t, request.Authorization, "Credential=FAKE_HOST_SOURCE_KEY/")
 			require.Contains(t, request.Authorization, "/"+tc.want+"/sts/")
-			credentials := execInSandbox(t, s, "cat", "/root/.aws/credentials")
-			require.Contains(t, credentials, "aws_access_key_id = FAKE_ROLE_KEY_1")
-			require.Contains(t, credentials, "aws_secret_access_key = FAKE_ROLE_SECRET_1")
-			require.Contains(t, credentials, "aws_session_token = FAKE_ROLE_SESSION_1")
-			require.NotContains(t, credentials, "FAKE_HOST_SOURCE")
-			require.Equal(t, "700\n600\n600\n", execInSandbox(t, s, "stat", "-c", "%a", "/root/.aws", "/root/.aws/credentials", "/root/.aws/config"))
-			require.Equal(t, "FAKE_ROLE_KEY_1\n", execInSandbox(t, s, "aws", "configure", "get", "aws_access_key_id"))
-			require.Equal(t, tc.want+"\n", execInSandbox(t, s, "aws", "configure", "get", "region"))
-			execInSandbox(t, s, "bash", "-eu", "-c", `test -z "${AWS_SHARED_CREDENTIALS_FILE+x}"`)
-			execInSandbox(t, s, "test", "!", "-e", os.Getenv("AWS_SHARED_CREDENTIALS_FILE"))
 			require.NotContains(t, storedSandboxConfig(t, s), "FAKE_ROLE_SECRET")
 		})
 	}
 }
 
 func TestAWSRefreshesCredentialsAndStopsRefreshingOnExit(t *testing.T) {
-	settings, requests := fakeAWSHost(t, "", func(n int) (time.Time, bool) {
+	t.Parallel()
+	host := fakeAWSHost(t, "", func(n int) (time.Time, bool) {
 		if n == 1 {
 			return time.Now().Add(5*time.Minute + 2*time.Second), true
 		}
 		return validAWSResponse(n)
 	})
 	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
-	stop, err := s.StartAWS(context.Background(), settings)
+	stop, err := s.StartAWS(context.Background(), host.options)
 	require.NoError(t, err)
 	defer stop()
-	<-requests
+	<-host.requests
 	select {
-	case <-requests:
+	case <-host.requests:
 	case <-time.After(10 * time.Second):
 		t.Fatal("expected automatic refresh before expiration")
 	}
@@ -108,16 +116,17 @@ func TestAWSRefreshesCredentialsAndStopsRefreshingOnExit(t *testing.T) {
 	}, 5*time.Second, 50*time.Millisecond)
 	stop()
 	select {
-	case <-requests:
+	case <-host.requests:
 		t.Fatal("refresh continued after stop")
 	case <-time.After(1100 * time.Millisecond):
 	}
 }
 
 func TestAWSReplacesCredentialsOnReuseAndClearsThemWhenDisabled(t *testing.T) {
-	settings, _ := fakeAWSHost(t, "", validAWSResponse)
+	t.Parallel()
+	host := fakeAWSHost(t, "", validAWSResponse)
 	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
-	stop, err := s.StartAWS(context.Background(), settings)
+	stop, err := s.StartAWS(context.Background(), host.options)
 	require.NoError(t, err)
 	stop()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -126,7 +135,7 @@ func TestAWSReplacesCredentialsOnReuseAndClearsThemWhenDisabled(t *testing.T) {
 	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, launcherconfig.DefaultSettings())
 	require.NoError(t, err)
 	defer func() { require.NoError(t, resumed.Close()) }()
-	stop, err = resumed.StartAWS(ctx, settings)
+	stop, err = resumed.StartAWS(ctx, host.options)
 	require.NoError(t, err)
 	stop()
 	require.Contains(t, execInSandbox(t, resumed, "cat", "/root/.aws/credentials"), "FAKE_ROLE_KEY_2")
@@ -138,39 +147,41 @@ func TestAWSReplacesCredentialsOnReuseAndClearsThemWhenDisabled(t *testing.T) {
 }
 
 func TestAWSFailsClosedAndSuppressesUpstreamDetails(t *testing.T) {
-	settings, _ := fakeAWSHost(t, "", func(int) (time.Time, bool) { return time.Time{}, false })
+	t.Parallel()
+	host := fakeAWSHost(t, "", func(int) (time.Time, bool) { return time.Time{}, false })
 	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
-	_, err := s.StartAWS(context.Background(), settings)
+	_, err := s.StartAWS(context.Background(), host.options)
 	require.ErrorContains(t, err, "assume AWS role failed")
 	require.NotContains(t, err.Error(), "FAKE_HOST_SOURCE_SECRET")
 	execInSandbox(t, s, "test", "!", "-e", "/root/.aws/credentials")
 }
 
 func TestAWSRejectsExpiredRoleCredentials(t *testing.T) {
-	settings, _ := fakeAWSHost(t, "", func(int) (time.Time, bool) {
+	t.Parallel()
+	host := fakeAWSHost(t, "", func(int) (time.Time, bool) {
 		return time.Now().Add(-time.Minute), true
 	})
 	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
-	_, err := s.StartAWS(context.Background(), settings)
+	_, err := s.StartAWS(context.Background(), host.options)
 	require.ErrorContains(t, err, "expired role credentials")
 	execInSandbox(t, s, "test", "!", "-e", "/root/.aws/credentials")
 }
 
 func TestAWSRefreshFailureKeepsOnlyPreviousRoleCredentials(t *testing.T) {
-	settings, requests := fakeAWSHost(t, "", func(n int) (time.Time, bool) {
+	t.Parallel()
+	host := fakeAWSHost(t, "", func(n int) (time.Time, bool) {
 		return time.Now().Add(5*time.Minute + 2*time.Second), n == 1
 	})
 	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
-	stop, err := s.StartAWS(context.Background(), settings)
+	stop, err := s.StartAWS(context.Background(), host.options)
 	require.NoError(t, err)
 	defer stop()
-	<-requests
+	<-host.requests
 	select {
-	case <-requests:
+	case <-host.requests:
 	case <-time.After(10 * time.Second):
 		t.Fatal("expected attempted refresh")
 	}
-	// Joining the refresh loop also ensures any in-flight failed refresh is done.
 	stop()
 	credentials := execInSandbox(t, s, "cat", "/root/.aws/credentials")
 	require.Contains(t, credentials, "FAKE_ROLE_KEY_1")
@@ -178,13 +189,14 @@ func TestAWSRefreshFailureKeepsOnlyPreviousRoleCredentials(t *testing.T) {
 }
 
 func TestAWSDoesNotOverwriteOrRemoveUnmanagedGuestFiles(t *testing.T) {
-	settings, _ := fakeAWSHost(t, "", validAWSResponse)
+	t.Parallel()
+	host := fakeAWSHost(t, "", validAWSResponse)
 	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
 	execInSandbox(t, s, "bash", "-eu", "-c", "mkdir -p /root/.aws; printf 'user-owned' > /root/.aws/credentials")
-	_, err := s.StartAWS(context.Background(), settings)
+	_, err := s.StartAWS(context.Background(), host.options)
 	require.ErrorContains(t, err, "unmanaged")
 	stop, err := s.StartAWS(context.Background(), nil)
 	require.NoError(t, err)
 	stop()
-	require.Equal(t, "user-owned", execInSandbox(t, s, "cat", filepath.Join("/root/.aws", "credentials")))
+	require.Equal(t, "user-owned", execInSandbox(t, s, "cat", "/root/.aws/credentials"))
 }

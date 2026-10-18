@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"os"
 	"syscall"
+	"time"
+
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 
 	launcherconfig "opencode-sandbox/internal/config"
 	"opencode-sandbox/internal/sandbox"
@@ -17,7 +21,7 @@ func launch(ctx context.Context, configPath, cliConfigPath, awsRole, awsProfile 
 	}
 	var awsOptions *sandbox.AWSOptions
 	if awsRole != "" || awsProfile != "" {
-		awsOptions = &sandbox.AWSOptions{SourceProfile: awsProfile, RoleARN: awsRole}
+		awsOptions = &sandbox.AWSOptions{RoleARN: awsRole}
 		if err := awsOptions.Validate(); err != nil {
 			return err
 		}
@@ -43,6 +47,22 @@ func launch(ctx context.Context, configPath, cliConfigPath, awsRole, awsProfile 
 		return err
 	}
 	defer func() { err = errors.Join(err, s.Shutdown()) }()
+	if awsOptions != nil {
+		// Resolve the host environment only here; sandbox lifecycle code receives
+		// an explicitly configured client and region.
+		loadCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+		defer cancel()
+		loadOptions := []func(*awsconfig.LoadOptions) error{awsconfig.WithDefaultRegion("eu-west-1")}
+		if awsProfile != "" {
+			loadOptions = append(loadOptions, awsconfig.WithSharedConfigProfile(awsProfile))
+		}
+		cfg, err := awsconfig.LoadDefaultConfig(loadCtx, loadOptions...)
+		if err != nil {
+			return fmt.Errorf("load host AWS profile failed (details suppressed)")
+		}
+		awsOptions.Region = cfg.Region
+		awsOptions.Client = sts.NewFromConfig(cfg)
+	}
 	stopAWS, err := s.StartAWS(ctx, awsOptions)
 	if err != nil {
 		return err

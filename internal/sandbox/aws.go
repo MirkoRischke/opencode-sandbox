@@ -10,13 +10,15 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
+// AWSOptions contains resolved host configuration; callers own credential and
+// region discovery. StartAWS never loads profiles or the process environment.
 type AWSOptions struct {
-	SourceProfile string
-	RoleARN       string
+	RoleARN string
+	Region  string
+	Client  *sts.Client
 }
 
 func (a AWSOptions) Validate() error {
@@ -46,22 +48,16 @@ fi`) != nil {
 	}
 	initialCtx, cancelInitial := context.WithTimeout(ctx, 45*time.Second)
 	defer cancelInitial()
-	loadOptions := []func(*config.LoadOptions) error{config.WithDefaultRegion("eu-west-1")}
-	if settings.SourceProfile != "" {
-		loadOptions = append(loadOptions, config.WithSharedConfigProfile(settings.SourceProfile))
+	if settings.Client == nil {
+		return nil, fmt.Errorf("AWS client is not configured")
 	}
-	cfg, err := config.LoadDefaultConfig(initialCtx, loadOptions...)
-	if err != nil {
-		return nil, fmt.Errorf("load host AWS profile failed (details suppressed)")
-	}
-	if strings.ContainsAny(cfg.Region, "\r\n\x00") {
+	if settings.Region == "" || strings.ContainsAny(settings.Region, "\r\n\x00") {
 		return nil, fmt.Errorf("host AWS region is invalid")
 	}
-	client := sts.NewFromConfig(cfg)
 	refresh := func(ctx context.Context) (time.Time, error) {
 		refreshCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 		defer cancel()
-		result, err := client.AssumeRole(refreshCtx, &sts.AssumeRoleInput{
+		result, err := settings.Client.AssumeRole(refreshCtx, &sts.AssumeRoleInput{
 			RoleArn: aws.String(settings.RoleARN), RoleSessionName: aws.String(s.Name),
 			DurationSeconds: aws.Int32(3600),
 		})
@@ -79,7 +75,7 @@ fi`) != nil {
 			}
 		}
 		payload := fmt.Sprintf("[default]\naws_access_key_id = %s\naws_secret_access_key = %s\naws_session_token = %s\n", values[0], values[1], values[2])
-		if s.writeAWSFiles(refreshCtx, payload, cfg.Region) != nil {
+		if s.writeAWSFiles(refreshCtx, payload, settings.Region) != nil {
 			return time.Time{}, fmt.Errorf("write guest AWS credentials failed; check for unmanaged ~/.aws files (details suppressed)")
 		}
 		return *credentials.Expiration, nil
