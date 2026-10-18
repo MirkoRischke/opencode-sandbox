@@ -20,9 +20,10 @@ type Settings struct {
 }
 
 type VMSettings struct {
-	CPUs        uint8  `toml:"cpus" description:"Number of virtual CPUs (1-255)."`
-	MemoryMiB   uint32 `toml:"memory_mib" description:"Guest memory in MiB."`
-	RootDiskMiB uint32 `toml:"root_disk_mib" description:"Persistent guest disk size in MiB; excludes mounted host worktrees."`
+	CPUs          uint8  `toml:"cpus" description:"Number of virtual CPUs (1-255)."`
+	MemoryMiB     uint32 `toml:"memory_mib" description:"Guest memory in MiB."`
+	RootDiskMiB   uint32 `toml:"root_disk_mib" description:"Persistent guest disk size in MiB; excludes mounted host worktrees."`
+	DockerDiskMiB uint32 `toml:"docker_disk_mib" description:"Private ext4 Docker data disk capacity in MiB; deleted with the VM."`
 }
 
 type NetworkSettings struct {
@@ -33,7 +34,7 @@ type NetworkSettings struct {
 // DefaultSettings denies application internet access.
 func DefaultSettings() Settings {
 	return Settings{
-		VM:      VMSettings{CPUs: 2, MemoryMiB: 2048, RootDiskMiB: 4096},
+		VM:      VMSettings{CPUs: 2, MemoryMiB: 2048, RootDiskMiB: 4096, DockerDiskMiB: 10240},
 		Network: NetworkSettings{AllowedHosts: []string{}, AdditionalAllowedHosts: []string{}},
 	}
 }
@@ -89,6 +90,9 @@ func (s Settings) Validate() error {
 	}
 	if s.VM.RootDiskMiB == 0 {
 		return fmt.Errorf("vm.root_disk_mib must be greater than zero")
+	}
+	if s.VM.DockerDiskMiB == 0 {
+		return fmt.Errorf("vm.docker_disk_mib must be greater than zero")
 	}
 	if err := s.Network.validate(); err != nil {
 		return err

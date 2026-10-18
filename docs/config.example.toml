@@ -19,6 +19,7 @@ headers = ["authorization"]
 cpus = 2
 memory_mib = 2048
 root_disk_mib = 4096
+docker_disk_mib = 10240
 
 [network]
 allowed_hosts = [
@@ -58,6 +59,16 @@ allowed_hosts = [
   # Remove if unused. Node itself is already installed in the base image.
   "registry.npmjs.org",
 
+  # Public container pulls: Docker Hub auth, registry, and layer downloads.
+  "auth.docker.io",
+  "registry-1.docker.io",
+  "production.cloudflare.docker.com",
+  "production.cloudfront.docker.com",
+  "docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com",
+
+  # Amazon ECR Public (the gallery website is not needed for docker pull).
+  "public.ecr.aws",
+
   # Optional: installing other Node versions with mise.
   # "nodejs.org",
 
@@ -80,8 +91,9 @@ allowed_hosts = [
 # Scope / limits:
 # - Based on this repo's mise.toml and your OpenAI-only sandbox configuration.
 # - Other projects, LSP downloads, Git LFS, and Actions logs can need extra hosts.
-# - Docker builds/image imports run on the host, outside this guest policy;
-#   Docker Hub, ghcr.io, and Debian mirrors are intentionally omitted.
+# - Building/importing the sandbox image on the host is outside this policy.
+#   Guest Docker builds still need package/download hosts explicitly allowed;
+#   ghcr.io and Debian mirrors are not included here.
 # - Shared hosts (especially storage.googleapis.com, GitHub, npm) serve content
 #   from many users. An allowlist is not an exfiltration or read-only guarantee.
 # - No unrestricted web browsing/search; add destinations deliberately.
@@ -93,3 +105,5 @@ allowed_hosts = [
 # https://github.com/jdx/mise/blob/v2026.10.12/settings.toml
 # https://github.com/jdx/mise/blob/v2026.10.12/src/aqua/aqua_registry_wrapper.rs
 # https://go.dev/ref/mod#module-proxy
+# https://docs.docker.com/desktop/setup/allow-list/
+# https://docs.aws.amazon.com/AmazonECR/latest/public/docker-pull-ecr-image.html

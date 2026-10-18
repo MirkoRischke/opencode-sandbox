@@ -57,6 +57,7 @@ func TestRepoSettingsMergeAllAttributes(t *testing.T) {
 	root, path := repoSettingsFixture(t, `
 [vm]
 memory_mib = 8192
+docker_disk_mib = 20480
 [network]
 allowed_hosts = []
 [secrets.github]
@@ -95,7 +96,7 @@ headers = ['authorization']
 	})
 	require.NoError(t, err)
 	require.Equal(t, 1, calls)
-	require.Equal(t, launcherconfig.VMSettings{CPUs: 4, MemoryMiB: 8192, RootDiskMiB: 9000}, settings.VM)
+	require.Equal(t, launcherconfig.VMSettings{CPUs: 4, MemoryMiB: 8192, RootDiskMiB: 9000, DockerDiskMiB: 20480}, settings.VM)
 	require.Empty(t, settings.Network.AllowedHosts)
 	require.Equal(t, launcherconfig.SecretSettings{
 		File: "creds/github-token", Env: "GH_TOKEN",

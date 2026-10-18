@@ -15,7 +15,7 @@ import (
 
 func TestVMResourcesFollowConfigAndPersistAcrossResume(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	writeSettings(t, "[vm]\ncpus = 1\nmemory_mib = 1024\nroot_disk_mib = 5120\n")
+	writeSettings(t, "[vm]\ncpus = 1\nmemory_mib = 1024\nroot_disk_mib = 5120\ndocker_disk_mib = 2048\n")
 	settings, err := launcherconfig.LoadSettings()
 	require.NoError(t, err)
 	s := startSandboxWithSettings(t, settings)
@@ -25,8 +25,9 @@ func TestVMResourcesFollowConfigAndPersistAcrossResume(t *testing.T) {
 	require.EqualValues(t, 1024, config.MemoryMiB)
 	require.NotNil(t, config.RootDisk)
 	require.EqualValues(t, 5120, config.RootDisk.SizeMiB)
+	require.Equal(t, "2147483648\n", execInSandbox(t, s, "sh", "-ec", `blockdev --getsize64 "$(findmnt -n -o SOURCE /var/lib/docker)"`))
 	require.Equal(t, "1\n", execInSandbox(t, s, "nproc"))
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	require.NoError(t, s.Stop(ctx))
 	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, nil, launcherconfig.DefaultSettings())
@@ -37,4 +38,5 @@ func TestVMResourcesFollowConfigAndPersistAcrossResume(t *testing.T) {
 	require.EqualValues(t, 1024, config.MemoryMiB)
 	require.NotNil(t, config.RootDisk)
 	require.EqualValues(t, 5120, config.RootDisk.SizeMiB)
+	require.Equal(t, "2147483648\n", execInSandbox(t, resumed, "sh", "-ec", `blockdev --getsize64 "$(findmnt -n -o SOURCE /var/lib/docker)"`))
 }

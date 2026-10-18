@@ -15,6 +15,9 @@ retain installed tools and guest files for the next launch.
 - **AWS roles:** assume a role on the host and provide automatically refreshed,
   temporary credentials to the guest. Unlike proxy secrets, these are readable
   by guest code.
+- **Guest Docker:** build and run images with Docker Engine, Buildx, and Compose.
+  Each VM has its own persistent Docker data disk; container ports stay inside
+  the VM. See [Docker configuration](docs/config.md#docker-inside-the-vm).
 
 ## How it works
 

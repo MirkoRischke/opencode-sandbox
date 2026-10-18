@@ -121,6 +121,7 @@ the guest; the guest receives no Herdr socket access.
 cpus = 2
 memory_mib = 2048
 root_disk_mib = 4096
+docker_disk_mib = 10240
 
 [network]
 allowed_hosts = ["github.com", "api.github.com"]
@@ -131,6 +132,46 @@ Values must be positive integers (CPUs: 1–255; memory/disk: 1–4294967295 MiB
 Microsandbox and host resource limits still apply. Root-disk size controls
 guest-local storage, not mounted host worktrees. Existing VMs retain their specs;
 recreate them to apply changes.
+
+### Docker inside the VM
+
+The image includes Docker Engine, Buildx, and Compose (`docker compose`). On each
+launch the host launcher starts the guest daemon if `dockerd` is installed, waits
+for its local Unix socket to become ready, and fails with recent daemon logs if
+startup fails. Images without `dockerd` skip this step. No image-specific startup
+script or systemd service is required. An already healthy daemon is left running.
+On a cold VM restart, the launcher clears its previous boot's default Docker and
+managed-containerd PID files, which otherwise persist on the layered root.
+
+VMs retain their shared, layered root filesystem. A separate private, VM-owned
+ext4 disk at `/var/lib/docker` stores Docker images, containers, named volumes,
+and build cache. `vm.docker_disk_mib` sets its capacity (default 10240 MiB),
+independently of `root_disk_mib`. Both disks survive VM stop/start and are deleted
+when the VM is removed. Bind-mounted host files are not deleted. Docker disks
+are not shared between VMs. Recreate existing VMs to receive the new image and
+disk; rebuilding the image alone does not upgrade them.
+
+The supplied image selects Docker's classic `overlay2` backend, keeping image
+data on that ext4 disk rather than Engine 29+'s default containerd image store
+under `/var/lib/containerd`. The launcher does not overwrite an image's Docker
+configuration. Custom configurations must keep their storage paths on suitable
+filesystems.
+
+Daemon output appends to `/var/log/opencode-sandbox/dockerd.log` in the guest,
+without truncation or rotation. There is no automatic daemon restart-on-crash or
+explicit graceful Docker shutdown. Exiting the launcher stops the entire VM.
+The Docker socket is guest-local, never the host's socket; there is no TCP daemon
+listener configured by the supplied image. Compose networks and published
+container ports work inside the VM, with no port forwarding to the host.
+
+`docs/config.example.toml` allows public Docker Hub and Amazon ECR Public pulls,
+including Docker Hub's authentication and image-download hosts. Built-in network
+defaults remain deny-all. Guest builds and containers still obey the VM network
+policy: package repositories and other download hosts need separate approval.
+Containers do not automatically inherit the guest's injected TLS CA; images that
+make HTTPS requests through the inspected network must trust that CA themselves.
+
+### Network policy
 
 Only exact DNS hostnames are accepted. Connections are limited to TCP port 443
 with strict hostname checks and verified TLS inspection. Other outbound traffic

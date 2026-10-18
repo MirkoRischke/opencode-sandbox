@@ -57,6 +57,9 @@ func Prepare(ctx context.Context, directory string, config []byte, secrets []Sec
 	}
 	owner := m.MountOptions{Owner: &m.MountOwner{UID: 0, GID: 0}}
 	mounts := map[string]m.MountConfig{root: m.Mount.Bind(root, owner)}
+	mounts["/var/lib/docker"] = m.Mount.Owned(m.OwnedVolumeOptions{
+		Kind: m.VolumeKindDisk, SizeMiB: settings.VM.DockerDiskMiB,
+	})
 	// A regular checkout already includes its .git directory in the root mount.
 	if !strings.HasPrefix(common, root+string(filepath.Separator)) {
 		mounts[common] = m.Mount.Bind(common, owner)
@@ -81,6 +84,9 @@ func Prepare(ctx context.Context, directory string, config []byte, secrets []Sec
 			}
 		}
 	}()
+	if err := s.EnsureDocker(ctx); err != nil {
+		return nil, err
+	}
 	githubEnabled := false
 	for _, secret := range secrets {
 		githubEnabled = githubEnabled || secret.entry.EnvVar == "GH_TOKEN"

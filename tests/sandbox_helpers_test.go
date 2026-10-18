@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
 func newWorktree(t *testing.T) string {
@@ -47,7 +48,15 @@ func prepareSandboxWithConfig(t *testing.T, worktree string, config []byte) *san
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		assert.NoError(t, s.Remove(ctx))
+		// A test may deliberately close/shut down its original SDK connection.
+		// Destroy through a fresh management handle instead of that connection.
+		handle, err := m.GetSandbox(ctx, s.Name)
+		if assert.NoError(t, err) {
+			assert.NoError(t, handle.Destroy(ctx))
+		}
+		if err := s.Close(); !m.IsKind(err, m.ErrInvalidHandle) {
+			assert.NoError(t, err)
+		}
 	})
 	return s
 }

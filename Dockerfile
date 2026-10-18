@@ -18,9 +18,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     gh \
     libatomic1 \
+    util-linux \
     unzip \
     xz-utils \
     && rm -rf /var/lib/apt/lists/*
+
+# Docker runs inside the VM, not against the host's Docker socket. Suppress
+# package service startup: Microsandbox's agent, not systemd, is guest PID 1.
+# hadolint ignore=DL3008
+RUN install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian trixie stable" > /etc/apt/sources.list.d/docker.list \
+    && printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d \
+    && chmod +x /usr/sbin/policy-rc.d \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin \
+    && rm /usr/sbin/policy-rc.d \
+    && rm -rf /var/lib/apt/lists/*
+
+# Keep all image layers on the owned ext4 disk at /var/lib/docker. Engine 29+
+# otherwise defaults to the containerd image store under /var/lib/containerd.
+RUN mkdir -p /etc/docker \
+    && printf '%s\n' '{"features":{"containerd-snapshotter":false},"storage-driver":"overlay2"}' > /etc/docker/daemon.json
 
 ENV MISE_DATA_DIR=/mise/data \
     MISE_CONFIG_DIR=/mise/config \
