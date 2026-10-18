@@ -157,9 +157,12 @@ func TestCommandHelp(t *testing.T) {
 
 func TestManagementAliases(t *testing.T) {
 	t.Parallel()
-	for alias, name := range map[string]string{"ls": "list", "rm": "remove"} {
+	for alias, name := range map[string]string{
+		"ls": "list", "rm": "remove",
+		"snapshot ls": "snapshot list", "snapshot rm": "snapshot remove",
+	} {
 		t.Run(alias, func(t *testing.T) {
-			output, err := executeCommand(alias, "--help")
+			output, err := executeCommand(append(strings.Fields(alias), "--help")...)
 			if err != nil || !strings.Contains(output, "opencode-sandbox "+name+" [flags]") {
 				t.Fatalf("expected help for %s, got %v\n%s", name, err, output)
 			}

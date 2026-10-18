@@ -14,6 +14,7 @@ func newSnapshotCommand() *cobra.Command {
 	var all bool
 	remove := &cobra.Command{
 		Use: "remove", Short: "Delete repository snapshots without removing worktree VMs",
+		Aliases: []string{"rm"},
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return reportRemovals(cmd.OutOrStdout(), "snapshot", func(observer sandbox.RemovalObserver) error {

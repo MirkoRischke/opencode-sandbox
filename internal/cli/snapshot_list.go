@@ -14,6 +14,7 @@ import (
 func newSnapshotListCommand() *cobra.Command {
 	return &cobra.Command{
 		Use: "list", Short: "List all repository snapshots, highlighting the current repository",
+		Aliases: []string{"ls"},
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			listing, err := sandbox.ListSnapshots(cmd.Context(), ".")
