@@ -115,6 +115,8 @@ headers = ['X-Api-Key']
 func TestSecretHostDoesNotExpandNetworkAllowlist(t *testing.T) {
 	t.Parallel()
 	settings := githubSecretSettings("unused")
+	settings.Network.AllowedHosts = []string{}
+	settings.Network.AdditionalAllowedHosts = []string{}
 	secrets := githubSecrets(t, []byte("github_pat_FAKE_NETWORK_SCOPE"))
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

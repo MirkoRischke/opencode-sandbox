@@ -43,7 +43,10 @@ func TestRestrictedNetworkAllowsOnlyConfiguredHTTPSHostsWithoutCredentials(t *te
 
 func TestEmptyNetworkAllowlistBlocksInternet(t *testing.T) {
 	t.Parallel()
-	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
+	settings := launcherconfig.DefaultSettings()
+	settings.Network.AllowedHosts = []string{}
+	settings.Network.AdditionalAllowedHosts = []string{}
+	s := startSandboxWithSettings(t, settings)
 	requireNetworkBlocked(t, s, "https://github.com")
 }
 
@@ -67,19 +70,22 @@ func TestUnrestrictedNetworkAllowsPublicInternetButBlocksProtectedDestinations(t
 	}
 }
 
-func TestMissingConfigDefaultsToDenyingInternetInVM(t *testing.T) {
+func TestMissingConfigDefaultsToDevelopmentAllowlistInVM(t *testing.T) {
 	t.Parallel()
 	settings, err := launcherconfig.LoadSettings(t.TempDir())
 	require.NoError(t, err)
 	s := startSandboxWithSettings(t, settings)
-	requireNetworkBlocked(t, s, "https://github.com")
+	execInSandbox(t, s, "curl", "--noproxy", "*", "--fail", "--silent", "--show-error", "--max-time", "15", "https://github.com")
 	requireNetworkBlocked(t, s, "https://example.org")
 	requireNetworkBlocked(t, s, "https://1.1.1.1")
 }
 
 func TestExistingSandboxRetainsItsNetworkPolicy(t *testing.T) {
 	t.Parallel()
-	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
+	initial := launcherconfig.DefaultSettings()
+	initial.Network.AllowedHosts = []string{}
+	initial.Network.AdditionalAllowedHosts = []string{}
+	s := startSandboxWithSettings(t, initial)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	require.NoError(t, s.Stop(ctx))
