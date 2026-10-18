@@ -36,6 +36,17 @@ func TestConfigCommandRejectsInvalidArguments(t *testing.T) {
 	}
 }
 
+func TestSnapshotCommandRejectsInvalidArguments(t *testing.T) {
+	t.Parallel()
+	for _, args := range [][]string{{"snapshot"}, {"snapshot", "unknown"}, {"snapshot", "create", "extra"}, {"snapshot", "remove", "extra"}} {
+		t.Run(strings.Join(args, "/"), func(t *testing.T) {
+			if _, err := executeCommand(args...); err == nil {
+				t.Fatal("expected snapshot argument error")
+			}
+		})
+	}
+}
+
 func TestDiagnosticsCommandRejectsInvalidArguments(t *testing.T) {
 	t.Parallel()
 	for _, args := range [][]string{{"diagnostics"}, {"diagnostics", "unknown"}, {"diagnostics", "network", "extra"}} {
@@ -63,6 +74,7 @@ func TestCommandHelp(t *testing.T) {
 		{"--help"}, {"list", "--help"}, {"remove", "--help"},
 		{"config", "--help"}, {"config", "default", "--help"},
 		{"diagnostics", "--help"}, {"diagnostics", "network", "--help"},
+		{"snapshot", "--help"}, {"snapshot", "create", "--help"}, {"snapshot", "remove", "--help"},
 		{"completion", "--help"},
 	} {
 		t.Run(strings.Join(args, "/"), func(t *testing.T) {
@@ -149,7 +161,7 @@ func TestCompletionSuggestions(t *testing.T) {
 		prefix string
 		want   []string
 	}{
-		{prefix: "", want: []string{"list", "remove", "config", "diagnostics", "completion"}},
+		{prefix: "", want: []string{"list", "remove", "config", "diagnostics", "snapshot", "completion"}},
 		{prefix: "--aws-", want: []string{"--aws-role", "--aws-profile"}},
 	} {
 		t.Run(tc.prefix, func(t *testing.T) {

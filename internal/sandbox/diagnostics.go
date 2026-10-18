@@ -9,7 +9,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -63,12 +62,18 @@ type DiagnosticsOptions struct {
 	Output   io.Writer
 }
 
-func worktreeRoot(ctx context.Context, directory string) (string, error) {
-	out, err := exec.CommandContext(ctx, "git", "-C", directory, "rev-parse", "--show-toplevel").CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("discover worktree: %w: %s", err, out)
+func resolveDiagnostics(enabled bool, options []DiagnosticsOptions) (DiagnosticsOptions, error) {
+	if !enabled {
+		return DiagnosticsOptions{}, nil
 	}
-	return filepath.EvalSymlinks(strings.TrimSpace(string(out)))
+	if len(options) != 1 || options[0].StateDir == "" {
+		return DiagnosticsOptions{}, fmt.Errorf("network diagnostics require an explicit host state directory")
+	}
+	resolved := options[0]
+	if resolved.Output == nil {
+		resolved.Output = io.Discard
+	}
+	return resolved, nil
 }
 
 // WriteNetworkDiagnostics prints the worktree's saved JSON without starting a VM

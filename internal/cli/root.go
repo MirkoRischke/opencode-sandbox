@@ -23,7 +23,7 @@ func NewCommand() *cobra.Command {
 	root.Flags().StringVar(&cliConfigPath, "cli-config", "", "Guest OpenCode CLI JSON settings file")
 	root.Flags().StringVar(&awsRole, "aws-role", "", "IAM role ARN to assume for this session (optional)")
 	root.Flags().StringVar(&awsProfile, "aws-profile", "", "Optional host AWS source profile (requires --aws-role)")
-	root.AddCommand(newListCommand(), newRemoveCommand(), newConfigCommand(), newDiagnosticsCommand())
+	root.AddCommand(newListCommand(), newRemoveCommand(), newConfigCommand(), newDiagnosticsCommand(), newSnapshotCommand())
 	return root
 }
 

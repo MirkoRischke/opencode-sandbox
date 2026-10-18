@@ -18,6 +18,8 @@ retain installed tools and guest files for the next launch.
 - **Guest Docker:** build and run images with Docker Engine, Buildx, and Compose.
   Each VM has its own persistent Docker data disk; container ports stay inside
   the VM. See [Docker configuration](docs/config.md#docker-inside-the-vm).
+- **Prepared repo snapshots:** warm tools, dependency caches, and Docker images
+  once; new worktree VMs restore independent copies of the repo baseline.
 
 ## How it works
 
@@ -57,11 +59,27 @@ opencode-sandbox remove # Delete ALL managed VMs without confirmation (alias: rm
 opencode-sandbox --help # Show launch options
 opencode-sandbox config default # Print documented launcher defaults
 opencode-sandbox diagnostics network # Print saved network diagnostics JSON for this worktree
+opencode-sandbox snapshot create # Prepare a fresh VM and replace this repo's baseline
+opencode-sandbox snapshot remove # Delete this repo's baseline, leaving VMs untouched
 ```
 
 Configure network access and secrets in [launcher configuration](docs/config.md).
 New VMs deny application internet access by default. See also
 [GitHub access](docs/github.md) and [AWS credentials](docs/aws.md).
+
+### Prepared repository snapshots
+
+Define a preparation command in the repo's `.opencode-sandbox.toml`:
+
+```toml
+[snapshot]
+command = "./scripts/sandbox-prepare.sh"
+```
+
+Run `opencode-sandbox snapshot create` to prepare a fresh VM and capture its
+guest disks, including Docker images.
+
+See [snapshot configuration and limitations](docs/config.md#repository-snapshots).
 
 ### Shell completion
 

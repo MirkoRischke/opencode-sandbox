@@ -23,6 +23,11 @@ memory_mib = 2048
 root_disk_mib = 4096
 docker_disk_mib = 10240
 
+# Optional: run explicitly with `opencode-sandbox snapshot create`.
+# Usually put this section in each repo's .opencode-sandbox.toml instead.
+# [snapshot]
+# command = "./scripts/sandbox-prepare.sh"
+
 [network]
 # Allow any public destination/port/protocol, ignoring both host lists.
 # Host/private, loopback, link-local, metadata and multicast remain blocked.

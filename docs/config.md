@@ -159,6 +159,93 @@ The simplest compatible image extends the supplied image with
 GitHub credential integration additionally requires `gh`; AWS integration requires
 the AWS CLI. Docker is optional: images without `dockerd` skip daemon startup.
 
+### Repository snapshots
+
+Snapshots are optional, explicitly prepared disk baselines shared by all linked
+worktrees of a repository. Configure a shell command globally or in the approved
+repo-root `.opencode-sandbox.toml`:
+
+```toml
+[snapshot]
+command = "./scripts/sandbox-prepare.sh"
+```
+
+For example, the script can run `npm ci`, `go mod download`,
+`./gradlew dependencies`, and `docker compose pull`. Its command runs with
+`bash -eu -c` from `/workspace`, a writable mount of the **current host worktree**.
+It may change host files; failure does not roll those changes back. Cache paths
+must be on guest disks, outside that mount, to enter the snapshot. Scripts should
+stop any background project services and remove containers/volumes they do not
+want cloned, including containers with automatic restart policies.
+
+```sh
+opencode-sandbox snapshot create
+opencode-sandbox snapshot remove
+```
+
+`create` always creates a **fresh** temporary VM from `vm.image`, starts Docker,
+configures GitHub integration, trusts/installs project mise tools, and runs the
+command. It uses current approved networking and configured proxy secrets, but
+does not import OpenAI subscription credentials or assume a session AWS role.
+Empty/omitted `snapshot.command` rejects creation before VM startup. There is no
+incremental mode or automatic expiry/rebuild when scripts, settings, branches,
+or lockfiles change.
+
+After the script succeeds, creation stops running containers and Docker cleanly,
+flushes disks, stops the VM, and takes a native Microsandbox **disk-only** snapshot.
+It explicitly selects the successful generation as the native group head before
+deleting previous generations. A failed preparation leaves the old head intact.
+The temporary VM is deleted on success or failure. Forced termination can leave
+a temporary VM or an unpublished generation; snapshot removal also cleans up
+managed leftover generations in that repository's group.
+
+Normal launch first resumes an existing worktree VM. Otherwise it restores the
+repo baseline if present, or creates a normal VM if none exists. A broken baseline
+is reported, not silently ignored. New worktree mounts, network policy, CPU/memory,
+and current host secrets are configured for the restored VM. Root/Docker capacity,
+base image and warmed disk contents come from the snapshot: recreate the baseline
+to change those. Existing VMs are neither updated nor migrated.
+
+**What is stored:** all guest root-disk changes (tools, caches, configuration,
+logs, temporary files), the owned Docker disk (images/layers, containers, named
+volumes, build cache), and native snapshot metadata such as base-image identity
+and mount descriptions. RAM/processes and host bind-mounted contents are not
+copied. In particular, `node_modules` in the worktree is not captured; a new
+worktree still needs installation, ideally from warmed package-manager caches.
+Any sensitive file deliberately written to guest disks is captured too; snapshots
+are sensitive local state. Host-proxy credential values are not guest files and
+are not copied into the snapshot by substitution alone. Captured system CA trust
+can retain the preparation VM's CA in addition to the destination runtime CA.
+
+The canonical absolute Git common-directory path identifies a repository.
+Linked worktrees and symlink aliases share a group; separate clones do not.
+Moving a repository changes its identity. Native group names are
+`oc-repo-<readable-repo-name>-<path-hash>`, with uniquely named `prepared-*` members.
+Labels include `opencode-sandbox`, `kind=repo-baseline`, `repo-name`, `repo-id`, and
+`repo-path`. Microsandbox stores the disks/metadata in its managed host-local
+snapshot store. Group/head lookup needs no launcher JSON index. Launcher cache
+contains only per-repository lock files to prevent concurrent create/remove/restore
+operations; a conflicting operation reports an error rather than racing cleanup.
+
+`snapshot remove` needs no configuration approval or credential reads. It deletes
+only that repository's managed snapshot members, old members before the head;
+repeat removal is a no-op. Existing restored VMs retain independent writable
+disks and survive snapshot removal/replacement and subsequent cold starts.
+The existing top-level `remove` remains VM-only and does not delete baselines.
+
+**Microsandbox 0.7.8 restore limitations:** restored VMs require an extra
+stop/configure/start cycle for labels, working directory and credentials, before
+any project initialization. The Go secret-modification interface cannot express
+the configured `headers` restriction: **on snapshot-derived VMs substitution can
+occur in any header, but only on the configured allowed hosts**. Such an endpoint
+could log/reflect the credential. Freshly created VMs and the preparation VM retain
+selected-header restrictions. Restores without secrets still enable verified TLS
+inspection via a temporary non-credential secret, removed before project commands.
+Network diagnostics retain debug logs and cumulative collection, but restored
+VMs cannot enable the optional HTTP denial responder through the restore interface;
+denied-host evidence remains best effort. Ordinary destination restrictions remain
+in effect. No custom SDK bindings or host cache proxy are used.
+
 ### Docker inside the VM
 
 The image includes Docker Engine, Buildx, and Compose (`docker compose`). On each

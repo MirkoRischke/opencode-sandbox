@@ -13,9 +13,14 @@ import (
 // Settings is the host-side launcher configuration, separate from OpenCode's
 // guest JSON configuration. Add new launcher settings as fields or sections.
 type Settings struct {
-	VM      VMSettings                `toml:"vm" description:"VM resources. Recreate the VM after changing these settings."`
-	Network NetworkSettings           `toml:"network" description:"Outbound network access. Recreate the VM after policy changes."`
-	Secrets map[string]SecretSettings `toml:"secrets" description:"Optional file-backed secrets, substituted by the host proxy. Uncomment and adjust the example to enable."`
+	VM       VMSettings                `toml:"vm" description:"VM resources. Recreate the VM after changing these settings."`
+	Network  NetworkSettings           `toml:"network" description:"Outbound network access. Recreate the VM after policy changes."`
+	Snapshot SnapshotSettings          `toml:"snapshot" description:"Optional per-repository prepared disk baseline. Created and removed explicitly with the snapshot commands."`
+	Secrets  map[string]SecretSettings `toml:"secrets" description:"Optional file-backed secrets, substituted by the host proxy. Uncomment and adjust the example to enable."`
+}
+
+type SnapshotSettings struct {
+	Command string `toml:"command" description:"Shell command run in a fresh preparation VM before capture, from the mounted worktree. Empty disables snapshot creation; existing baselines are still used."`
 }
 
 type VMSettings struct {
@@ -62,6 +67,9 @@ func LoadSettings(configDir string) (Settings, error) {
 
 // Validate rejects invalid launcher settings before runtime preparation.
 func (s Settings) Validate() error {
+	if strings.ContainsRune(s.Snapshot.Command, '\x00') {
+		return fmt.Errorf("snapshot.command must not contain NUL bytes")
+	}
 	if strings.TrimSpace(s.VM.Image) == "" {
 		return fmt.Errorf("vm.image must not be empty")
 	}

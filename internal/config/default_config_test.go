@@ -41,6 +41,18 @@ func TestNetworkDiagnosticsConfigMerging(t *testing.T) {
 	require.False(t, settings.Network.Diagnostics)
 }
 
+func TestSnapshotCommandConfigMerging(t *testing.T) {
+	t.Parallel()
+	settings, err := mergeSettings(DefaultSettings(), []byte("[snapshot]\ncommand = './scripts/prepare.sh'\n"), "/project")
+	require.NoError(t, err)
+	require.Equal(t, "./scripts/prepare.sh", settings.Snapshot.Command)
+	settings, err = mergeSettings(settings, []byte("[snapshot]\ncommand = ''\n"), "/project")
+	require.NoError(t, err)
+	require.Empty(t, settings.Snapshot.Command)
+	settings.Snapshot.Command = "echo bad\x00"
+	require.ErrorContains(t, settings.Validate(), "snapshot.command")
+}
+
 func TestUnrestrictedNetworkConfigMerging(t *testing.T) {
 	t.Parallel()
 	settings := DefaultSettings()

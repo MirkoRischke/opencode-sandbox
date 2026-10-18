@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -30,100 +29,85 @@ func Prepare(ctx context.Context, directory string, config []byte, secrets []Sec
 	if err := settings.Validate(); err != nil {
 		return nil, err
 	}
-	if settings.Network.Diagnostics {
-		if len(diagnostics) != 1 || diagnostics[0].StateDir == "" {
-			return nil, fmt.Errorf("network diagnostics require an explicit host state directory")
-		}
-		if diagnostics[0].Output == nil {
-			diagnostics[0].Output = io.Discard
-		}
-	}
-	git := func(args ...string) (string, error) {
-		out, err := exec.CommandContext(ctx, "git", append([]string{"-C", directory}, args...)...).CombinedOutput()
-		if err != nil {
-			return "", fmt.Errorf("discover worktree: %w: %s", err, out)
-		}
-		return strings.TrimSpace(string(out)), nil
-	}
-	root, err := worktreeRoot(ctx, directory)
+	diagnosticOptions, err := resolveDiagnostics(settings.Network.Diagnostics, diagnostics)
 	if err != nil {
 		return nil, err
 	}
-	common, err := git("rev-parse", "--path-format=absolute", "--git-common-dir")
+	paths, err := discoverWorktree(ctx, directory)
 	if err != nil {
 		return nil, err
 	}
-	common, err = filepath.EvalSymlinks(common)
-	if err != nil {
-		return nil, err
-	}
-	s := &Sandbox{Name: sandboxName(root, common), Worktree: root}
 	if err := configureRuntime(); err != nil {
 		return nil, fmt.Errorf("locate Microsandbox runtime: %w", err)
 	}
+	s := &Sandbox{Name: sandboxName(paths.root, paths.common), Worktree: paths.root}
+	started := time.Now().UTC()
+	s.vm, err = connectOrRestore(ctx, s.Name, paths, secrets, settings, sandboxOptions(paths, paths.root, settings))
+	if err != nil {
+		return nil, fmt.Errorf("prepare sandbox: %w", err)
+	}
+	if settings.Network.Diagnostics {
+		s.diagnostics = startNetworkDiagnostics(s.vm, paths.root, started, diagnosticOptions)
+	}
+	if err := s.initializeProject(ctx, secrets); err != nil {
+		return nil, errors.Join(err, s.Shutdown())
+	}
+	if err := s.configureOpenCode(ctx, config); err != nil {
+		return nil, errors.Join(fmt.Errorf("configure guest OpenCode: %w", err), s.Shutdown())
+	}
+	return s, nil
+}
+
+func sandboxOptions(paths worktreePaths, guestRoot string, settings launcherconfig.Settings) []m.SandboxOption {
 	owner := m.MountOptions{Owner: &m.MountOwner{UID: 0, GID: 0}}
-	mounts := map[string]m.MountConfig{root: m.Mount.Bind(root, owner)}
+	mounts := map[string]m.MountConfig{guestRoot: m.Mount.Bind(paths.root, owner)}
 	mounts["/var/lib/docker"] = m.Mount.Owned(m.OwnedVolumeOptions{
 		Kind: m.VolumeKindDisk, SizeMiB: settings.VM.DockerDiskMiB,
 	})
 	// A regular checkout already includes its .git directory in the root mount.
-	if !strings.HasPrefix(common, root+string(filepath.Separator)) {
-		mounts[common] = m.Mount.Bind(common, owner)
+	if guestRoot != paths.root || !strings.HasPrefix(paths.common, paths.root+string(filepath.Separator)) {
+		mounts[paths.common] = m.Mount.Bind(paths.common, owner)
 	}
 	opts := []m.SandboxOption{
 		m.WithImage(settings.VM.Image), m.WithPullPolicy(m.PullPolicyNever),
 		m.WithCPUs(settings.VM.CPUs), m.WithMemory(settings.VM.MemoryMiB),
 		m.WithRootDisk(m.RootDisk.Managed(settings.VM.RootDiskMiB)),
-		m.WithWorkdir(root), m.WithMounts(mounts), m.WithDetached(),
+		m.WithWorkdir(guestRoot), m.WithMounts(mounts), m.WithDetached(),
 		m.WithNetwork(networkPolicy(settings.Network)), m.WithInterceptTLS(),
 		m.WithLabel("opencode-sandbox", ""),
 	}
 	if settings.Network.Diagnostics {
 		opts = append(opts, m.WithLogLevel(m.LogLevelDebug))
 	}
-	started := time.Now().UTC()
-	s.vm, err = connectWithSecrets(ctx, s.Name, secrets, opts)
-	if err != nil {
-		return nil, fmt.Errorf("prepare sandbox: %w", err)
-	}
-	if settings.Network.Diagnostics {
-		s.diagnostics = startNetworkDiagnostics(s.vm, root, started, diagnostics[0])
-	}
-	initialized := false
-	defer func() {
-		if !initialized {
-			if err := s.Shutdown(); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-			}
-		}
-	}()
+	return opts
+}
+
+// initializeProject is shared by worktree launches and fresh preparation VMs.
+// Session-specific OpenCode configuration/authentication happens only on launch.
+func (s *Sandbox) initializeProject(ctx context.Context, secrets []Secret) error {
 	if err := s.EnsureDocker(ctx); err != nil {
-		return nil, err
+		return err
 	}
 	githubEnabled := false
 	for _, secret := range secrets {
 		githubEnabled = githubEnabled || secret.entry.EnvVar == "GH_TOKEN"
 	}
 	if err := s.configureGitHub(ctx, githubEnabled); err != nil {
-		return nil, err
+		return err
 	}
 	// mise discovers supported filenames (including .mise.toml and mise/config.toml).
 	// Ignore the image's global config when deciding whether this project uses mise.
 	// Trust first: even config discovery parses trust-sensitive environment settings.
-	err = s.Exec(ctx, nil, os.Stdout, os.Stderr, "bash", "-eu", "-c", `
+	err := s.Exec(ctx, nil, os.Stdout, os.Stderr, "bash", "-eu", "-c", `
 mise trust --all
 configs=$(mise config ls --no-header --no-truncate)
 if printf '%s\n' "$configs" | grep -F -- "$PWD/" >/dev/null; then
   mise install
 fi`)
 	if err != nil {
-		return nil, fmt.Errorf("initialize project tools: %w", err)
+		return fmt.Errorf("initialize project tools: %w", err)
 	}
-	if err := s.configureOpenCode(ctx, config); err != nil {
-		return nil, fmt.Errorf("configure guest OpenCode: %w", err)
-	}
-	initialized = true
-	return s, nil
+	return nil
 }
 
 func (s *Sandbox) Exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, command ...string) error {
