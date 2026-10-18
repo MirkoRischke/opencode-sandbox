@@ -216,6 +216,62 @@ does not expand GitHub credential substitution permissions. Allowed services can
 still receive data: this is a destination restriction, not an exfiltration or
 read-only guarantee.
 
+### Network diagnostics
+
+Opt in globally or in an approved worktree config:
+
+```toml
+[network]
+diagnostics = true
+```
+
+Default: `false`. Recreate an existing VM after changing this setting: runtime
+verbosity is stored with the VM, just like its network policy. Disabling collection
+alone does not lower the verbosity of a VM previously created with diagnostics.
+
+Microsandbox writes **all runtime debug logs**, including unrelated diagnostics,
+to its host-side `<sandbox-dir>/logs/runtime.log`. These rotate at 10 MiB with three
+rotated files (roughly 40 MiB). Normal info/warning/error logs remain included;
+guest command output and kernel logs use their existing separate logging paths.
+There is no networking-only verbosity filter or pre-disk Go log interception.
+
+Diagnostics also enable Microsandbox's HTTP-denial responder: eligible HTTP/HTTPS
+requests receive HTTP 403 instead of a connection reset. This lets its existing
+TLS diagnostics record the denied hostname; early default-deny TCP resets are
+otherwise silent. No upstream connection is allowed by the responder, and
+protected/private destinations remain blocked. Clients must reach the TLS/SNI
+handling path for hostname evidence to be available.
+
+The launcher periodically reads new system-log records, recognizes Microsandbox
+0.7.8 network-policy denial messages, and merges them into one cumulative overview:
+
+```text
+${XDG_STATE_HOME:-~/.local/state}/opencode-sandbox/diagnostics/<worktree-id>/network.json
+```
+
+The exact path is printed on startup. Worktree identity hashes its canonical path,
+not the VM instance or branch. The JSON survives process exit and VM deletion or
+recreation. Each launch collects only that launch's new records, not old raw logs.
+It is saved atomically every five seconds when changed, and drained/saved during
+normal shutdown. Background errors are reported after the interactive session ends,
+not while OpenCode owns the terminal. Warnings distinguish collection from save
+failures and include a safe error category. They do not prevent VM use; malformed history is not
+overwritten. Disabled diagnostics leave existing summaries untouched.
+
+`denied_targets` contains optional `hostname`, `ip`, `port`, `protocol`, and `reason`,
+plus `observations`, `first_seen`, and `last_seen`. Hostnames group independently of
+changing destination IPs; unknown hostnames use the IP instead. Different ports,
+protocols, and reasons remain separate. No raw messages, URLs, headers, or payloads
+are copied into the overview. `schema_version`, `worktree`, and `updated_at` describe
+the overview; `overflow: true` indicates its 4096-distinct-target limit was reached.
+
+This is best-effort historical evidence, **not a complete audit**: Microsandbox
+does not log every denial or always expose a hostname. Counts are observed log
+records, not unique requests. Allowed hosts are never added automatically; old
+denials remain after policy changes, with `last_seen` showing their age. Summaries
+are not automatically expired; remove the worktree's `network.json` to reset it
+while its launcher is stopped.
+
 For new launcher settings, extend the `Settings` struct in
 `internal/config/settings.go`, add a `description` tag and validation, and document
 the new keys here. The default-config printer discovers fields automatically;

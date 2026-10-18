@@ -17,9 +17,10 @@ import (
 )
 
 type Sandbox struct {
-	Name     string
-	Worktree string
-	vm       *m.Sandbox
+	Name        string
+	Worktree    string
+	vm          *m.Sandbox
+	diagnostics *networkDiagnostics
 }
 
 // Prepare creates or resumes one VM per worktree and initializes project tools.
@@ -72,9 +73,16 @@ func Prepare(ctx context.Context, directory string, config []byte, secrets []Sec
 		m.WithNetwork(networkPolicy(settings.Network)), m.WithInterceptTLS(),
 		m.WithLabel("opencode-sandbox", ""),
 	}
+	if settings.Network.Diagnostics {
+		opts = append(opts, m.WithLogLevel(m.LogLevelDebug))
+	}
+	started := time.Now().UTC()
 	s.vm, err = connectWithSecrets(ctx, s.Name, secrets, opts)
 	if err != nil {
 		return nil, fmt.Errorf("prepare sandbox: %w", err)
+	}
+	if settings.Network.Diagnostics {
+		s.diagnostics = startNetworkDiagnostics(s.vm, root, started)
 	}
 	initialized := false
 	defer func() {
@@ -203,16 +211,24 @@ func (s *Sandbox) Open(ctx context.Context) error {
 
 func (s *Sandbox) Remove(ctx context.Context) (err error) {
 	defer func() { err = errors.Join(err, s.Close()) }()
+	if s.diagnostics != nil {
+		if err := s.Stop(ctx); err != nil {
+			return err
+		}
+	}
 	return s.vm.Destroy(ctx)
 }
 
 // Close releases the SDK connection without stopping this persistent VM.
 func (s *Sandbox) Close() error {
+	s.diagnostics.finish()
 	return s.vm.Close()
 }
 
 func (s *Sandbox) Stop(ctx context.Context) error {
-	return s.vm.Stop(ctx)
+	err := s.vm.Stop(ctx)
+	s.diagnostics.finish()
+	return err
 }
 
 // Shutdown stops the VM without deleting its disk, then releases the connection.

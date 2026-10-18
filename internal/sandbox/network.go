@@ -14,6 +14,11 @@ func networkPolicy(n config.NetworkSettings) *m.NetworkConfig {
 		DefaultIngress: m.PolicyActionDeny,
 		Rules:          []m.PolicyRule{m.Rule.AllowDNS()},
 	}
+	if n.Diagnostics {
+		// Default-deny SYN resets are silent. The responder extracts TLS SNI
+		// and emits a denial diagnostic without connecting to the destination.
+		policy.HTTP = &m.HTTPConfig{DenyResponse: true}
+	}
 	// Keep local/protected destinations blocked even for an allowed hostname.
 	// The gateway DNS exception must precede the host deny.
 	for _, destination := range []string{"host", "private", "loopback", "link-local", "metadata", "multicast", "0.0.0.0", "::"} {

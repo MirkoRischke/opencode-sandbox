@@ -39,3 +39,17 @@ func TestNetworkPolicyAdditionalHostsWithoutBaseline(t *testing.T) {
 	policy := networkPolicy(settings.Network)
 	require.Equal(t, "registry.npmjs.org", policy.Rules[len(policy.Rules)-1].Destination)
 }
+
+func TestNetworkDiagnosticsOnlyChangesDenialResponsesNotRules(t *testing.T) {
+	settings := config.DefaultSettings().Network
+	settings.AllowedHosts = []string{"github.com"}
+	baseline := networkPolicy(settings)
+	require.Nil(t, baseline.HTTP)
+	settings.Diagnostics = true
+	policy := networkPolicy(settings)
+	require.Equal(t, baseline.Rules, policy.Rules)
+	require.Equal(t, baseline.DefaultEgress, policy.DefaultEgress)
+	require.Equal(t, baseline.DefaultIngress, policy.DefaultIngress)
+	require.NotNil(t, policy.HTTP)
+	require.True(t, policy.HTTP.DenyResponse)
+}

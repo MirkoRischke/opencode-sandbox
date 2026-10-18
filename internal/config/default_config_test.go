@@ -22,10 +22,20 @@ func TestDefaultConfigRoundTripsToRuntimeDefaults(t *testing.T) {
 	require.NoError(t, settings.Validate())
 	require.Empty(t, settings.Secrets, "examples must not enable credentials")
 	require.Contains(t, out.String(), "additional_allowed_hosts = []")
+	require.Contains(t, out.String(), "diagnostics = false")
 	require.Contains(t, out.String(), `image = "opencode-sandbox:poc"`)
 	var again bytes.Buffer
 	require.NoError(t, WriteDefaultConfig(&again))
 	require.Equal(t, out.String(), again.String())
+}
+
+func TestNetworkDiagnosticsConfigMerging(t *testing.T) {
+	settings, err := mergeRepoSettings(DefaultSettings(), []byte("[network]\ndiagnostics = true\n"), "/project")
+	require.NoError(t, err)
+	require.True(t, settings.Network.Diagnostics)
+	settings, err = mergeRepoSettings(settings, []byte("[network]\ndiagnostics = false\n"), "/project")
+	require.NoError(t, err)
+	require.False(t, settings.Network.Diagnostics)
 }
 
 func TestEveryConfigFieldHasDocumentation(t *testing.T) {

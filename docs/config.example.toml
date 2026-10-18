@@ -24,6 +24,10 @@ root_disk_mib = 4096
 docker_disk_mib = 10240
 
 [network]
+# Best-effort cumulative denied-target summary per worktree. Also enables all
+# Microsandbox runtime debug logs (rotating, about 40 MiB) and HTTP 403 denial
+# responses instead of resets where supported. Recreate VM on change.
+diagnostics = false
 allowed_hosts = [
   # OpenAI subscription inference (legacy Codex and Sign in with ChatGPT)
   # and OAuth token refresh. No credential inspection needed to include both.

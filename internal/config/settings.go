@@ -29,6 +29,7 @@ type VMSettings struct {
 }
 
 type NetworkSettings struct {
+	Diagnostics            bool     `toml:"diagnostics" description:"Collect cumulative denied-target diagnostics per worktree. Enables full rotating runtime debug logs and HTTP denial responses; recreate the VM after changing this setting."`
 	AllowedHosts           []string `toml:"allowed_hosts" description:"Baseline exact DNS hostnames; HTTPS/WSS on TCP port 443 only."`
 	AdditionalAllowedHosts []string `toml:"additional_allowed_hosts" description:"Extra hostnames, combined with allowed_hosts after merging. Both lists must be empty to deny internet access. Each list replaces its inherited value when specified."`
 }
