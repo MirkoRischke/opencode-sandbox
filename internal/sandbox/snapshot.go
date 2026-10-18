@@ -83,9 +83,6 @@ func CreateSnapshot(ctx context.Context, directory string, secrets []Secret, set
 	if err := settings.Validate(); err != nil {
 		return "", err
 	}
-	if strings.TrimSpace(settings.Snapshot.Command) == "" {
-		return "", fmt.Errorf("snapshot.command is required to create a repository baseline")
-	}
 	diagnosticOptions, err := resolveDiagnostics(settings.Network.Diagnostics, diagnostics)
 	if err != nil {
 		return "", err
@@ -121,8 +118,10 @@ func CreateSnapshot(ctx context.Context, directory string, secrets []Secret, set
 		defer cancel()
 		err = errors.Join(err, prep.Remove(cleanup))
 	}()
-	if err := prep.Exec(ctx, nil, os.Stdout, os.Stderr, "bash", "-eu", "-c", settings.Snapshot.Command); err != nil {
-		return "", fmt.Errorf("snapshot preparation: %w", err)
+	if strings.TrimSpace(settings.Snapshot.Command) != "" {
+		if err := prep.Exec(ctx, nil, os.Stdout, os.Stderr, "bash", "-eu", "-c", settings.Snapshot.Command); err != nil {
+			return "", fmt.Errorf("snapshot preparation: %w", err)
+		}
 	}
 	if err := prep.Exec(ctx, nil, os.Stdout, os.Stderr, "bash", "-eu", "-c", stopDockerForSnapshot); err != nil {
 		return "", fmt.Errorf("quiesce snapshot: %w", err)

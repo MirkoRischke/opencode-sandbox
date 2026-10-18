@@ -72,7 +72,7 @@ New VMs use a built-in development-service allowlist by default. See also
 
 ### Prepared repository snapshots
 
-Define a preparation command in the repo's `.opencode-sandbox.toml`:
+Optionally define an additional preparation command in the repo's `.opencode-sandbox.toml`:
 
 ```toml
 [snapshot]
@@ -80,7 +80,8 @@ command = "./scripts/sandbox-prepare.sh"
 ```
 
 Run `opencode-sandbox snapshot create` to prepare a fresh VM and capture its
-guest disks, including Docker images.
+guest disks, including installed mise tools and Docker images. No custom command
+is required.
 
 See [snapshot configuration and limitations](docs/config.md#repository-snapshots).
 

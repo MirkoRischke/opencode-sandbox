@@ -20,7 +20,7 @@ type Settings struct {
 }
 
 type SnapshotSettings struct {
-	Command string `toml:"command" description:"Shell command run in a fresh preparation VM before capture, from the mounted worktree. Empty disables snapshot creation; existing baselines are still used."`
+	Command string `toml:"command" description:"Optional shell command run after project initialization in a fresh preparation VM before capture, from the mounted worktree. Empty skips the custom command."`
 }
 
 type VMSettings struct {

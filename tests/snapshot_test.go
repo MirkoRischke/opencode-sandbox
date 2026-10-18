@@ -15,6 +15,26 @@ import (
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
+func TestRepositorySnapshotWithoutPreparationCommand(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	worktree := newWorktree(t)
+	settings := config.DefaultSettings()
+	settings.VM.CPUs, settings.VM.MemoryMiB = 1, 768
+	settings.VM.RootDiskMiB, settings.VM.DockerDiskMiB = 512, 256
+	t.Cleanup(func() {
+		cleanup, done := context.WithTimeout(context.Background(), time.Minute)
+		defer done()
+		require.NoError(t, sandbox.RemoveSnapshot(cleanup, worktree))
+	})
+	reference, err := sandbox.CreateSnapshot(ctx, worktree, nil, settings)
+	require.NoError(t, err)
+	require.NotEmpty(t, reference)
+	child := prepareSnapshotChild(t, ctx, worktree, settings)
+	execInSandbox(t, child, "docker", "info")
+}
+
 func TestRepositorySnapshotLifecycle(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)

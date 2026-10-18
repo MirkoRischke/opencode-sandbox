@@ -67,10 +67,17 @@ func TestRestoredSecretsKeepValuesHostSideAndRetainDestinationScope(t *testing.T
 	require.Contains(t, patch.Labels, "opencode-sandbox")
 }
 
-func TestSnapshotCreationRequiresExplicitPreparationCommand(t *testing.T) {
+func TestSnapshotCreationAllowsEmptyPreparationCommand(t *testing.T) {
 	t.Parallel()
-	_, err := CreateSnapshot(context.Background(), "not-a-repository", nil, config.DefaultSettings())
-	require.ErrorContains(t, err, "snapshot.command is required")
+	for _, command := range []string{"", " \t\n"} {
+		t.Run(command, func(t *testing.T) {
+			t.Parallel()
+			settings := config.DefaultSettings()
+			settings.Snapshot.Command = command
+			_, err := CreateSnapshot(context.Background(), t.TempDir(), nil, settings)
+			require.ErrorContains(t, err, "discover worktree")
+		})
+	}
 }
 
 func TestSnapshotLockSerializesOnlyTheSameRepository(t *testing.T) { //nolint:paralleltest // Concurrent subprocess tests can briefly inherit flock descriptors.

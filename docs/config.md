@@ -163,7 +163,7 @@ the AWS CLI. Docker is optional: images without `dockerd` skip daemon startup.
 ### Repository snapshots
 
 Snapshots are optional, explicitly prepared disk baselines shared by all linked
-worktrees of a repository. Configure a shell command globally or in the approved
+worktrees of a repository. Optionally configure an additional shell command globally or in the approved
 repo-root `.opencode-sandbox.toml`:
 
 ```toml
@@ -187,13 +187,14 @@ opencode-sandbox snapshot remove
 
 `create` always creates a **fresh** temporary VM from `vm.image`, starts Docker,
 configures GitHub integration, trusts/installs project mise tools, and runs the
-command. It uses current approved networking and configured proxy secrets, but
+custom command if provided. It uses current approved networking and configured proxy secrets, but
 does not import OpenAI subscription credentials or assume a session AWS role.
-Empty/omitted `snapshot.command` rejects creation before VM startup. There is no
+Empty/omitted or whitespace-only `snapshot.command` skips only the custom command;
+normal project initialization is still captured. There is no
 incremental mode or automatic expiry/rebuild when scripts, settings, branches,
 or lockfiles change.
 
-After the script succeeds, creation stops running containers and Docker cleanly,
+After preparation succeeds, creation stops running containers and Docker cleanly,
 flushes disks, stops the VM, and takes a native Microsandbox **disk-only** snapshot.
 It explicitly selects the successful generation as the native group head before
 deleting previous generations. A failed preparation leaves the old head intact.

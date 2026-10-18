@@ -30,7 +30,7 @@ func newSnapshotCommand() *cobra.Command {
 		Args: cobra.NoArgs, RunE: requireSubcommand,
 	}
 	command.AddCommand(newSnapshotListCommand(), &cobra.Command{
-		Use: "create", Short: "Run snapshot.command in a fresh VM and replace this repository's baseline",
+		Use: "create", Short: "Prepare a fresh VM and replace this repository's baseline",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			configDir, err := hostConfigDir(os.Getenv("XDG_CONFIG_HOME"), os.Getenv("HOME"))
