@@ -13,6 +13,7 @@ import (
 
 	launcherconfig "opencode-sandbox/internal/config"
 	"opencode-sandbox/internal/sandbox"
+	"opencode-sandbox/internal/workspace"
 )
 
 func launch(ctx context.Context, awsRole, awsProfile string) (err error) {
@@ -35,7 +36,11 @@ func launch(ctx context.Context, awsRole, awsProfile string) (err error) {
 		return err
 	}
 	paths := launcherconfig.Paths{ConfigDir: configDir, StateDir: stateDir}
-	settings, err := paths.LoadRepoSettings(".", approveRepoConfig)
+	w, err := workspace.Resolve(ctx, ".")
+	if err != nil {
+		return err
+	}
+	settings, err := paths.LoadWorkspaceSettings(w.Root(), approveWorkspaceConfig)
 	if err != nil {
 		return err
 	}
@@ -43,7 +48,7 @@ func launch(ctx context.Context, awsRole, awsProfile string) (err error) {
 	if err != nil {
 		return err
 	}
-	s, err := sandbox.Prepare(ctx, ".", secrets, settings, sandbox.DiagnosticsOptions{StateDir: stateDir, Output: os.Stderr})
+	s, err := sandbox.PrepareWorkspace(ctx, w, secrets, settings, sandbox.DiagnosticsOptions{StateDir: stateDir, Output: os.Stderr})
 	if err != nil {
 		return err
 	}

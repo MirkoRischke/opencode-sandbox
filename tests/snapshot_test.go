@@ -85,24 +85,28 @@ echo host-modified > prepared-on-host
 	group := *head.Group()
 	artifact, err := head.Open(ctx)
 	require.NoError(t, err)
-	require.Equal(t, "repo", artifact.Labels()["repo-name"])
+	require.Equal(t, "worktree", artifact.Labels()["workspace-name"])
 	require.Equal(t, m.SnapshotScopeDisk, artifact.Scope())
-	listing, err := sandbox.ListSnapshots(ctx, second)
+	listing, err := sandbox.ListSnapshots(ctx, worktree)
 	require.NoError(t, err)
 	require.NotNil(t, listing.Current)
-	require.Equal(t, repo, listing.Current.Path)
+	require.Equal(t, worktree, listing.Current.Path)
 	require.Len(t, listing.Current.Snapshots, 1)
 	require.Equal(t, first, listing.Current.Snapshots[0].Reference)
 	require.True(t, listing.Current.Snapshots[0].Baseline)
 	require.Equal(t, head.SizeBytes(), listing.Current.Snapshots[0].SizeBytes)
 	require.Equal(t, head.CreatedAt(), listing.Current.Snapshots[0].CreatedAt)
-	// Outside Git, all managed repositories remain visible without a current section.
+	// Other worktrees and non-Git directories have independent baselines.
+	listing, err = sandbox.ListSnapshots(ctx, second)
+	require.NoError(t, err)
+	require.Empty(t, listing.Current.Snapshots)
 	listing, err = sandbox.ListSnapshots(ctx, t.TempDir())
 	require.NoError(t, err)
-	require.Nil(t, listing.Current)
+	require.NotNil(t, listing.Current)
+	require.Empty(t, listing.Current.Snapshots)
 	require.Condition(t, func() bool {
-		for _, r := range listing.Repositories {
-			if r.Path == repo {
+		for _, r := range listing.Workspaces {
+			if r.Path == worktree {
 				return len(r.Snapshots) == 1 && r.Snapshots[0].Reference == first
 			}
 		}
@@ -111,7 +115,7 @@ echo host-modified > prepared-on-host
 
 	// A failed fresh preparation must not replace the previous head.
 	settings.Snapshot.Command = "exit 23"
-	_, err = sandbox.CreateSnapshot(ctx, second, nil, settings)
+	_, err = sandbox.CreateSnapshot(ctx, worktree, nil, settings)
 	require.ErrorContains(t, err, "snapshot preparation")
 	unchanged, err := m.Snapshot.Get(ctx, group)
 	require.NoError(t, err)
@@ -137,31 +141,36 @@ echo host-modified > prepared-on-host
 
 	// Fresh replacement must not inherit arbitrary writes from a worktree VM.
 	settings.Snapshot.Command = "echo second > /root/generation; test ! -e /root/.cache/snapshot-test/generation"
-	replacement, err := sandbox.CreateSnapshot(ctx, second, nil, settings)
+	replacement, err := sandbox.CreateSnapshot(ctx, worktree, nil, settings)
 	require.NoError(t, err)
 	require.NotEqual(t, first, replacement)
 	_, err = m.Snapshot.Get(ctx, first)
 	require.True(t, m.IsKind(err, m.ErrSnapshotNotFound), "old snapshot should be removed: %v", err)
-	b := prepareSnapshotChild(t, ctx, second, settings)
-	require.Equal(t, "second\n", execInSandbox(t, b, "cat", "/root/generation"))
-	execInSandbox(t, b, "bash", "-eu", "-c", "test ! -e /root/only-a; ! docker volume inspect only-a >/dev/null 2>&1; test ! -e prepared-on-host; git rev-parse --git-common-dir >/dev/null")
+	// A different linked worktree must not inherit this directory's baseline.
+	other := prepareSnapshotChild(t, ctx, second, settings)
+	execInSandbox(t, other, "bash", "-eu", "-c", "test ! -e /root/generation; test ! -e /root/.cache/snapshot-test/generation")
 	require.Equal(t, "first\n", execInSandbox(t, a, "cat", "/root/.cache/snapshot-test/generation"))
+	// Existing VMs keep their disks; recreation restores the replacement baseline.
+	require.NoError(t, sandbox.Remove(ctx, worktree))
+	b := prepareSnapshotChild(t, ctx, worktree, settings)
+	require.Equal(t, "second\n", execInSandbox(t, b, "cat", "/root/generation"))
+	execInSandbox(t, b, "bash", "-eu", "-c", "test ! -e /root/only-a; ! docker volume inspect only-a >/dev/null 2>&1; git rev-parse --git-common-dir >/dev/null")
 
 	// Removing the baseline does not affect either existing VM, even cold boot.
-	require.NoError(t, sandbox.RemoveSnapshot(ctx, second))
-	require.NoError(t, sandbox.RemoveSnapshot(ctx, second), "removal should be idempotent")
+	require.NoError(t, sandbox.RemoveSnapshot(ctx, worktree))
+	require.NoError(t, sandbox.RemoveSnapshot(ctx, worktree), "removal should be idempotent")
 	listing, err = sandbox.ListSnapshots(ctx, worktree)
 	require.NoError(t, err)
 	require.NotNil(t, listing.Current)
 	require.Empty(t, listing.Current.Snapshots)
-	require.NoError(t, a.Stop(ctx))
+	require.NoError(t, b.Stop(ctx))
 	resumed, err := sandbox.Prepare(ctx, worktree, nil, settings)
 	require.NoError(t, err)
 	defer func() { require.NoError(t, resumed.Close()) }()
-	require.Equal(t, "first\n", execInSandbox(t, resumed, "docker", "image", "inspect", "snapshot-proof:local", "--format", `{{index .Config.Labels "snapshot-proof"}}`))
+	require.Equal(t, "second\n", execInSandbox(t, resumed, "cat", "/root/generation"))
 	// A separate clone must not accidentally discover this repository's group.
-	other := prepareSnapshotChild(t, ctx, newWorktree(t), settings)
-	execInSandbox(t, other, "bash", "-eu", "-c", "test ! -e /root/generation; test ! -e /root/.cache/snapshot-test/generation")
+	clone := prepareSnapshotChild(t, ctx, newWorktree(t), settings)
+	execInSandbox(t, clone, "bash", "-eu", "-c", "test ! -e /root/generation; test ! -e /root/.cache/snapshot-test/generation")
 }
 
 func prepareSnapshotChild(t *testing.T, ctx context.Context, directory string, settings config.Settings, secrets ...sandbox.Secret) *sandbox.Sandbox {
@@ -190,7 +199,7 @@ func TestSnapshotRestoreUsesCurrentHostSecrets(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.VM.CPUs, settings.VM.MemoryMiB = 1, 768
 	settings.VM.RootDiskMiB, settings.VM.DockerDiskMiB = 512, 256
-	settings.Snapshot.Command = `test "$GH_TOKEN" = '$MSB_GH_TOKEN'`
+	settings.Snapshot.Command = `test "$GH_TOKEN" = '$MSB_GH_TOKEN'; touch /root/snapshot-preparation-proof`
 	path := githubTokenPath(t)
 	require.NoError(t, os.WriteFile(path, []byte("synthetic-preparation-credential"), 0600))
 	settings.Secrets = githubSecretSettings(path).Secrets
@@ -204,12 +213,15 @@ func TestSnapshotRestoreUsesCurrentHostSecrets(t *testing.T) {
 	secrets, err = sandbox.LoadSecrets(settings)
 	require.NoError(t, err)
 	s := prepareSnapshotChild(t, ctx, worktree, settings, secrets...)
+	execInSandbox(t, s, "test", "-f", "/root/snapshot-preparation-proof")
 	execInSandbox(t, s, "bash", "-eu", "-c", `test "$GH_TOKEN" = '$MSB_GH_TOKEN'`)
 	stored := storedSandboxConfig(t, s)
 	require.NotContains(t, stored, "synthetic-preparation-credential")
 	require.Contains(t, stored, "synthetic-current-credential")
 	require.Contains(t, stored, "api.github.com")
-	withoutSecrets := prepareSnapshotChild(t, ctx, filepath.Join(filepath.Dir(worktree), "repo"), settings)
+	require.NoError(t, sandbox.Remove(ctx, worktree))
+	withoutSecrets := prepareSnapshotChild(t, ctx, worktree, settings)
+	execInSandbox(t, withoutSecrets, "test", "-f", "/root/snapshot-preparation-proof")
 	execInSandbox(t, withoutSecrets, "bash", "-eu", "-c", `test -z "${GH_TOKEN+x}"`)
 	require.NotContains(t, storedSandboxConfig(t, withoutSecrets), "synthetic-preparation-credential")
 }

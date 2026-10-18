@@ -9,26 +9,24 @@ import (
 	"testing"
 	"time"
 
-	"opencode-sandbox/internal/config"
-
 	"github.com/stretchr/testify/require"
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
 func TestSnapshotIdentityIncludesReadableRepositoryAndStableLabels(t *testing.T) {
 	t.Parallel()
-	repo := snapshotIdentity("/projects/My_Project/.git")
-	require.Regexp(t, `^oc-repo-my-project-[0-9a-f]{16}$`, repo.group)
-	require.Equal(t, "My_Project", repo.labels()["repo-name"])
-	require.Equal(t, "/projects/My_Project", repo.labels()["repo-path"])
+	repo := snapshotIdentity("/projects/My_Project")
+	require.Regexp(t, `^oc-workspace-my-project-[0-9a-f]{16}$`, repo.group)
+	require.Equal(t, "My_Project", repo.labels()["workspace-name"])
+	require.Equal(t, "/projects/My_Project", repo.labels()["workspace-path"])
 	require.Len(t, repo.id, 64)
 	require.True(t, repo.owns(repo.labels()))
-	require.False(t, repo.owns(map[string]string{"repo-id": repo.id}))
-	require.NotEqual(t, repo.group, snapshotIdentity("/other/My_Project/.git").group)
-	require.LessOrEqual(t, len(snapshotIdentity("/projects/"+strings.Repeat("long", 50)+"/.git").group), 128)
+	require.False(t, repo.owns(map[string]string{"workspace-id": repo.id}))
+	require.NotEqual(t, repo.group, snapshotIdentity("/other/My_Project").group)
+	require.LessOrEqual(t, len(snapshotIdentity("/projects/"+strings.Repeat("long", 50)).group), 128)
 }
 
-func TestSnapshotDiscoverySharesIdentityAcrossLinkedWorktrees(t *testing.T) {
+func TestSnapshotDiscoverySeparatesLinkedWorktrees(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	repo, tree := filepath.Join(dir, "repo"), filepath.Join(dir, "tree")
@@ -40,16 +38,16 @@ func TestSnapshotDiscoverySharesIdentityAcrossLinkedWorktrees(t *testing.T) {
 	git("init", "--initial-branch=main", repo)
 	git("-C", repo, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "-m", "initial")
 	git("-C", repo, "worktree", "add", "-b", "other", tree)
-	first, err := snapshotRepo(context.Background(), repo)
+	first, err := resolveSnapshotWorkspace(context.Background(), repo)
 	require.NoError(t, err)
-	second, err := snapshotRepo(context.Background(), tree)
+	second, err := resolveSnapshotWorkspace(context.Background(), tree)
 	require.NoError(t, err)
-	require.Equal(t, first, second)
+	require.NotEqual(t, first.id, second.id)
 	alias := filepath.Join(dir, "alias")
 	require.NoError(t, os.Symlink(tree, alias))
-	third, err := snapshotRepo(context.Background(), alias)
+	third, err := resolveSnapshotWorkspace(context.Background(), alias)
 	require.NoError(t, err)
-	require.Equal(t, first, third)
+	require.Equal(t, second, third)
 }
 
 func TestRestoredSecretsKeepValuesHostSideAndRetainDestinationScope(t *testing.T) {
@@ -65,19 +63,6 @@ func TestRestoredSecretsKeepValuesHostSideAndRetainDestinationScope(t *testing.T
 	require.Equal(t, "$MSB_GH_TOKEN", patch.Secrets["GH_TOKEN"].Placeholder)
 	require.Equal(t, []string{"github.com"}, patch.Secrets["GH_TOKEN"].AllowedHosts)
 	require.Contains(t, patch.Labels, "opencode-sandbox")
-}
-
-func TestSnapshotCreationAllowsEmptyPreparationCommand(t *testing.T) {
-	t.Parallel()
-	for _, command := range []string{"", " \t\n"} {
-		t.Run(command, func(t *testing.T) {
-			t.Parallel()
-			settings := config.DefaultSettings()
-			settings.Snapshot.Command = command
-			_, err := CreateSnapshot(context.Background(), t.TempDir(), nil, settings)
-			require.ErrorContains(t, err, "discover worktree")
-		})
-	}
 }
 
 func TestSnapshotLockSerializesOnlyTheSameRepository(t *testing.T) { //nolint:paralleltest // Concurrent subprocess tests can briefly inherit flock descriptors.
@@ -105,24 +90,24 @@ func TestSnapshotLockSerializesOnlyTheSameRepository(t *testing.T) { //nolint:pa
 func TestManagedSnapshotRepositoryUsesStoredIdentity(t *testing.T) {
 	t.Parallel()
 	original := snapshotIdentity("/deleted/repository/.git")
-	repo, ok := managedSnapshotRepository(original.group, original.labels())
+	repo, ok := managedSnapshotWorkspace(original.group, original.labels())
 	require.True(t, ok)
 	require.Equal(t, original.id, repo.id)
 	require.Equal(t, original.name, repo.name)
 	require.Equal(t, original.group, repo.group)
 	require.True(t, repo.owns(original.labels()))
 
-	for _, key := range []string{"opencode-sandbox", "kind", "repo-id"} {
+	for _, key := range []string{"opencode-sandbox", "kind", "workspace-id"} {
 		labels := original.labels()
 		delete(labels, key)
-		_, ok := managedSnapshotRepository(original.group, labels)
+		_, ok := managedSnapshotWorkspace(original.group, labels)
 		require.False(t, ok, "must not delete snapshots missing %s", key)
 	}
 	labels := original.labels()
 	labels["kind"] = "unrelated"
-	_, ok = managedSnapshotRepository(original.group, labels)
+	_, ok = managedSnapshotWorkspace(original.group, labels)
 	require.False(t, ok)
-	_, ok = managedSnapshotRepository("unrelated-group", original.labels())
+	_, ok = managedSnapshotWorkspace("unrelated-group", original.labels())
 	require.False(t, ok)
 }
 
@@ -143,7 +128,7 @@ func TestBulkSnapshotRemovalRespectsRepositoryLock(t *testing.T) { //nolint:para
 	unlock, err := repo.lock()
 	require.NoError(t, err)
 	defer unlock()
-	stored, ok := managedSnapshotRepository(repo.group, repo.labels())
+	stored, ok := managedSnapshotWorkspace(repo.group, repo.labels())
 	require.True(t, ok)
 	require.ErrorContains(t, stored.removeLocked(context.Background()), "another snapshot operation")
 }

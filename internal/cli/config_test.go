@@ -49,7 +49,7 @@ func TestRepoSettingsTrustFallsBackToHome(t *testing.T) {
 	require.NoError(t, err, "%s", output)
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".opencode-sandbox.toml"), []byte("# config\n"), 0600))
 	paths := launcherconfig.Paths{ConfigDir: t.TempDir(), StateDir: state}
-	_, err = paths.LoadRepoSettings(root, func(string, []byte, launcherconfig.Settings) error { return nil })
+	_, err = paths.LoadWorkspaceSettings(root, func(string, []byte, launcherconfig.Settings) error { return nil })
 	require.NoError(t, err)
 	_, err = os.Stat(filepath.Join(home, ".local/state/opencode-sandbox/trust.json"))
 	require.NoError(t, err)

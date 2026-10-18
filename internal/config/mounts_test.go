@@ -85,12 +85,12 @@ func TestRepoMountApprovalUsesResolvedPaths(t *testing.T) {
 	require.NoError(t, err, "%s", output)
 	source := filepath.Join(root, "AGENTS.md")
 	require.NoError(t, os.WriteFile(source, []byte("instructions"), 0600))
-	require.NoError(t, os.WriteFile(filepath.Join(root, repoConfigName), []byte("[[mounts]]\nsource = 'AGENTS.md'\ntarget = '/opt/AGENTS.md'\n"), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(root, workspaceConfigName), []byte("[[mounts]]\nsource = 'AGENTS.md'\ntarget = '/opt/AGENTS.md'\n"), 0600))
 	paths := Paths{ConfigDir: t.TempDir(), StateDir: t.TempDir()}
-	_, err = paths.LoadRepoSettings(root, nil)
-	require.ErrorContains(t, err, "untrusted repo config")
+	_, err = paths.LoadWorkspaceSettings(root, nil)
+	require.ErrorContains(t, err, "untrusted workspace config")
 	approved := false
-	_, err = paths.LoadRepoSettings(root, func(_ string, _ []byte, settings Settings) error {
+	_, err = paths.LoadWorkspaceSettings(root, func(_ string, _ []byte, settings Settings) error {
 		approved = true
 		require.Equal(t, source, settings.Mounts[0].Source)
 		return nil
@@ -98,6 +98,6 @@ func TestRepoMountApprovalUsesResolvedPaths(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, approved)
 	require.NoError(t, os.Remove(source))
-	_, err = paths.LoadRepoSettings(root, nil)
+	_, err = paths.LoadWorkspaceSettings(root, nil)
 	require.ErrorContains(t, err, fmt.Sprintf("mounts[0].source %q", source))
 }

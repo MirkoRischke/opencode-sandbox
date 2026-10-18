@@ -9,7 +9,7 @@ import (
 	launcherconfig "opencode-sandbox/internal/config"
 )
 
-func TestConfirmRepoConfig(t *testing.T) {
+func TestConfirmWorkspaceConfig(t *testing.T) {
 	t.Parallel()
 	for _, answer := range []string{"y\n", "yes\n", "YES\n", "n\n", "\n", "", "yes"} {
 		t.Run(answer, func(t *testing.T) {
@@ -18,7 +18,7 @@ func TestConfirmRepoConfig(t *testing.T) {
 			settings.Secrets = map[string]launcherconfig.SecretSettings{"github": {
 				File: "creds/token", Env: "GH_TOKEN", AllowedHosts: []string{"api.github.com"}, Headers: []string{"authorization"},
 			}}
-			err := confirmRepoConfig(strings.NewReader(answer), &output, "/repo/.opencode-sandbox.toml", []byte("# override\n\x1b[2J\n"), settings)
+			err := confirmWorkspaceConfig(strings.NewReader(answer), &output, "/repo/.opencode-sandbox.toml", []byte("# override\n\x1b[2J\n"), settings)
 			approved := answer == "y\n" || answer == "yes\n" || answer == "YES\n"
 			if (err == nil) != approved {
 				t.Fatalf("answer %q: unexpected result %v", answer, err)
@@ -36,7 +36,7 @@ func TestConfirmRepoConfig(t *testing.T) {
 }
 
 //nolint:paralleltest // Replaces process-wide os.Stdin to exercise the real approval entry point; concurrent stdin users would observe the test pipe.
-func TestApproveRepoConfigRejectsPipedInput(t *testing.T) {
+func TestApproveWorkspaceConfigRejectsPipedInput(t *testing.T) {
 	reader, writer, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
@@ -57,7 +57,7 @@ func TestApproveRepoConfigRejectsPipedInput(t *testing.T) {
 	if _, err := writer.WriteString("yes\n"); err != nil {
 		t.Fatal(err)
 	}
-	err = approveRepoConfig("/repo/.opencode-sandbox.toml", nil, launcherconfig.DefaultSettings())
+	err = approveWorkspaceConfig("/repo/.opencode-sandbox.toml", nil, launcherconfig.DefaultSettings())
 	if err == nil || !strings.Contains(err.Error(), "launch interactively") {
 		t.Fatalf("expected non-interactive refusal, got %v", err)
 	}

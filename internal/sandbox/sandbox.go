@@ -6,11 +6,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	launcherconfig "opencode-sandbox/internal/config"
+	"opencode-sandbox/internal/workspace"
 
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
@@ -22,10 +21,19 @@ type Sandbox struct {
 	diagnostics *networkDiagnostics
 }
 
-// Prepare creates or resumes one VM per worktree and initializes project tools.
+// Prepare resolves an exact directory and prepares its workspace VM.
 // GitHub credentials stay in the host proxy; the guest gets only a placeholder.
 // When diagnostics are enabled, supply exactly one host diagnostics configuration.
 func Prepare(ctx context.Context, directory string, secrets []Secret, settings launcherconfig.Settings, diagnostics ...DiagnosticsOptions) (*Sandbox, error) {
+	w, err := workspace.Resolve(ctx, directory)
+	if err != nil {
+		return nil, err
+	}
+	return PrepareWorkspace(ctx, w, secrets, settings, diagnostics...)
+}
+
+// PrepareWorkspace creates or resumes one VM for an already resolved workspace.
+func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secret, settings launcherconfig.Settings, diagnostics ...DiagnosticsOptions) (*Sandbox, error) {
 	if err := settings.Validate(); err != nil {
 		return nil, err
 	}
@@ -36,25 +44,21 @@ func Prepare(ctx context.Context, directory string, secrets []Secret, settings l
 	if err != nil {
 		return nil, err
 	}
-	paths, err := discoverWorktree(ctx, directory)
-	if err != nil {
-		return nil, err
-	}
-	if err := validateMounts(paths, settings); err != nil {
+	if err := validateMounts(w, settings); err != nil {
 		return nil, err
 	}
 	if err := configureRuntime(); err != nil {
 		return nil, fmt.Errorf("locate Microsandbox runtime: %w", err)
 	}
-	s := &Sandbox{Name: sandboxName(paths.root, paths.common), Worktree: paths.root}
+	s := &Sandbox{Name: sandboxName(w), Worktree: w.Root()}
 	started := time.Now().UTC()
 	var created bool
-	s.vm, created, err = connectOrRestore(ctx, s.Name, paths, secrets, settings, sandboxOptions(paths, paths.root, settings))
+	s.vm, created, err = connectOrRestore(ctx, s.Name, w, secrets, settings, sandboxOptions(w, w.Root(), settings))
 	if err != nil {
 		return nil, fmt.Errorf("prepare sandbox: %w", err)
 	}
 	if settings.Network.Diagnostics {
-		s.diagnostics = startNetworkDiagnostics(s.vm, paths.root, started, diagnosticOptions)
+		s.diagnostics = startNetworkDiagnostics(s.vm, w.Root(), started, diagnosticOptions)
 	}
 	if created {
 		if err := s.configureEnvironment(ctx, settings); err != nil {
@@ -69,16 +73,11 @@ func Prepare(ctx context.Context, directory string, secrets []Secret, settings l
 	return s, nil
 }
 
-func sandboxOptions(paths worktreePaths, guestRoot string, settings launcherconfig.Settings) []m.SandboxOption {
-	owner := m.MountOptions{Owner: &m.MountOwner{UID: 0, GID: 0}}
-	mounts := map[string]m.MountConfig{guestRoot: m.Mount.Bind(paths.root, owner)}
+func sandboxOptions(w workspace.Workspace, guestRoot string, settings launcherconfig.Settings) []m.SandboxOption {
+	mounts := workspaceMounts(w, guestRoot)
 	mounts["/var/lib/docker"] = m.Mount.Owned(m.OwnedVolumeOptions{
 		Kind: m.VolumeKindDisk, SizeMiB: settings.VM.DockerDiskMiB,
 	})
-	// A regular checkout already includes its .git directory in the root mount.
-	if guestRoot != paths.root || !strings.HasPrefix(paths.common, paths.root+string(filepath.Separator)) {
-		mounts[paths.common] = m.Mount.Bind(paths.common, owner)
-	}
 	addReadOnlyMounts(mounts, settings)
 	opts := []m.SandboxOption{
 		m.WithImage(settings.VM.Image), m.WithPullPolicy(m.PullPolicyNever),

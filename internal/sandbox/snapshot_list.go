@@ -3,7 +3,6 @@ package sandbox
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -11,7 +10,7 @@ import (
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
-// SnapshotInfo describes a managed repository snapshot using runtime metadata.
+// SnapshotInfo describes a managed workspace snapshot using runtime metadata.
 type SnapshotInfo struct {
 	Reference string
 	CreatedAt time.Time
@@ -19,43 +18,44 @@ type SnapshotInfo struct {
 	Baseline  bool
 }
 
-// SnapshotRepository groups snapshots by repository identity, not display name.
-type SnapshotRepository struct {
+// SnapshotWorkspace groups snapshots by canonical directory identity.
+type SnapshotWorkspace struct {
 	ID, Name, Path string
 	Snapshots      []SnapshotInfo
 }
 
-// SnapshotListing separates the current repository from all other repositories.
-// Current is nil when the working directory is outside Git.
+// SnapshotListing separates the current workspace from all other workspaces.
+// Current is nil when no directory was supplied (global listing).
 type SnapshotListing struct {
-	Current      *SnapshotRepository
-	Repositories []SnapshotRepository
+	Current    *SnapshotWorkspace
+	Workspaces []SnapshotWorkspace
 }
 
 // ListSnapshots reads native snapshot metadata without loading config or secrets.
 func ListSnapshots(ctx context.Context, directory string) (SnapshotListing, error) {
 	var listing SnapshotListing
-	repo, err := snapshotRepo(ctx, directory)
-	if err == nil {
-		listing.Current = &SnapshotRepository{ID: repo.id, Name: repo.name, Path: filepath.Dir(repo.common)}
-	} else if !strings.Contains(err.Error(), "not a git repository") {
-		return listing, err
+	if directory != "" {
+		repo, err := resolveSnapshotWorkspace(ctx, directory)
+		if err != nil {
+			return listing, err
+		}
+		listing.Current = &SnapshotWorkspace{ID: repo.id, Name: repo.name, Path: repo.root}
 	}
 	if err := configureRuntime(); err != nil {
 		return listing, fmt.Errorf("locate Microsandbox runtime: %w", err)
 	}
 	members, err := m.Snapshot.List(ctx)
 	if err != nil {
-		return listing, fmt.Errorf("list repository snapshots: %w", err)
+		return listing, fmt.Errorf("list workspace snapshots: %w", err)
 	}
-	repositories := map[string]*SnapshotRepository{}
+	repositories := map[string]*SnapshotWorkspace{}
 	if listing.Current != nil {
 		repositories[listing.Current.ID] = listing.Current
 	}
 	heads := map[string]string{}
 	for _, member := range members {
 		group := member.Group()
-		if group == nil || !strings.HasPrefix(*group, "oc-repo-") || member.Scope() != m.SnapshotScopeDisk {
+		if group == nil || !strings.HasPrefix(*group, "oc-workspace-") || member.Scope() != m.SnapshotScopeDisk {
 			continue
 		}
 		artifact, err := member.Open(ctx)
@@ -63,7 +63,7 @@ func ListSnapshots(ctx context.Context, directory string) (SnapshotListing, erro
 			return listing, fmt.Errorf("read snapshot %s: %w", member.Reference(), err)
 		}
 		labels := artifact.Labels()
-		if _, managed := labels["opencode-sandbox"]; !managed || labels["kind"] != "repo-baseline" || labels["repo-id"] == "" {
+		if _, managed := labels["opencode-sandbox"]; !managed || labels["kind"] != "workspace-baseline" || labels["workspace-id"] == "" {
 			continue
 		}
 		headID, known := heads[*group]
@@ -75,9 +75,9 @@ func ListSnapshots(ctx context.Context, directory string) (SnapshotListing, erro
 			headID = head.ID()
 			heads[*group] = headID
 		}
-		r := repositories[labels["repo-id"]]
+		r := repositories[labels["workspace-id"]]
 		if r == nil {
-			r = &SnapshotRepository{ID: labels["repo-id"], Name: labels["repo-name"], Path: labels["repo-path"]}
+			r = &SnapshotWorkspace{ID: labels["workspace-id"], Name: labels["workspace-name"], Path: labels["workspace-path"]}
 			repositories[r.ID] = r
 		}
 		r.Snapshots = append(r.Snapshots, SnapshotInfo{
@@ -94,11 +94,11 @@ func ListSnapshots(ctx context.Context, directory string) (SnapshotListing, erro
 			return a.Reference < b.Reference
 		})
 		if r != listing.Current {
-			listing.Repositories = append(listing.Repositories, *r)
+			listing.Workspaces = append(listing.Workspaces, *r)
 		}
 	}
-	sort.Slice(listing.Repositories, func(i, j int) bool {
-		a, b := listing.Repositories[i], listing.Repositories[j]
+	sort.Slice(listing.Workspaces, func(i, j int) bool {
+		a, b := listing.Workspaces[i], listing.Workspaces[j]
 		if a.Name != b.Name {
 			return a.Name < b.Name
 		}

@@ -26,7 +26,7 @@ var configExamples = map[reflect.Type]any{
 // user configuration, trust state, or credentials. Optional examples are inert.
 func WriteDefaultConfig(w io.Writer) error {
 	var out bytes.Buffer
-	fmt.Fprintln(&out, "# Launcher defaults. Global config and approved repo config override these values.")
+	fmt.Fprintln(&out, "# Launcher defaults. Global config and approved workspace config override these values.")
 	if err := writeConfigTable(&out, reflect.ValueOf(DefaultSettings()), "", false); err != nil {
 		return err
 	}

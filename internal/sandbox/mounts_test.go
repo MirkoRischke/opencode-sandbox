@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"opencode-sandbox/internal/config"
+	"opencode-sandbox/internal/workspace"
 
 	"github.com/stretchr/testify/require"
 	m "github.com/superradcompany/microsandbox/sdk/go"
@@ -25,12 +26,13 @@ func TestConfiguredMountsAreReadOnly(t *testing.T) {
 
 func TestMountsCannotOverlapManagedMounts(t *testing.T) {
 	t.Parallel()
-	paths := worktreePaths{root: "/host/repo", common: "/host/main/.git"}
-	for _, target := range []string{"/host", "/host/repo", "/host/repo/subdir", "/host/main/.git", "/workspace", "/var/lib", "/var/lib/docker/subdir", "/proc/file", "/sys", "/dev", "/etc", "/etc/opencode", systemOpenCodeConfig, "/etc/opencode-sandbox", sandboxInstructions} {
+	w, err := workspace.Resolve(context.Background(), t.TempDir())
+	require.NoError(t, err)
+	for _, target := range []string{filepath.Dir(w.Root()), w.Root(), filepath.Join(w.Root(), "subdir"), "/workspace", "/var/lib", "/var/lib/docker/subdir", "/proc/file", "/sys", "/dev", "/etc", "/etc/opencode", systemOpenCodeConfig, "/etc/opencode-sandbox", sandboxInstructions} {
 		t.Run(target, func(t *testing.T) {
 			settings := config.DefaultSettings()
 			settings.Mounts = []config.MountSettings{{Source: t.TempDir(), Target: target}}
-			require.ErrorContains(t, validateMounts(paths, settings), "launcher/runtime mount")
+			require.ErrorContains(t, validateMounts(w, settings), "launcher/runtime mount")
 		})
 	}
 }
@@ -42,7 +44,7 @@ func TestMissingMountFailsBeforeRuntimePreparation(t *testing.T) {
 	settings.Mounts = []config.MountSettings{{Source: source, Target: "/opt/file"}}
 	// Metadata validation can run without any Microsandbox runtime.
 	require.ErrorIs(t, settings.ValidateMountSources(), os.ErrNotExist)
-	// Validate before worktree discovery as well, so callers get the missing path.
+	// Missing sources fail before preparing any runtime resources.
 	_, err := Prepare(context.Background(), t.TempDir(), nil, settings)
 	require.ErrorIs(t, err, os.ErrNotExist)
 	require.ErrorContains(t, err, source)

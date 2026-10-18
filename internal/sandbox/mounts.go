@@ -4,19 +4,35 @@ import (
 	"fmt"
 
 	"opencode-sandbox/internal/config"
+	"opencode-sandbox/internal/workspace"
 
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
-func validateMounts(paths worktreePaths, settings config.Settings) error {
+func validateMounts(w workspace.Workspace, settings config.Settings) error {
+	reservedPaths := []string{w.Root(), snapshotWorktree, "/var/lib/docker", "/proc", "/sys", "/dev", "/etc/opencode", "/etc/opencode-sandbox"}
+	for _, mount := range w.Mounts(snapshotWorktree) {
+		reservedPaths = append(reservedPaths, mount.Target)
+	}
 	for i, mount := range settings.Mounts {
-		for _, reserved := range []string{paths.root, paths.common, snapshotWorktree, "/var/lib/docker", "/proc", "/sys", "/dev", "/etc/opencode", "/etc/opencode-sandbox"} {
+		for _, reserved := range reservedPaths {
 			if config.MountTargetsOverlap(mount.Target, reserved) {
 				return fmt.Errorf("mounts[%d].target %q overlaps launcher/runtime mount %q", i, mount.Target, reserved)
 			}
 		}
 	}
 	return nil
+}
+
+func workspaceMounts(w workspace.Workspace, guestRoots ...string) map[string]m.MountConfig {
+	mounts := map[string]m.MountConfig{}
+	owner := m.MountOptions{Owner: &m.MountOwner{UID: 0, GID: 0}}
+	for _, root := range guestRoots {
+		for _, mount := range w.Mounts(root) {
+			mounts[mount.Target] = m.Mount.Bind(mount.Source, owner)
+		}
+	}
+	return mounts
 }
 
 func addReadOnlyMounts(mounts map[string]m.MountConfig, settings config.Settings) {

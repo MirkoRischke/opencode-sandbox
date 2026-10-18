@@ -16,25 +16,25 @@ type Settings struct {
 	Mounts   []MountSettings           `toml:"mounts" description:"Explicit read-only host file/directory mounts. No files are shared by default. Recreate the VM after changing mappings."`
 	VM       VMSettings                `toml:"vm" description:"VM resources. Recreate the VM after changing these settings."`
 	Network  NetworkSettings           `toml:"network" description:"Outbound network access. Recreate the VM after policy changes."`
-	Snapshot SnapshotSettings          `toml:"snapshot" description:"Optional per-repository prepared disk baseline. Created and removed explicitly with the snapshot commands."`
+	Snapshot SnapshotSettings          `toml:"snapshot" description:"Optional per-directory prepared disk baseline. Created and removed explicitly with the snapshot commands."`
 	Secrets  map[string]SecretSettings `toml:"secrets" description:"Optional file-backed secrets, substituted by the host proxy. Uncomment and adjust the example to enable."`
 }
 
 type SnapshotSettings struct {
-	Command string `toml:"command" description:"Optional shell command run after project initialization in a fresh preparation VM before capture, from the mounted worktree. Empty skips the custom command."`
+	Command string `toml:"command" description:"Optional shell command run after project initialization in a fresh preparation VM before capture, from the mounted workspace. Empty skips the custom command."`
 }
 
 type VMSettings struct {
 	Image         string `toml:"image" description:"VM image already loaded into Microsandbox; images are never pulled automatically."`
 	CPUs          uint8  `toml:"cpus" description:"Number of virtual CPUs (1-255)."`
 	MemoryMiB     uint32 `toml:"memory_mib" description:"Guest memory in MiB."`
-	RootDiskMiB   uint32 `toml:"root_disk_mib" description:"Persistent guest disk size in MiB; excludes mounted host worktrees."`
+	RootDiskMiB   uint32 `toml:"root_disk_mib" description:"Persistent guest disk size in MiB; excludes mounted host workspaces."`
 	DockerDiskMiB uint32 `toml:"docker_disk_mib" description:"Private ext4 Docker data disk capacity in MiB; deleted with the VM."`
 }
 
 type NetworkSettings struct {
 	Unrestricted           bool     `toml:"unrestricted" description:"Allow public internet on any port/protocol, ignoring both host lists. Protected destinations remain blocked; secret scopes are unchanged."`
-	Diagnostics            bool     `toml:"diagnostics" description:"Collect cumulative denied-target diagnostics per worktree. Enables full rotating runtime debug logs and HTTP denial responses; recreate the VM after changing this setting."`
+	Diagnostics            bool     `toml:"diagnostics" description:"Collect cumulative denied-target diagnostics per workspace. Enables full rotating runtime debug logs and HTTP denial responses; recreate the VM after changing this setting."`
 	AllowedHosts           []string `toml:"allowed_hosts" description:"Baseline exact DNS hostnames; HTTPS/WSS on TCP port 443 only."`
 	AdditionalAllowedHosts []string `toml:"additional_allowed_hosts" description:"Extra hostnames, combined with allowed_hosts after merging. With unrestricted disabled, both lists must be empty to deny internet access. Each list replaces its inherited value when specified."`
 }

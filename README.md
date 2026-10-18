@@ -1,6 +1,6 @@
 # opencode-sandbox
 
-Run OpenCode in an isolated VM for your Git worktree, powered by
+Run OpenCode in an isolated VM for your current directory, powered by
 [Microsandbox](https://microsandbox.dev) under the hood. VMs stop on exit and
 retain installed tools and guest files for the next launch.
 
@@ -10,7 +10,7 @@ retain installed tools and guest files for the next launch.
   customize allowed hosts or deny all application internet access.
 - **Custom credentials:** configure file-backed secrets, injected into selected
   HTTPS headers by the host proxy without exposing their values to the guest.
-- **Repository configuration:** override global settings with a repo-root
+- **Workspace configuration:** override global settings with a directory-local
   `.opencode-sandbox.toml`; new or changed configs require approval.
 - **Read-only host mounts:** explicitly share selected files or directories,
   including OpenCode configuration, instructions, and skills. No extra host files
@@ -23,8 +23,8 @@ retain installed tools and guest files for the next launch.
 - **Guest Docker:** build and run images with Docker Engine, Buildx, and Compose.
   Each VM has its own persistent Docker data disk; container ports stay inside
   the VM. See [Docker configuration](docs/config.md#docker-inside-the-vm).
-- **Prepared repo snapshots:** warm tools, dependency caches, and Docker images
-  once; new worktree VMs restore independent copies of the repo baseline.
+- **Prepared workspace snapshots:** warm tools, dependency caches, and Docker images
+  once; recreated VMs restore the directory's baseline, with or without Git.
 
 ## How it works
 
@@ -33,9 +33,11 @@ The custom Debian image comes with pre-installed tools (see
 
 On launch, the host launcher:
 
-1. Finds the Git worktree and creates or resumes its dedicated VM, mounting the
-   worktree and required Git metadata. Changes to the Git repository inside the
-   sandbox are immediately visible on the host—no syncing or copying needed.
+1. Creates or resumes a dedicated VM for the exact current directory, mounting it
+   and any required Git metadata when it is a checkout or linked worktree root.
+   Parent repositories/configuration are never discovered. Changes are immediately
+   visible on the host—no syncing or copying needed. Drive roots, home directories,
+   and common broad/system directories are rejected; use a project subdirectory.
 2. Configures credentials and trusts mise configuration, automatically running
    `mise install` when the project has mise configuration. Tool downloads require
    the relevant hosts to be allowed by the network policy.
@@ -58,26 +60,26 @@ mise run load    # Build and import the sandbox image
 ## Usage
 
 ```sh
-opencode-sandbox        # Launch from inside a Git worktree
+opencode-sandbox        # Launch for the exact current directory (Git optional)
 opencode-sandbox list   # List managed VMs (alias: ls)
-opencode-sandbox remove # Delete this worktree's VM without confirmation (alias: rm)
+opencode-sandbox remove # Delete this directory's VM without confirmation (alias: rm)
 opencode-sandbox remove --all # Delete ALL managed VMs without confirmation
 opencode-sandbox --help # Show launch options
 opencode-sandbox config default # Print documented launcher defaults
-opencode-sandbox diagnostics network # Print saved network diagnostics JSON for this worktree
-opencode-sandbox snapshot create # Prepare a fresh VM and replace this repo's baseline
-opencode-sandbox snapshot list   # List all repo snapshots; current repo gets its own section
-opencode-sandbox snapshot remove # Delete this repo's baseline, leaving VMs untouched
-opencode-sandbox snapshot remove --all # Delete ALL managed repo snapshots without confirmation
+opencode-sandbox diagnostics network # Print saved network diagnostics JSON for this directory
+opencode-sandbox snapshot create # Prepare a fresh VM and replace this directory's baseline
+opencode-sandbox snapshot list   # List all snapshots; current directory gets its own section
+opencode-sandbox snapshot remove # Delete this directory's baseline, leaving VMs untouched
+opencode-sandbox snapshot remove --all # Delete ALL managed snapshots without confirmation
 ```
 
 Configure network access and secrets in [launcher configuration](docs/config.md).
 New VMs use a built-in development-service allowlist by default. See also
 [GitHub access](docs/github.md) and [AWS credentials](docs/aws.md).
 
-### Prepared repository snapshots
+### Prepared workspace snapshots
 
-Optionally define an additional preparation command in the repo's `.opencode-sandbox.toml`:
+Optionally define an additional preparation command in the directory's `.opencode-sandbox.toml`:
 
 ```toml
 [snapshot]
@@ -88,7 +90,10 @@ Run `opencode-sandbox snapshot create` to prepare a fresh VM and capture its
 guest disks, including installed mise tools and Docker images. No custom command
 is required.
 
-See [snapshot configuration and limitations](docs/config.md#repository-snapshots).
+Each canonical directory has its own VM and baseline, including separate linked
+worktrees and repository subdirectories. Symlink aliases share identity.
+
+See [snapshot configuration and limitations](docs/config.md#workspace-snapshots).
 
 ### Shell completion
 

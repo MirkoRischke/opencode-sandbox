@@ -40,7 +40,7 @@ func TestWriteNetworkDiagnostics(t *testing.T) {
 	// Unapproved repo configuration must not be loaded to read saved diagnostics.
 	require.NoError(t, os.WriteFile(filepath.Join(repo, ".opencode-sandbox.toml"), []byte("invalid = ["), 0600))
 
-	for _, directory := range []string{repo, subdir, alias} {
+	for _, directory := range []string{repo, alias} {
 		t.Run(directory, func(t *testing.T) {
 			var output bytes.Buffer
 			require.NoError(t, WriteNetworkDiagnostics(context.Background(), directory, state, &output))
@@ -64,7 +64,7 @@ func TestWriteNetworkDiagnostics(t *testing.T) {
 	t.Run("outside Git", func(t *testing.T) {
 		var output bytes.Buffer
 		err := WriteNetworkDiagnostics(context.Background(), t.TempDir(), state, &output)
-		require.ErrorContains(t, err, "discover worktree")
+		require.ErrorContains(t, err, "no saved network diagnostics")
 		require.Empty(t, output.String())
 	})
 }

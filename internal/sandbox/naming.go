@@ -1,18 +1,15 @@
 package sandbox
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"opencode-sandbox/internal/workspace"
 )
 
-func sandboxName(worktree, commonGitDir string) string {
-	repo := namePart(filepath.Base(filepath.Dir(commonGitDir)))
-	tree := namePart(filepath.Base(worktree))
-	// Identity follows the canonical worktree path, not the current branch.
-	hash := sha256.Sum256([]byte(worktree))
-	return fmt.Sprintf("oc-%s-%s-%x", repo, tree, hash[:4])
+func sandboxName(w workspace.Workspace) string {
+	return fmt.Sprintf("oc-%s-%s", namePart(filepath.Base(w.Root())), w.ID()[:8])
 }
 
 func namePart(name string) string {

@@ -7,6 +7,8 @@ import (
 	"sort"
 	"time"
 
+	"opencode-sandbox/internal/workspace"
+
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
@@ -36,10 +38,10 @@ func List(ctx context.Context) ([]*m.SandboxHandle, error) {
 	return vms, nil
 }
 
-// Remove stops and deletes only the managed VM for the given Git worktree.
-// Missing VMs are a no-op; repository snapshots are left untouched.
+// Remove stops and deletes only the VM for the exact directory.
+// Missing VMs are a no-op; workspace snapshots are left untouched.
 func Remove(ctx context.Context, directory string, observers ...RemovalObserver) error {
-	paths, err := discoverWorktree(ctx, directory)
+	w, err := workspace.Resolve(ctx, directory)
 	if err != nil {
 		return err
 	}
@@ -47,7 +49,7 @@ func Remove(ctx context.Context, directory string, observers ...RemovalObserver)
 	if err != nil {
 		return err
 	}
-	name := sandboxName(paths.root, paths.common)
+	name := sandboxName(w)
 	for _, vm := range vms {
 		if vm.Name() == name {
 			if err := vm.Destroy(ctx, m.WithDestroyTimeout(30*time.Second)); err != nil {

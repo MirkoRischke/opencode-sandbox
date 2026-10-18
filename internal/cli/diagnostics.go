@@ -16,7 +16,7 @@ func newDiagnosticsCommand() *cobra.Command {
 	}
 	diagnostics.AddCommand(&cobra.Command{
 		Use:   "network",
-		Short: "Print saved network diagnostics JSON for the current worktree",
+		Short: "Print saved network diagnostics JSON for the current directory",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			stateDir, err := hostStateDir(os.Getenv("XDG_STATE_HOME"), os.Getenv("HOME"))

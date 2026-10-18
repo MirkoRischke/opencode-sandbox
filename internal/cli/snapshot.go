@@ -6,6 +6,7 @@ import (
 
 	"opencode-sandbox/internal/config"
 	"opencode-sandbox/internal/sandbox"
+	"opencode-sandbox/internal/workspace"
 
 	"github.com/spf13/cobra"
 )
@@ -13,7 +14,7 @@ import (
 func newSnapshotCommand() *cobra.Command {
 	var all bool
 	remove := &cobra.Command{
-		Use: "remove", Short: "Delete repository snapshots without removing worktree VMs",
+		Use: "remove", Short: "Delete workspace snapshots without removing VMs",
 		Aliases: []string{"rm"},
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -25,13 +26,13 @@ func newSnapshotCommand() *cobra.Command {
 			})
 		},
 	}
-	remove.Flags().BoolVar(&all, "all", false, "Delete managed snapshots for all repositories without confirmation")
+	remove.Flags().BoolVar(&all, "all", false, "Delete managed snapshots for all workspaces without confirmation")
 	command := &cobra.Command{
-		Use: "snapshot", Short: "Manage prepared repository disk baselines",
+		Use: "snapshot", Short: "Manage prepared workspace disk baselines",
 		Args: cobra.NoArgs, RunE: requireSubcommand,
 	}
 	command.AddCommand(newSnapshotListCommand(), &cobra.Command{
-		Use: "create", Short: "Prepare a fresh VM and replace this repository's baseline",
+		Use: "create", Short: "Prepare a fresh VM and replace this directory's baseline",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			configDir, err := hostConfigDir(os.Getenv("XDG_CONFIG_HOME"), os.Getenv("HOME"))
@@ -43,7 +44,11 @@ func newSnapshotCommand() *cobra.Command {
 				return err
 			}
 			paths := config.Paths{ConfigDir: configDir, StateDir: stateDir}
-			settings, err := paths.LoadRepoSettings(".", approveRepoConfig)
+			w, err := workspace.Resolve(cmd.Context(), ".")
+			if err != nil {
+				return err
+			}
+			settings, err := paths.LoadWorkspaceSettings(w.Root(), approveWorkspaceConfig)
 			if err != nil {
 				return err
 			}
@@ -51,12 +56,12 @@ func newSnapshotCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			reference, err := sandbox.CreateSnapshot(cmd.Context(), ".", secrets, settings,
+			reference, err := sandbox.CreateWorkspaceSnapshot(cmd.Context(), w, secrets, settings,
 				sandbox.DiagnosticsOptions{StateDir: stateDir, Output: cmd.ErrOrStderr()})
 			if err != nil {
 				return err
 			}
-			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Repository snapshot created:", reference)
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Workspace snapshot created:", reference)
 			return err
 		},
 	}, remove)

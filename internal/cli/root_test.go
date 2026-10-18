@@ -52,7 +52,7 @@ func TestRemoveAllFlag(t *testing.T) {
 	}
 	for _, command := range []string{"remove", "rm"} {
 		output, err := executeCommand(command, "--help")
-		if err != nil || !strings.Contains(output, "--all") || !strings.Contains(output, "this worktree's VM") {
+		if err != nil || !strings.Contains(output, "--all") || !strings.Contains(output, "this directory's VM") {
 			t.Fatalf("expected current-worktree help and --all flag, got %v\n%s", err, output)
 		}
 	}

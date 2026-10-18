@@ -119,7 +119,7 @@ allowed_hosts = [
   # "httpbingo.org",
 ]
 
-# Optional repo-root .opencode-sandbox.toml additions to the global baseline above:
+# Optional directory-local .opencode-sandbox.toml additions to the global baseline above:
 # [network]
 # additional_allowed_hosts = ["nodejs.org"]
 # Both lists use replacement semantics across configs; their union is allowed.

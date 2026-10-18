@@ -42,21 +42,21 @@ func TestLauncherPrintsDefaultConfigWithoutLoadingHostState(t *testing.T) {
 	require.Equal(t, "invalid JSON", string(stored))
 }
 
-func TestLauncherRejectsDirectoriesOutsideGit(t *testing.T) {
+func TestLauncherRejectsUnsafeWorkspaceBeforeLoadingSettings(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	dir := t.TempDir()
-	writeSettingsAt(t, dir, "[network]\nallowed_hosts = []\n")
+	writeSettingsAt(t, dir, "invalid TOML [")
 	binary := buildLauncher(t)
 	command := exec.CommandContext(ctx, binary)
 	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir)
-	command.Dir = t.TempDir()
+	command.Dir = "/"
 
 	output, err := command.CombinedOutput()
 
 	require.Error(t, err)
-	require.Contains(t, string(output), "discover worktree")
+	require.Contains(t, string(output), "unsafe workspace directory")
 }
 
 func TestLauncherListsVMsOutsideGitWithoutLoadingSettings(t *testing.T) {
@@ -129,7 +129,7 @@ func TestLauncherRejectsUntrustedRepoConfigBeforeLoadingSecrets(t *testing.T) {
 	command.Stdin = strings.NewReader("yes\n")
 	output, err := command.CombinedOutput()
 	require.Error(t, err)
-	require.Contains(t, string(output), "untrusted repo config")
+	require.Contains(t, string(output), "untrusted workspace config")
 	require.NotContains(t, string(output), "missing-token")
 	_, err = os.Stat(filepath.Join(paths.StateDir, "opencode-sandbox", "trust.json"))
 	require.True(t, os.IsNotExist(err))
@@ -159,9 +159,12 @@ func TestLauncherAcceptsAWSRoleWithoutProfile(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	command := exec.CommandContext(ctx, buildLauncher(t), "--aws-role", "arn:aws:iam::123456789012:role/SandboxReadOnly")
-	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+t.TempDir())
+	dir := t.TempDir()
+	writeSettingsAt(t, dir, "invalid TOML [")
+	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir)
 	command.Dir = t.TempDir()
 	output, err := command.CombinedOutput()
 	require.Error(t, err)
-	require.Contains(t, string(output), "discover worktree")
+	require.Contains(t, string(output), "config.toml")
+	require.NotContains(t, string(output), "--aws-role")
 }

@@ -18,16 +18,17 @@ used at runtime; descriptions come from configuration struct tags. The built-in
 allowlist includes OpenAI, the OpenCode model catalog, Context7 and AWS Knowledge
 MCPs, GitHub, mise metadata, Go downloads/modules, npm, Docker Hub, and ECR Public.
 Diagnostics and unrestricted access are disabled; no credentials are enabled.
-For repo overrides, keep only settings you want to override: saving all defaults
+For workspace overrides, keep only settings you want to override: saving all defaults
 also overrides your global values with those defaults.
 
-## Repository overrides and trust
+## Workspace overrides and trust
 
-Optionally add `.opencode-sandbox.toml` at the Git worktree root. Launching from
-a subdirectory uses that same root file; parent directories and nested configs
-are not merged. Each worktree has its own config and approval.
+Optionally add `.opencode-sandbox.toml` in the current directory. The exact current
+directory is always the workspace, with or without Git. Parent directories and
+their repositories/configs are never discovered or merged. Each canonical
+directory has its own config, approval, VM, and snapshot baseline.
 
-Settings load in this order: built-in defaults, global `config.toml`, then repo
+Settings load in this order: built-in defaults, global `config.toml`, then workspace
 config. Tables merge recursively, scalars and arrays replace, and omitted keys
 inherit. These rules apply to every setting, including named secrets. For example:
 
@@ -51,7 +52,7 @@ file paths resolve against the directory of the config supplying the `file`
 field. Overriding another secret field does not change the inherited file's origin.
 Do not commit credential files.
 
-To add repo-specific destinations without replacing global `allowed_hosts`, use:
+To add workspace-specific destinations without replacing global `allowed_hosts`, use:
 
 ```toml
 # .opencode-sandbox.toml
@@ -61,27 +62,27 @@ additional_allowed_hosts = ["registry.npmjs.org", "nodejs.org"]
 
 The effective network allowlist is the union of `allowed_hosts` and
 `additional_allowed_hosts`, deduplicated case-insensitively after merging.
-Both fields follow the same inheritance/replacement rules: repo additions replace
+Both fields follow the same inheritance/replacement rules: workspace additions replace
 global additions, not append to them. Keep your shared baseline in global
 `allowed_hosts`. To deny all application internet access, set **both** lists to
 `[]` and keep `unrestricted = false`. Neither list expands a secret's credential
 substitution scope.
 
-Before a new or changed repo config is used, an interactive launch shows its
+Before a new or changed workspace config is used, an interactive launch shows its
 contents and the effective settings, and asks for approval (default: no).
 Credential values are not read during this review. Approval authorizes all
 settings, including host credential files and substitution destinations.
 Unapproved configs fail in non-interactive launches. Invalid configs fail before
-approval. An absent repo config needs no approval.
+approval. An absent workspace config needs no approval.
 
-Approvals are stored outside the repo at
+Approvals are stored outside the workspace at
 `$XDG_STATE_HOME/opencode-sandbox/trust.json`, defaulting to
 `~/.local/state/opencode-sandbox/trust.json`. Each record binds the canonical
-absolute worktree path to the SHA-256 hash of the exact config bytes. Any change,
+absolute workspace path to the SHA-256 hash of the exact config bytes. Any change,
 including comments, or a moved/copied checkout requires approval again. Symlink
-aliases of the same worktree share approval. The directory uses mode `700`, the
+aliases of the same directory share approval. The directory uses mode `700`, the
 file mode `600`, and writes replace the file atomically. Malformed trust storage
-fails launch. Delete a repo's entry (or the trust file) to require approval again.
+fails launch. Delete a workspace's entry (or the trust file) to require approval again.
 
 The launcher uses the same bytes it reviewed, even if the file changes while the
 prompt is open. Approval is checked before loading credentials or starting the VM,
@@ -89,6 +90,22 @@ including when resuming an existing VM. Existing VM policies and credentials sti
 require recreation to change, as described below.
 
 ## Launch behaviour
+
+The writable workspace is the exact current directory after resolving symlinks.
+Git checkouts and linked worktrees retain required Git metadata mounts when
+launched at their root; launching in a repository subdirectory mounts only that
+subdirectory, not the ancestor repository or its Git metadata.
+
+For safety, filesystem/volume mount roots, user homes, ancestors of your home,
+and common broad directories (`/home`, `/Users`, `/Volumes`, `/mnt`, `/media`,
+temporary-directory roots, `/opt`, `/srv`, `/var`, `/private`, `/Library`, and
+`/Applications`) cannot be workspaces. Sensitive system trees such as `/etc`,
+`/usr`, `/System`, `/proc`, `/sys`, and `/dev` are also blocked, including their
+descendants and canonical macOS aliases. Choose a project subdirectory instead;
+there is no bypass flag. This also rejects a dedicated project mounted directly
+at a filesystem root. Explicit read-only mounts and required Git metadata retain
+their separate validation rules. These checks prevent common mistakes, not
+arbitrarily large projects or sensitive files within an otherwise allowed project.
 
 AWS role access is enabled per launch with `--aws-role` and optional
 `--aws-profile`, not with global configuration. See [AWS credentials](aws.md).
@@ -100,7 +117,7 @@ next launch. Forced termination (`SIGKILL`) or a host crash cannot run cleanup.
 ### Read-only host mounts
 
 Explicitly expose host files or directories with `[[mounts]]` entries in global
-`config.toml` or an approved repo `.opencode-sandbox.toml`. No extra host files,
+`config.toml` or an approved workspace `.opencode-sandbox.toml`. No extra host files,
 OpenCode configuration, instructions, or skills are shared by default.
 
 ```toml
@@ -133,10 +150,10 @@ OpenCode's own reload behavior still applies. Its settings UI cannot save to a
 read-only `cli.json`.
 
 Mount arrays replace, rather than append, across configuration layers. Use
-`mounts = []` at the top level of a repo config to disable inherited mounts.
-New/changed repo configuration requires the normal approval, which authorizes
+`mounts = []` at the top level of a workspace config to disable inherited mounts.
+New/changed workspace configuration requires the normal approval, which authorizes
 the displayed host paths. Duplicate or nested targets and overlaps with the
-worktree, Git metadata, Docker storage, or runtime mounts are rejected.
+workspace, Git metadata, Docker storage, or runtime mounts are rejected.
 
 Mappings apply at VM creation; recreate the VM after adding, removing, or changing
 them. Configured mounts are also available during snapshot preparation and are
@@ -163,7 +180,7 @@ no `--config` / `--cli-config` flags. Authentication remains separate.
 
 ### VM management
 
-New VMs carry the label `app=opencode-sandbox` for bulk management. Run from any
+New VMs carry the label `opencode-sandbox` for bulk management. Run from any
 directory, without loading launch configuration or secrets:
 
 ```sh
@@ -174,10 +191,10 @@ opencode-sandbox remove
 `ls` is an alias for `list`; `rm` is an alias for `remove`.
 
 `list` shows names and states of all managed VMs, including stopped VMs. `remove`
-stops and deletes all managed VMs without confirmation, including stopped VMs.
-It attempts every target and exits nonzero if any removal fails. No matches is a
-successful no-op. Existing VMs are not automatically relabeled and unlabeled VMs
-are excluded. Removal deletes guest-local state, but not mounted host worktrees.
+stops and deletes only the current directory's VM without confirmation. Use
+`remove --all` to delete every managed VM, attempting every target and exiting
+nonzero if any removal fails. No matches is a successful no-op. Unlabeled VMs
+are excluded. Removal deletes guest-local state, not mounted host directories.
 
 Inside a Herdr pane (`HERDR_ENV=1`), the launcher automatically identifies itself
 as OpenCode for agent detection. No command prefix or Herdr configuration is
@@ -204,7 +221,7 @@ recreate them to apply changes.
 
 ### Custom VM images
 
-Set `vm.image` in global `config.toml` or repo `.opencode-sandbox.toml` to select
+Set `vm.image` in global `config.toml` or workspace `.opencode-sandbox.toml` to select
 your own image. It defaults to `opencode-sandbox:poc` and must not be empty.
 The image must already exist in Microsandbox's local image store. Images are never
 pulled automatically; a missing image fails launch. Docker's image store is separate,
@@ -226,11 +243,12 @@ The simplest compatible image extends the supplied image with
 GitHub credential integration additionally requires `gh`; AWS integration requires
 the AWS CLI. Docker is optional: images without `dockerd` skip daemon startup.
 
-### Repository snapshots
+### Workspace snapshots
 
-Snapshots are optional, explicitly prepared disk baselines shared by all linked
-worktrees of a repository. Optionally configure an additional shell command globally or in the approved
-repo-root `.opencode-sandbox.toml`:
+Snapshots are optional, explicitly prepared disk baselines for a canonical
+directory, including non-Git directories. Linked worktrees have separate baselines.
+Optionally configure an additional shell command globally or in the approved
+directory-local `.opencode-sandbox.toml`:
 
 ```toml
 [snapshot]
@@ -239,7 +257,7 @@ command = "./scripts/sandbox-prepare.sh"
 
 For example, the script can run `npm ci`, `go mod download`,
 `./gradlew dependencies`, and `docker compose pull`. Its command runs with
-`bash -eu -c` from `/workspace`, a writable mount of the **current host worktree**.
+`bash -eu -c` from `/workspace`, a writable mount of the **current host directory**.
 It may change host files; failure does not roll those changes back. Cache paths
 must be on guest disks, outside that mount, to enter the snapshot. Scripts should
 stop any background project services and remove containers/volumes they do not
@@ -266,11 +284,11 @@ It explicitly selects the successful generation as the native group head before
 deleting previous generations. A failed preparation leaves the old head intact.
 The temporary VM is deleted on success or failure. Forced termination can leave
 a temporary VM or an unpublished generation; snapshot removal also cleans up
-managed leftover generations in that repository's group.
+managed leftover generations in that workspace's group.
 
-Normal launch first resumes an existing worktree VM. Otherwise it restores the
-repo baseline if present, or creates a normal VM if none exists. A broken baseline
-is reported, not silently ignored. New worktree mounts, network policy, CPU/memory,
+Normal launch first resumes an existing workspace VM. Otherwise it restores the
+directory's baseline if present, or creates a normal VM if none exists. A broken baseline
+is reported, not silently ignored. Workspace mounts, network policy, CPU/memory,
 and current host secrets are configured for the restored VM. Root/Docker capacity,
 base image and warmed disk contents come from the snapshot: recreate the baseline
 to change those. Existing VMs are neither updated nor migrated.
@@ -279,33 +297,33 @@ to change those. Existing VMs are neither updated nor migrated.
 logs, temporary files), the owned Docker disk (images/layers, containers, named
 volumes, build cache), and native snapshot metadata such as base-image identity
 and mount descriptions. RAM/processes and host bind-mounted contents are not
-copied. In particular, `node_modules` in the worktree is not captured; a new
-worktree still needs installation, ideally from warmed package-manager caches.
+copied. In particular, `node_modules` in the workspace is not captured; missing
+dependencies still need installation, ideally from warmed package-manager caches.
 Any sensitive file deliberately written to guest disks is captured too; snapshots
 are sensitive local state. Host-proxy credential values are not guest files and
 are not copied into the snapshot by substitution alone. Captured system CA trust
 can retain the preparation VM's CA in addition to the destination runtime CA.
 
-The canonical absolute Git common-directory path identifies a repository.
-Linked worktrees and symlink aliases share a group; separate clones do not.
-Moving a repository changes its identity. Native group names are
-`oc-repo-<readable-repo-name>-<path-hash>`, with uniquely named `prepared-*` members.
-Labels include `opencode-sandbox`, `kind=repo-baseline`, `repo-name`, `repo-id`, and
-`repo-path`. Microsandbox stores the disks/metadata in its managed host-local
+The canonical absolute workspace path identifies a baseline. Symlink aliases
+share a group; different directories, including linked worktrees, do not.
+Moving a workspace changes its identity. Native group names are
+`oc-workspace-<readable-name>-<path-hash>`, with uniquely named `prepared-*` members.
+Labels include `opencode-sandbox`, `kind=workspace-baseline`, `workspace-name`,
+`workspace-id`, and `workspace-path`. Microsandbox stores disks/metadata in its host-local
 snapshot store. Group/head lookup needs no launcher JSON index. Launcher cache
-contains only per-repository lock files to prevent concurrent create/remove/restore
+contains only per-workspace lock files to prevent concurrent create/remove/restore
 operations; a conflicting operation reports an error rather than racing cleanup.
 
-`snapshot list` shows all managed repository snapshots, with a dedicated current
-repository section and other snapshots grouped by repository. Outside Git, it
-shows a single all-repositories section. Each row includes the snapshot reference,
+`snapshot list` shows all managed workspace snapshots, with a dedicated current
+workspace section and other snapshots grouped by workspace. Non-Git directories
+also get a current-workspace section. Each row includes the snapshot reference,
 creation time (UTC), human-readable runtime-reported size (`—` if unavailable),
 and whether it is the current baseline used for new VMs. Reported size is not a
 guarantee of disk space reclaimed on deletion. Listing needs no configuration
 approval or credential reads and does not start VMs.
 
 `snapshot remove` needs no configuration approval or credential reads. It deletes
-only that repository's managed snapshot members, old members before the head;
+only that directory's managed snapshot members, old members before the head;
 repeat removal is a no-op. Existing restored VMs retain independent writable
 disks and survive snapshot removal/replacement and subsequent cold starts.
 The existing top-level `remove` remains VM-only and does not delete baselines.
@@ -403,7 +421,7 @@ read-only guarantee.
 
 ### Network diagnostics
 
-Opt in globally or in an approved worktree config:
+Opt in globally or in an approved workspace config:
 
 ```toml
 [network]
@@ -443,7 +461,7 @@ not while OpenCode owns the terminal. Warnings distinguish collection from save
 failures and include a safe error category. They do not prevent VM use; malformed history is not
 overwritten. Disabled diagnostics leave existing summaries untouched.
 
-Print the saved JSON unchanged from anywhere inside the worktree:
+Print the saved JSON unchanged from the same workspace directory:
 
 ```sh
 opencode-sandbox diagnostics network

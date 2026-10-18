@@ -11,7 +11,7 @@ func NewCommand() *cobra.Command {
 	var awsRole, awsProfile string
 	root := &cobra.Command{
 		Use:           "opencode-sandbox",
-		Short:         "Launch OpenCode in an isolated VM for the current Git worktree",
+		Short:         "Launch OpenCode in an isolated VM for the current directory",
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true, // main prints errors once, including runtime failures.

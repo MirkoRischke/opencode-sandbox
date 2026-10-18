@@ -14,46 +14,47 @@ import (
 	"time"
 
 	"opencode-sandbox/internal/config"
+	"opencode-sandbox/internal/workspace"
 
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
 const snapshotWorktree = "/workspace"
 
-type repoSnapshot struct {
-	common string
-	name   string
-	id     string
-	group  string
+type workspaceSnapshot struct {
+	root  string
+	name  string
+	id    string
+	group string
 }
 
-func snapshotRepo(ctx context.Context, directory string) (repoSnapshot, error) {
-	common, err := commonGitDir(ctx, directory)
+func resolveSnapshotWorkspace(ctx context.Context, directory string) (workspaceSnapshot, error) {
+	w, err := workspace.Resolve(ctx, directory)
 	if err != nil {
-		return repoSnapshot{}, err
+		return workspaceSnapshot{}, err
 	}
-	return snapshotIdentity(common), nil
+	return snapshotIdentity(w.Root()), nil
 }
 
-func snapshotIdentity(common string) repoSnapshot {
-	hash := sha256.Sum256([]byte(common))
-	name := filepath.Base(filepath.Dir(common))
-	return repoSnapshot{common: common, name: name, id: fmt.Sprintf("%x", hash),
-		group: fmt.Sprintf("oc-repo-%s-%x", namePart(name), hash[:8])}
+func snapshotIdentity(root string) workspaceSnapshot {
+	hash := sha256.Sum256([]byte(root))
+	name := filepath.Base(root)
+	return workspaceSnapshot{root: root, name: name, id: fmt.Sprintf("%x", hash),
+		group: fmt.Sprintf("oc-workspace-%s-%x", namePart(name), hash[:8])}
 }
 
-func (r repoSnapshot) labels() map[string]string {
-	return map[string]string{"opencode-sandbox": "", "kind": "repo-baseline", "repo-name": r.name, "repo-id": r.id, "repo-path": filepath.Dir(r.common)}
+func (r workspaceSnapshot) labels() map[string]string {
+	return map[string]string{"opencode-sandbox": "", "kind": "workspace-baseline", "workspace-name": r.name, "workspace-id": r.id, "workspace-path": r.root}
 }
 
-func (r repoSnapshot) owns(labels map[string]string) bool {
+func (r workspaceSnapshot) owns(labels map[string]string) bool {
 	_, managed := labels["opencode-sandbox"]
-	return managed && labels["kind"] == "repo-baseline" && labels["repo-id"] == r.id
+	return managed && labels["kind"] == "workspace-baseline" && labels["workspace-id"] == r.id
 }
 
 // Only a lock file is stored here, never a snapshot index or head pointer.
 // Serialize publication, deletion and restore so cleanup cannot race a reader.
-func (r repoSnapshot) lock() (func(), error) {
+func (r workspaceSnapshot) lock() (func(), error) {
 	dir, err := os.UserCacheDir()
 	if err != nil {
 		return nil, err
@@ -61,7 +62,7 @@ func (r repoSnapshot) lock() (func(), error) {
 	return r.lockIn(dir)
 }
 
-func (r repoSnapshot) lockIn(cacheDir string) (func(), error) {
+func (r workspaceSnapshot) lockIn(cacheDir string) (func(), error) {
 	dir := filepath.Join(cacheDir, "opencode-sandbox", "snapshot-locks")
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
@@ -80,6 +81,15 @@ func (r repoSnapshot) lockIn(cacheDir string) (func(), error) {
 // CreateSnapshot always prepares from the configured image, never the old head.
 // Guest files and the owned Docker disk are captured; bind mounts are not.
 func CreateSnapshot(ctx context.Context, directory string, secrets []Secret, settings config.Settings, diagnostics ...DiagnosticsOptions) (reference string, err error) {
+	w, err := workspace.Resolve(ctx, directory)
+	if err != nil {
+		return "", err
+	}
+	return CreateWorkspaceSnapshot(ctx, w, secrets, settings, diagnostics...)
+}
+
+// CreateWorkspaceSnapshot captures a baseline for an already resolved workspace.
+func CreateWorkspaceSnapshot(ctx context.Context, w workspace.Workspace, secrets []Secret, settings config.Settings, diagnostics ...DiagnosticsOptions) (reference string, err error) {
 	if err := settings.Validate(); err != nil {
 		return "", err
 	}
@@ -90,14 +100,10 @@ func CreateSnapshot(ctx context.Context, directory string, secrets []Secret, set
 	if err != nil {
 		return "", err
 	}
-	paths, err := discoverWorktree(ctx, directory)
-	if err != nil {
+	if err := validateMounts(w, settings); err != nil {
 		return "", err
 	}
-	if err := validateMounts(paths, settings); err != nil {
-		return "", err
-	}
-	repo := snapshotIdentity(paths.common)
+	repo := snapshotIdentity(w.Root())
 	unlock, err := repo.lock()
 	if err != nil {
 		return "", err
@@ -115,7 +121,7 @@ func CreateSnapshot(ctx context.Context, directory string, secrets []Secret, set
 		return "", err
 	}
 	generation := fmt.Sprintf("prepared-%x", nonce)
-	prep, err := createPreparationVM(ctx, paths, "oc-prepare-"+generation, secrets, settings, diagnosticOptions)
+	prep, err := createPreparationVM(ctx, w, "oc-prepare-"+generation, secrets, settings, diagnosticOptions)
 	if err != nil {
 		return "", err
 	}
@@ -139,11 +145,11 @@ func CreateSnapshot(ctx context.Context, directory string, secrets []Secret, set
 		Name: generation, Group: repo.group, FromSandbox: prep.Name, Labels: repo.labels(),
 	})
 	if err != nil {
-		return "", fmt.Errorf("capture repository snapshot: %w", err)
+		return "", fmt.Errorf("capture workspace snapshot: %w", err)
 	}
 	// Independent fresh preparations diverge; native HEAD must be selected.
 	if _, err := m.Snapshot.GroupHead(ctx, repo.group+":"+generation); err != nil {
-		return "", fmt.Errorf("select repository snapshot (captured as %s): %w", snapshot.Reference(), err)
+		return "", fmt.Errorf("select workspace snapshot (captured as %s): %w", snapshot.Reference(), err)
 	}
 	if err := repo.removeMembers(ctx, snapshot.ID()); err != nil {
 		return snapshot.Reference(), fmt.Errorf("new snapshot is current, but previous snapshot cleanup failed: %w", err)
@@ -153,8 +159,8 @@ func CreateSnapshot(ctx context.Context, directory string, secrets []Secret, set
 
 // The caller has validated settings, resolved paths and configured the runtime.
 // Preparation always creates a disposable VM, never resumes/restores one.
-func createPreparationVM(ctx context.Context, paths worktreePaths, name string, secrets []Secret, settings config.Settings, diagnostics DiagnosticsOptions) (*Sandbox, error) {
-	opts := sandboxOptions(paths, snapshotWorktree, settings)
+func createPreparationVM(ctx context.Context, w workspace.Workspace, name string, secrets []Secret, settings config.Settings, diagnostics DiagnosticsOptions) (*Sandbox, error) {
+	opts := sandboxOptions(w, snapshotWorktree, settings)
 	for _, secret := range secrets {
 		opts = append(opts, m.WithSecrets(secret.entry))
 	}
@@ -165,7 +171,7 @@ func createPreparationVM(ctx context.Context, paths worktreePaths, name string, 
 	}
 	prep := &Sandbox{Name: name, Worktree: snapshotWorktree, vm: vm}
 	if settings.Network.Diagnostics {
-		prep.diagnostics = startNetworkDiagnostics(vm, paths.root, started, diagnostics)
+		prep.diagnostics = startNetworkDiagnostics(vm, w.Root(), started, diagnostics)
 	}
 	if err := prep.configureEnvironment(ctx, settings); err != nil {
 		cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -180,9 +186,9 @@ func createPreparationVM(ctx context.Context, paths worktreePaths, name string, 
 	return prep, nil
 }
 
-// RemoveSnapshot removes this repository's members, not any restored VMs.
+// RemoveSnapshot removes this directory's members, not any restored VMs.
 func RemoveSnapshot(ctx context.Context, directory string, observers ...RemovalObserver) error {
-	repo, err := snapshotRepo(ctx, directory)
+	repo, err := resolveSnapshotWorkspace(ctx, directory)
 	if err != nil {
 		return err
 	}
@@ -197,27 +203,27 @@ func RemoveSnapshot(ctx context.Context, directory string, observers ...RemovalO
 	return repo.remove(ctx, observers...)
 }
 
-// RemoveAllSnapshots removes managed baselines across repositories, including
-// repositories whose working directories no longer exist. Restored VMs remain.
+// RemoveAllSnapshots removes managed baselines across workspaces, including
+// directories that no longer exist. Restored VMs remain.
 func RemoveAllSnapshots(ctx context.Context, observers ...RemovalObserver) error {
 	if err := configureRuntime(); err != nil {
 		return err
 	}
 	members, err := m.Snapshot.List(ctx)
 	if err != nil {
-		return fmt.Errorf("list repository snapshots: %w", err)
+		return fmt.Errorf("list workspace snapshots: %w", err)
 	}
-	repositories := map[string]repoSnapshot{}
+	repositories := map[string]workspaceSnapshot{}
 	for _, member := range members {
 		group := member.Group()
-		if group == nil || !strings.HasPrefix(*group, "oc-repo-") || member.Scope() != m.SnapshotScopeDisk {
+		if group == nil || !strings.HasPrefix(*group, "oc-workspace-") || member.Scope() != m.SnapshotScopeDisk {
 			continue
 		}
 		artifact, err := member.Open(ctx)
 		if err != nil {
 			return fmt.Errorf("read snapshot %s: %w", member.Reference(), err)
 		}
-		if repo, ok := managedSnapshotRepository(*group, artifact.Labels()); ok {
+		if repo, ok := managedSnapshotWorkspace(*group, artifact.Labels()); ok {
 			repositories[*group] = repo
 		}
 	}
@@ -238,15 +244,15 @@ func RemoveAllSnapshots(ctx context.Context, observers ...RemovalObserver) error
 	return errors.Join(errs...)
 }
 
-func managedSnapshotRepository(group string, labels map[string]string) (repoSnapshot, bool) {
+func managedSnapshotWorkspace(group string, labels map[string]string) (workspaceSnapshot, bool) {
 	_, managed := labels["opencode-sandbox"]
-	if !strings.HasPrefix(group, "oc-repo-") || !managed || labels["kind"] != "repo-baseline" || labels["repo-id"] == "" {
-		return repoSnapshot{}, false
+	if !strings.HasPrefix(group, "oc-workspace-") || !managed || labels["kind"] != "workspace-baseline" || labels["workspace-id"] == "" {
+		return workspaceSnapshot{}, false
 	}
-	return repoSnapshot{id: labels["repo-id"], name: labels["repo-name"], group: group}, true
+	return workspaceSnapshot{id: labels["workspace-id"], name: labels["workspace-name"], group: group}, true
 }
 
-func (r repoSnapshot) removeLocked(ctx context.Context, observers ...RemovalObserver) error {
+func (r workspaceSnapshot) removeLocked(ctx context.Context, observers ...RemovalObserver) error {
 	unlock, err := r.lock()
 	if err != nil {
 		return err
@@ -255,7 +261,7 @@ func (r repoSnapshot) removeLocked(ctx context.Context, observers ...RemovalObse
 	return r.remove(ctx, observers...)
 }
 
-func (repo repoSnapshot) remove(ctx context.Context, observers ...RemovalObserver) error {
+func (repo workspaceSnapshot) remove(ctx context.Context, observers ...RemovalObserver) error {
 	head, err := repo.head(ctx)
 	if err != nil {
 		return err
@@ -271,32 +277,32 @@ func (repo repoSnapshot) remove(ctx context.Context, observers ...RemovalObserve
 	if head != nil {
 		size := head.SizeBytes()
 		if err := head.Remove(ctx, false); err != nil {
-			return fmt.Errorf("remove repository snapshot: %w", err)
+			return fmt.Errorf("remove workspace snapshot: %w", err)
 		}
 		notifyRemoval(observers, head.Reference(), size)
 	}
 	return nil
 }
 
-func (r repoSnapshot) head(ctx context.Context) (*m.SnapshotHandle, error) {
+func (r workspaceSnapshot) head(ctx context.Context) (*m.SnapshotHandle, error) {
 	head, err := m.Snapshot.Get(ctx, r.group)
 	if m.IsKind(err, m.ErrSnapshotNotFound) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("find repository snapshot: %w", err)
+		return nil, fmt.Errorf("find workspace snapshot: %w", err)
 	}
 	artifact, err := head.Open(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if !r.owns(artifact.Labels()) || artifact.Scope() != m.SnapshotScopeDisk {
-		return nil, fmt.Errorf("snapshot group %s is not this repository's managed disk baseline", r.group)
+		return nil, fmt.Errorf("snapshot group %s is not this workspace's managed disk baseline", r.group)
 	}
 	return head, nil
 }
 
-func (r repoSnapshot) removeMembers(ctx context.Context, keepID string, observers ...RemovalObserver) error {
+func (r workspaceSnapshot) removeMembers(ctx context.Context, keepID string, observers ...RemovalObserver) error {
 	members, err := m.Snapshot.List(ctx)
 	if err != nil {
 		return err
@@ -319,14 +325,14 @@ func (r repoSnapshot) removeMembers(ctx context.Context, keepID string, observer
 	for _, member := range targets {
 		size := member.SizeBytes()
 		if err := member.Remove(ctx, true); err != nil {
-			return fmt.Errorf("remove old repository snapshot: %w", err)
+			return fmt.Errorf("remove old workspace snapshot: %w", err)
 		}
 		notifyRemoval(observers, member.Reference(), size)
 	}
 	return nil
 }
 
-func connectOrRestore(ctx context.Context, name string, paths worktreePaths, secrets []Secret, settings config.Settings, opts []m.SandboxOption) (*m.Sandbox, bool, error) {
+func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, secrets []Secret, settings config.Settings, opts []m.SandboxOption) (*m.Sandbox, bool, error) {
 	_, err := m.GetSandbox(ctx, name)
 	if err == nil {
 		vm, err := connectWithSecrets(ctx, name, secrets, opts)
@@ -335,7 +341,7 @@ func connectOrRestore(ctx context.Context, name string, paths worktreePaths, sec
 	if !m.IsKind(err, m.ErrSandboxNotFound) {
 		return nil, false, fmt.Errorf("find worktree VM (runtime details suppressed)")
 	}
-	repo := snapshotIdentity(paths.common)
+	repo := snapshotIdentity(w.Root())
 	unlock, err := repo.lock()
 	if err != nil {
 		return nil, false, err
@@ -362,22 +368,17 @@ func connectOrRestore(ctx context.Context, name string, paths worktreePaths, sec
 		}
 		return vm, true, nil
 	}
-	vm, err := restoreWorktree(ctx, head, name, paths, secrets, settings)
+	vm, err := restoreWorktree(ctx, head, name, w, secrets, settings)
 	return vm, err == nil, err
 }
 
-func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, paths worktreePaths, secrets []Secret, settings config.Settings) (*m.Sandbox, error) {
-	owner := m.MountOptions{Owner: &m.MountOwner{UID: 0, GID: 0}}
+func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, w workspace.Workspace, secrets []Secret, settings config.Settings) (*m.Sandbox, error) {
 	policy := networkPolicy(settings.Network)
 	// Restore accepts host policy only, not HTTP/TLS creation settings.
 	policy.HTTP = nil
 	restore := m.RestoreConfig{
 		CPUs: &settings.VM.CPUs, MemoryMiB: &settings.VM.MemoryMiB, NetworkPolicy: policy,
-		Volumes: map[string]m.MountConfig{
-			snapshotWorktree: m.Mount.Bind(paths.root, owner),
-			paths.root:       m.Mount.Bind(paths.root, owner),
-			paths.common:     m.Mount.Bind(paths.common, owner),
-		},
+		Volumes: workspaceMounts(w, snapshotWorktree, w.Root()),
 	}
 	addReadOnlyMounts(restore.Volumes, settings)
 	if settings.Network.Diagnostics {
@@ -385,10 +386,10 @@ func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, p
 	}
 	restored, err := m.RestoreSandbox(ctx, head, name, m.WithRestoreConfig(restore))
 	if err != nil {
-		return nil, fmt.Errorf("restore repository snapshot (runtime details suppressed)")
+		return nil, fmt.Errorf("restore workspace snapshot (runtime details suppressed)")
 	}
 	defer restored.Close() //nolint:errcheck // Release the original handle on every path; the restarted handle belongs to the caller.
-	handle, err := configureRestoredWorktree(ctx, restored, name, paths.root, secrets)
+	handle, err := configureRestoredWorktree(ctx, restored, name, w.Root(), secrets)
 	if err != nil {
 		return nil, discardRestoredVM(restored, err)
 	}

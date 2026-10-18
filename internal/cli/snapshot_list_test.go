@@ -17,11 +17,11 @@ func TestSnapshotListingSections(t *testing.T) {
 	size := uint64(2560 * 1024 * 1024)
 	created := time.Date(2026, 10, 18, 16, 32, 0, 0, time.FixedZone("local", 2*60*60))
 	listing := sandbox.SnapshotListing{
-		Current: &sandbox.SnapshotRepository{Name: "current", Path: "/projects/current", Snapshots: []sandbox.SnapshotInfo{
+		Current: &sandbox.SnapshotWorkspace{Name: "current", Path: "/projects/current", Snapshots: []sandbox.SnapshotInfo{
 			{Reference: "current:prepared-new", CreatedAt: created, SizeBytes: &size, Baseline: true},
 			{Reference: "current:prepared-old", CreatedAt: created.Add(-time.Hour)},
 		}},
-		Repositories: []sandbox.SnapshotRepository{
+		Workspaces: []sandbox.SnapshotWorkspace{
 			{Name: "other", Path: "/projects/other", Snapshots: []sandbox.SnapshotInfo{
 				{Reference: "other:prepared-new", CreatedAt: created, Baseline: true},
 			}},
@@ -30,10 +30,10 @@ func TestSnapshotListingSections(t *testing.T) {
 	var out bytes.Buffer
 	require.NoError(t, writeSnapshotListing(&out, listing))
 	text := out.String()
-	require.Contains(t, text, "Current repository: current\n/projects/current\n")
-	require.Contains(t, text, "Other repositories\n\nother · /projects/other")
-	require.Less(t, strings.Index(text, "current:prepared-new"), strings.Index(text, "Other repositories"))
-	require.Less(t, strings.Index(text, "Other repositories"), strings.Index(text, "other:prepared-new"))
+	require.Contains(t, text, "Current workspace: current\n/projects/current\n")
+	require.Contains(t, text, "Other workspaces\n\nother · /projects/other")
+	require.Less(t, strings.Index(text, "current:prepared-new"), strings.Index(text, "Other workspaces"))
+	require.Less(t, strings.Index(text, "Other workspaces"), strings.Index(text, "other:prepared-new"))
 	require.Contains(t, text, "CREATED (UTC)")
 	var rows []string
 	for _, line := range strings.Split(text, "\n") {
@@ -55,11 +55,11 @@ func TestSnapshotListingEmptyStates(t *testing.T) {
 		listing sandbox.SnapshotListing
 		want    string
 	}{
-		{"outside Git", sandbox.SnapshotListing{}, "All repositories\n\nNo snapshots found.\n"},
-		{"current has no snapshot", sandbox.SnapshotListing{Current: &sandbox.SnapshotRepository{Name: "repo", Path: "/repo"}},
-			"Current repository: repo\n/repo\n\nNo snapshot.\n\nOther repositories\n\nNo snapshots found.\n"},
-		{"outside Git with snapshots", sandbox.SnapshotListing{Repositories: []sandbox.SnapshotRepository{{Name: "repo", Path: "/repo"}}},
-			"All repositories\n\nrepo · /repo\nNo snapshot.\n"},
+		{"global listing", sandbox.SnapshotListing{}, "All workspaces\n\nNo snapshots found.\n"},
+		{"current has no snapshot", sandbox.SnapshotListing{Current: &sandbox.SnapshotWorkspace{Name: "repo", Path: "/repo"}},
+			"Current workspace: repo\n/repo\n\nNo snapshot.\n\nOther workspaces\n\nNo snapshots found.\n"},
+		{"global listing with snapshots", sandbox.SnapshotListing{Workspaces: []sandbox.SnapshotWorkspace{{Name: "repo", Path: "/repo"}}},
+			"All workspaces\n\nrepo · /repo\nNo snapshot.\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var out bytes.Buffer

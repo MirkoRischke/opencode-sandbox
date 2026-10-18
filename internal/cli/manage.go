@@ -43,7 +43,7 @@ func newRemoveCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:     "remove",
 		Aliases: []string{"rm"},
-		Short:   "Stop and delete this worktree's VM without confirmation",
+		Short:   "Stop and delete this directory's VM without confirmation",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return reportRemovals(cmd.OutOrStdout(), "VM", func(observer sandbox.RemovalObserver) error {

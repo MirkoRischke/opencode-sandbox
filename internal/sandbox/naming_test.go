@@ -1,38 +1,32 @@
 package sandbox
 
 import (
+	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"opencode-sandbox/internal/workspace"
+
 	"github.com/stretchr/testify/require"
 )
 
-func TestSandboxNameIdentifiesRepositoryAndWorktree(t *testing.T) {
+func TestSandboxNameUsesOnlyWorkspaceIdentity(t *testing.T) {
 	t.Parallel()
-	name := sandboxName("/projects/worktree", "/projects/repo/.git")
-	require.Regexp(t, `^oc-repo-worktree-[0-9a-f]{8}$`, name)
-}
-
-func TestSandboxNameNormalizesFolderNames(t *testing.T) {
-	t.Parallel()
-	name := sandboxName("/projects/VM Test", "/projects/Git_Ticket/.git")
-	require.Regexp(t, `^oc-git-ticket-vm-test-[0-9a-f]{8}$`, name)
-}
-
-func TestSandboxNameFitsRuntimeLimitForLongFolderNames(t *testing.T) {
-	t.Parallel()
-	name := sandboxName(filepath.Join("/projects", strings.Repeat("tree", 30)),
-		filepath.Join("/projects", strings.Repeat("repo", 30), ".git"))
-	require.LessOrEqual(t, len(name), 128)
-	require.Regexp(t, `^oc-[a-z0-9-]+-[0-9a-f]{8}$`, name)
-}
-
-func TestIdenticallyNamedWorktreesHaveDistinctSandboxNames(t *testing.T) {
-	t.Parallel()
-	first := sandboxName("/first/worktree", "/first/repo/.git")
-	second := sandboxName("/second/worktree", "/second/repo/.git")
-	require.Regexp(t, `^oc-repo-worktree-[0-9a-f]{8}$`, first)
-	require.Regexp(t, `^oc-repo-worktree-[0-9a-f]{8}$`, second)
-	require.NotEqual(t, first, second)
+	for _, folder := range []string{"VM Test", strings.Repeat("tree", 30)} {
+		root := filepath.Join(t.TempDir(), folder)
+		require.NoError(t, os.Mkdir(root, 0700))
+		w, err := workspace.Resolve(context.Background(), root)
+		require.NoError(t, err)
+		name := sandboxName(w)
+		require.LessOrEqual(t, len(name), 128)
+		require.Regexp(t, `^oc-[a-z0-9-]+-[0-9a-f]{8}$`, name)
+		require.True(t, strings.HasSuffix(name, w.ID()[:8]))
+	}
+	first, err := workspace.Resolve(context.Background(), t.TempDir())
+	require.NoError(t, err)
+	second, err := workspace.Resolve(context.Background(), t.TempDir())
+	require.NoError(t, err)
+	require.NotEqual(t, sandboxName(first), sandboxName(second))
 }

@@ -13,7 +13,7 @@ import (
 
 func newSnapshotListCommand() *cobra.Command {
 	return &cobra.Command{
-		Use: "list", Short: "List all repository snapshots, highlighting the current repository",
+		Use: "list", Short: "List all workspace snapshots, highlighting the current directory",
 		Aliases: []string{"ls"},
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -28,23 +28,23 @@ func newSnapshotListCommand() *cobra.Command {
 
 func writeSnapshotListing(out io.Writer, listing sandbox.SnapshotListing) error {
 	if listing.Current != nil {
-		if _, err := fmt.Fprintf(out, "Current repository: %s\n%s\n\n", listing.Current.Name, listing.Current.Path); err != nil {
+		if _, err := fmt.Fprintf(out, "Current workspace: %s\n%s\n\n", listing.Current.Name, listing.Current.Path); err != nil {
 			return err
 		}
 		if err := writeSnapshotTable(out, listing.Current.Snapshots); err != nil {
 			return err
 		}
-		if _, err := fmt.Fprintln(out, "\nOther repositories"); err != nil {
+		if _, err := fmt.Fprintln(out, "\nOther workspaces"); err != nil {
 			return err
 		}
-	} else if _, err := fmt.Fprintln(out, "All repositories"); err != nil {
+	} else if _, err := fmt.Fprintln(out, "All workspaces"); err != nil {
 		return err
 	}
-	if len(listing.Repositories) == 0 {
+	if len(listing.Workspaces) == 0 {
 		_, err := fmt.Fprintln(out, "\nNo snapshots found.")
 		return err
 	}
-	for _, repo := range listing.Repositories {
+	for _, repo := range listing.Workspaces {
 		if _, err := fmt.Fprintf(out, "\n%s · %s\n", repo.Name, repo.Path); err != nil {
 			return err
 		}

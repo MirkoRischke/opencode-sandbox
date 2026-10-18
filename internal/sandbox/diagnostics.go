@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"opencode-sandbox/internal/workspace"
+
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
@@ -79,10 +81,11 @@ func resolveDiagnostics(enabled bool, options []DiagnosticsOptions) (Diagnostics
 // WriteNetworkDiagnostics prints the worktree's saved JSON without starting a VM
 // or loading configuration. The saved bytes are preserved unchanged.
 func WriteNetworkDiagnostics(ctx context.Context, directory, stateDir string, w io.Writer) error {
-	root, err := worktreeRoot(ctx, directory)
+	wspace, err := workspace.Resolve(ctx, directory)
 	if err != nil {
 		return err
 	}
+	root := wspace.Root()
 	path := diagnosticsPath(stateDir, root)
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
