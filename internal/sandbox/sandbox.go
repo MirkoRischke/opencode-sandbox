@@ -25,9 +25,18 @@ type Sandbox struct {
 
 // Prepare creates or resumes one VM per worktree and initializes project tools.
 // GitHub credentials stay in the host proxy; the guest gets only a placeholder.
-func Prepare(ctx context.Context, directory string, config []byte, secrets []Secret, settings launcherconfig.Settings) (*Sandbox, error) {
+// When diagnostics are enabled, supply exactly one host diagnostics configuration.
+func Prepare(ctx context.Context, directory string, config []byte, secrets []Secret, settings launcherconfig.Settings, diagnostics ...DiagnosticsOptions) (*Sandbox, error) {
 	if err := settings.Validate(); err != nil {
 		return nil, err
+	}
+	if settings.Network.Diagnostics {
+		if len(diagnostics) != 1 || diagnostics[0].StateDir == "" {
+			return nil, fmt.Errorf("network diagnostics require an explicit host state directory")
+		}
+		if diagnostics[0].Output == nil {
+			diagnostics[0].Output = io.Discard
+		}
 	}
 	git := func(args ...string) (string, error) {
 		out, err := exec.CommandContext(ctx, "git", append([]string{"-C", directory}, args...)...).CombinedOutput()
@@ -78,7 +87,7 @@ func Prepare(ctx context.Context, directory string, config []byte, secrets []Sec
 		return nil, fmt.Errorf("prepare sandbox: %w", err)
 	}
 	if settings.Network.Diagnostics {
-		s.diagnostics = startNetworkDiagnostics(s.vm, root, started)
+		s.diagnostics = startNetworkDiagnostics(s.vm, root, started, diagnostics[0])
 	}
 	initialized := false
 	defer func() {

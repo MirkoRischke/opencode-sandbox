@@ -51,7 +51,7 @@ func launch(ctx context.Context, configPath, cliConfigPath, awsRole, awsProfile 
 	if err != nil {
 		return err
 	}
-	s, err := sandbox.Prepare(ctx, ".", config, secrets, settings)
+	s, err := sandbox.Prepare(ctx, ".", config, secrets, settings, sandbox.DiagnosticsOptions{StateDir: stateDir, Output: os.Stderr})
 	if err != nil {
 		return err
 	}

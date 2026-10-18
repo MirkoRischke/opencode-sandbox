@@ -20,6 +20,14 @@ func TestConfigDirectoryUsesXDGWhenSet(t *testing.T) {
 	require.Equal(t, want, dir)
 }
 
+func TestStateDirectoryUsesXDGWhenSet(t *testing.T) {
+	t.Parallel()
+	want := t.TempDir()
+	dir, err := hostStateDir(want, "")
+	require.NoError(t, err)
+	require.Equal(t, want, dir)
+}
+
 func TestSettingsUseHomeWhenXDGIsUnset(t *testing.T) {
 	t.Parallel()
 	dir, err := hostConfigDir("", t.TempDir())

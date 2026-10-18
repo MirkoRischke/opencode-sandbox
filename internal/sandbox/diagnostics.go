@@ -53,6 +53,14 @@ type networkDiagnostics struct {
 	reportOnce        sync.Once
 	collectionFailure string
 	saveFailure       string
+	output            io.Writer
+}
+
+// DiagnosticsOptions supplies host-owned state and output explicitly. The CLI
+// resolves its environment; independent callers can use private paths/writers.
+type DiagnosticsOptions struct {
+	StateDir string
+	Output   io.Writer
 }
 
 func worktreeRoot(ctx context.Context, directory string) (string, error) {
@@ -65,15 +73,12 @@ func worktreeRoot(ctx context.Context, directory string) (string, error) {
 
 // WriteNetworkDiagnostics prints the worktree's saved JSON without starting a VM
 // or loading configuration. The saved bytes are preserved unchanged.
-func WriteNetworkDiagnostics(ctx context.Context, directory string, w io.Writer) error {
+func WriteNetworkDiagnostics(ctx context.Context, directory, stateDir string, w io.Writer) error {
 	root, err := worktreeRoot(ctx, directory)
 	if err != nil {
 		return err
 	}
-	path, err := diagnosticsPath(root)
-	if err != nil {
-		return err
-	}
+	path := diagnosticsPath(stateDir, root)
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return fmt.Errorf("no saved network diagnostics for %s; enable network.diagnostics and launch the sandbox to collect them", root)
@@ -85,26 +90,18 @@ func WriteNetworkDiagnostics(ctx context.Context, directory string, w io.Writer)
 	return err
 }
 
-func diagnosticsPath(worktree string) (string, error) {
-	dir := os.Getenv("XDG_STATE_HOME")
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		dir = filepath.Join(home, ".local", "state")
-	}
+func diagnosticsPath(stateDir, worktree string) string {
 	identity := sha256.Sum256([]byte(worktree))
-	return filepath.Join(dir, "opencode-sandbox", "diagnostics", fmt.Sprintf("%x", identity[:16]), "network.json"), nil
+	return filepath.Join(stateDir, "opencode-sandbox", "diagnostics", fmt.Sprintf("%x", identity[:16]), "network.json")
 }
 
-func loadDiagnostics(worktree string, since time.Time) (*networkDiagnostics, error) {
-	path, err := diagnosticsPath(worktree)
-	if err != nil {
-		return nil, err
+func loadDiagnostics(worktree string, since time.Time, options DiagnosticsOptions) (*networkDiagnostics, error) {
+	path := diagnosticsPath(options.StateDir, worktree)
+	if options.Output == nil {
+		options.Output = io.Discard
 	}
 	d := &networkDiagnostics{
-		path: path, since: since,
+		path: path, since: since, output: options.Output,
 		overview: networkOverview{SchemaVersion: 1, Worktree: worktree, DeniedTargets: []deniedTarget{}},
 		stop:     make(chan struct{}), done: make(chan struct{}),
 	}
@@ -125,14 +122,14 @@ func loadDiagnostics(worktree string, since time.Time) (*networkDiagnostics, err
 	return d, nil
 }
 
-func startNetworkDiagnostics(vm *m.Sandbox, worktree string, since time.Time) *networkDiagnostics {
-	d, err := loadDiagnostics(worktree, since)
+func startNetworkDiagnostics(vm *m.Sandbox, worktree string, since time.Time, options DiagnosticsOptions) *networkDiagnostics {
+	d, err := loadDiagnostics(worktree, since, options)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "warning: network diagnostics unavailable; existing history was not changed")
+		fmt.Fprintln(options.Output, "warning: network diagnostics unavailable; existing history was not changed") //nolint:errcheck // Diagnostic notices are best-effort; never prevent VM use.
 		return nil
 	}
 	d.vm = vm
-	fmt.Fprintln(os.Stderr, "Network diagnostics:", d.path)
+	fmt.Fprintln(d.output, "Network diagnostics:", d.path) //nolint:errcheck // Diagnostic notices are best-effort; never prevent VM use.
 	go d.run(d.collect)
 	return d
 }
@@ -198,10 +195,10 @@ func (d *networkDiagnostics) finish() {
 	// Never let a collector goroutine write into OpenCode's active TUI.
 	d.reportOnce.Do(func() {
 		if d.collectionFailure != "" {
-			fmt.Fprintf(os.Stderr, "warning: network diagnostics incomplete: collection failed (%s); summary: %s\n", d.collectionFailure, d.path)
+			fmt.Fprintf(d.output, "warning: network diagnostics incomplete: collection failed (%s); summary: %s\n", d.collectionFailure, d.path) //nolint:errcheck // Warning output must not prevent shutdown.
 		}
 		if d.saveFailure != "" {
-			fmt.Fprintf(os.Stderr, "warning: network diagnostics incomplete: save failed (%s); summary: %s\n", d.saveFailure, d.path)
+			fmt.Fprintf(d.output, "warning: network diagnostics incomplete: save failed (%s); summary: %s\n", d.saveFailure, d.path) //nolint:errcheck // Warning output must not prevent shutdown.
 		}
 	})
 }

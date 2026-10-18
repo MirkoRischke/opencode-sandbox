@@ -48,6 +48,24 @@ in the integration package, plus the two fallback cases relocated to
 trust/content approval, header substitution, denied destinations, VM resource
 persistence, and rejection of inherited `GH_TOKEN` as a credential source.
 
+## Diagnostics isolation
+
+Pass the diagnostics state directory and output writer explicitly. CLI setup
+resolves XDG/HOME; VM and unit tests use private directories and buffers rather
+than replacing process-wide stderr/environment. The history/recreation test now
+runs in parallel. Keep final-drain, persistence, warning timing, and replay
+assertions. Add a real CLI check for HOME fallback and bypassing invalid global
+and repo configuration when reading saved diagnostics.
+
+| Group | Before total / mean | After total / mean | Reduction |
+| --- | --- | --- | --- |
+| Diagnostics history test plus the five existing Docker tests | 98.929s / 32.976s | 69.745s / 23.248s | 29.5% |
+
+All six scenarios passed in all three repetitions. Docker is the unchanged
+companion workload: this comparison measures removal of diagnostics' serial
+barrier, not a reduction in diagnostics collection time itself. The separate
+CLI fallback/bypass check passed, as did repeated internal-package race checks.
+
 ## Reproduction and artifacts
 
 Freeze a binary at each revision with:

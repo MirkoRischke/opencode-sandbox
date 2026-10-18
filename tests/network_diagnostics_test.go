@@ -1,6 +1,7 @@
 package sandbox_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -18,17 +19,10 @@ import (
 )
 
 func TestNetworkDiagnosticsPreservesWorktreeHistoryAcrossVMRecreation(t *testing.T) {
-	// Sequential: replaces process-wide stderr and the state-directory environment.
-	stderr := os.Stderr
-	captured, err := os.CreateTemp(t.TempDir(), "diagnostics-stderr")
-	require.NoError(t, err)
-	os.Stderr = captured
-	t.Cleanup(func() {
-		os.Stderr = stderr
-		require.NoError(t, captured.Close())
-	})
+	t.Parallel()
+	var captured bytes.Buffer
 	state := t.TempDir()
-	t.Setenv("XDG_STATE_HOME", state)
+	diagnostics := sandbox.DiagnosticsOptions{StateDir: state, Output: &captured}
 	root := newWorktree(t)
 	settings := launcherconfig.DefaultSettings()
 	settings.Network.Diagnostics = true
@@ -53,7 +47,7 @@ func TestNetworkDiagnosticsPreservesWorktreeHistoryAcrossVMRecreation(t *testing
 			settings.Network.AllowedHosts = []string{"github.com"}
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		s, err := sandbox.Prepare(ctx, root, nil, nil, settings)
+		s, err := sandbox.Prepare(ctx, root, nil, nil, settings, diagnostics)
 		cancel()
 		require.NoError(t, err)
 		current = s
@@ -66,9 +60,7 @@ func TestNetworkDiagnosticsPreservesWorktreeHistoryAcrossVMRecreation(t *testing
 		err = s.Stop(ctx)
 		cancel()
 		require.NoError(t, err)
-		messages, err := os.ReadFile(captured.Name())
-		require.NoError(t, err)
-		require.NotContains(t, string(messages), "warning:", "diagnostics should collect and save without warnings")
+		require.NotContains(t, captured.String(), "warning:", "diagnostics should collect and save without warnings")
 
 		identity := sha256.Sum256([]byte(s.Worktree))
 		path := filepath.Join(state, "opencode-sandbox", "diagnostics", fmt.Sprintf("%x", identity[:16]), "network.json")
@@ -90,7 +82,7 @@ func TestNetworkDiagnosticsPreservesWorktreeHistoryAcrossVMRecreation(t *testing
 		// Resume the same VM without making requests. Old raw logs must not be
 		// counted again, and deleting the VM must preserve the overview.
 		ctx, cancel = context.WithTimeout(context.Background(), time.Minute)
-		resumed, err := sandbox.Prepare(ctx, root, nil, nil, settings)
+		resumed, err := sandbox.Prepare(ctx, root, nil, nil, settings, diagnostics)
 		cancel()
 		require.NoError(t, err)
 		current = resumed
