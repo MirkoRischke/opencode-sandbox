@@ -57,14 +57,17 @@ ENV MISE_DATA_DIR=/mise/data \
     MISE_CONFIG_DIR=/mise/config \
     MISE_CACHE_DIR=/mise/cache \
     MISE_STATE_DIR=/mise/state \
-    PATH=/mise/data/shims:$PATH \
+    PATH=/mise/data/shims:/root/.opencode/bin:$PATH \
     SHELL=/bin/bash \
     NODE_USE_SYSTEM_CA=1
 
 ARG OPENCODE_VERSION
-RUN mise use --global node@24 \
-    && mise use --global opencode@${OPENCODE_VERSION} \
-    && mise exec -- opencode --version
+# Install the standalone binary; the official installer selects the platform.
+RUN curl -fsSL https://opencode.ai/v2/install -o /tmp/install-opencode.sh \
+    && bash /tmp/install-opencode.sh --version "${OPENCODE_VERSION}" --no-modify-path \
+    && rm /tmp/install-opencode.sh \
+    && mkdir -p /mise/data/shims \
+    && opencode --version
 
 # AWS CLI bundles its own CA file; use the trust store updated by Microsandbox.
 ENV AWS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt

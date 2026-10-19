@@ -1,0 +1,5 @@
+[network]
+
+additional_allowed_hosts = [
+  "tuf-repo-cdn.sigstore.dev", # golang-ci-lint
+]

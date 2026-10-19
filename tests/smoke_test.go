@@ -6,7 +6,7 @@ func TestDefaultToolsAreAvailable(t *testing.T) {
 	t.Parallel()
 	s := startSandbox(t)
 	tools := []string{
-		"mise", "node", "git", "gh", "aws", "opencode", "docker", "dockerd",
+		"mise", "git", "gh", "aws", "opencode", "docker", "dockerd",
 		"jq", "rg", "file", "patch", "less", "tree",
 		"ps", "pgrep", "pkill", "ip", "ss", "dig", "nslookup", "nc", "ping", "lsof",
 	}
