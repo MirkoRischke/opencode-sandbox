@@ -144,6 +144,7 @@ complete -o default -F __start_opencode-sandbox ocs
 mise run fmt  # Format Go code
 mise run lint
 mise run test:unit    # Fast internal tests; no VMs or external services
+mise run test:image   # Build + offline image smoke tests; Docker only, no VMs
 mise run test:prepare # Build/import images once; repeat after image changes
 mise run test        # VM/integration tests using the prepared images
 mise run test:live   # Opt-in OpenAI smoke test; uses host credentials

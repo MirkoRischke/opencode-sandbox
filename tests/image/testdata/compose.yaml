@@ -1,0 +1,4 @@
+services:
+  smoke:
+    image: busybox:1.37.0
+    command: ["echo", "smoke-ok"]

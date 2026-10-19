@@ -1,4 +1,5 @@
 ARG MISE_VERSION=2026.10.12
+# renovate: datasource=npm depName=@opencode/cli
 ARG OPENCODE_VERSION=2.0.30
 
 FROM ghcr.io/jdx/mise:${MISE_VERSION} AS mise
@@ -40,7 +41,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # hadolint ignore=DL3008
 RUN install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian trixie stable" > /etc/apt/sources.list.d/docker.list \
+    && . /etc/os-release \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian ${VERSION_CODENAME} stable" > /etc/apt/sources.list.d/docker.list \
     && printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d \
     && chmod +x /usr/sbin/policy-rc.d \
     && apt-get update && apt-get install -y --no-install-recommends \

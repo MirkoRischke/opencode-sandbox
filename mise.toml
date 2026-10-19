@@ -45,6 +45,11 @@ run = [
 description = "Run fast tests without VMs or external services"
 run = "go test -count=1 -timeout 10s ./internal/..."
 
+[tasks."test:image"]
+description = "Build and smoke-test the Docker image without VMs or credentials"
+depends = ["build"]
+run = "go test -count=1 -v -timeout 2m ./tests/image"
+
 [tasks.test]
 description = "Run tests using prepared images (no image builds or imports)"
 run = "go test -count=1 -v -parallel 4 -timeout 10m ./..."

@@ -1,0 +1,27 @@
+name: Image smoke
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  image-smoke:
+    name: Image smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Build image
+        run: docker build --pull --platform linux/amd64 -t opencode-sandbox:poc .
+      - name: Smoke-test image
+        run: go test -count=1 -v -timeout 2m ./tests/image
