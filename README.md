@@ -116,6 +116,14 @@ complete -o default -F __start_opencode-sandbox ocs
 
 ## Limitations
 
+- **Host execution through shared files:** the workspace and required Git metadata
+  are writable from the guest. This preserves live host editing and review, but
+  guest code can modify files that host tools later execute—for example, mise or
+  direnv configuration, Git hooks/configuration, and editor or language-server
+  configuration. Linked worktrees may share affected Git metadata with other
+  checkouts. The VM does not protect against execution triggered by host tools
+  consuming these changes. Review changes before trusting or running them;
+  automatic host tooling may execute them before review.
 - **Incomplete network diagnostics after snapshot restore:** with Microsandbox
   v0.7.8, restored VMs lose the HTTP denial responder required to log blocked
   HTTPS destinations. Network blocking still works, but those requests are
