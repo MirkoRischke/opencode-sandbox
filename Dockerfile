@@ -8,16 +8,28 @@ FROM debian:13-slim
 # Copy only the standalone mise binary; Debian remains the base image.
 COPY --from=mise /usr/local/bin/mise /usr/local/bin/mise
 
-# Installation prerequisites, not the optional development/debugging toolset.
+# Runtime prerequisites and common agent development/network debugging tools.
 # Keep Debian package updates available when rebuilding the image.
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     awscli \
+    bind9-dnsutils \
     ca-certificates \
     curl \
+    file \
     git \
     gh \
+    iproute2 \
+    iputils-ping \
+    jq \
+    less \
     libatomic1 \
+    lsof \
+    netcat-openbsd \
+    patch \
+    procps \
+    ripgrep \
+    tree \
     util-linux \
     unzip \
     xz-utils \
