@@ -45,9 +45,7 @@ func LoadSecrets(settings config.Settings) ([]Secret, error) {
 			return nil, fmt.Errorf("load secret %q: %w", name, err)
 		}
 		hosts := make([]string, len(config.AllowedHosts))
-		for i, host := range config.AllowedHosts {
-			hosts[i] = strings.ToLower(host)
-		}
+		copy(hosts, config.AllowedHosts)
 		headers := make([]string, len(config.Headers))
 		for i, header := range config.Headers {
 			headers[i] = strings.ToLower(header)

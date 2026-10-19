@@ -35,7 +35,7 @@ type VMSettings struct {
 type NetworkSettings struct {
 	Unrestricted           bool     `toml:"unrestricted" description:"Allow public internet on any port/protocol, ignoring both host lists. Protected destinations remain blocked; secret scopes are unchanged."`
 	Diagnostics            bool     `toml:"diagnostics" description:"Collect cumulative denied-target diagnostics per workspace. Enables full rotating runtime debug logs and HTTP denial responses; recreate the VM after changing this setting."`
-	AllowedHosts           []string `toml:"allowed_hosts" description:"Baseline exact DNS hostnames; HTTPS/WSS on TCP port 443 only."`
+	AllowedHosts           []string `toml:"allowed_hosts" description:"Baseline DNS hosts: example.com matches exactly; .example.com includes the base domain and all subdomains. Passed unchanged to Microsandbox; HTTPS/WSS on TCP port 443 only."`
 	AdditionalAllowedHosts []string `toml:"additional_allowed_hosts" description:"Extra hostnames, combined with allowed_hosts after merging. With unrestricted disabled, both lists must be empty to deny internet access. Each list replaces its inherited value when specified."`
 }
 
@@ -129,8 +129,9 @@ func (n NetworkSettings) validate() error {
 		{"additional_allowed_hosts", n.AdditionalAllowedHosts},
 	} {
 		for _, host := range list.hosts {
-			if len(host) > 253 || !hostnamePattern.MatchString(host) {
-				return fmt.Errorf("network.%s: %q must be an exact DNS hostname, not a URL, wildcard, IP, or port", list.name, host)
+			name := strings.TrimPrefix(host, ".")
+			if len(name) > 253 || !hostnamePattern.MatchString(name) {
+				return fmt.Errorf("network.%s: %q must be a DNS hostname or .prefixed domain suffix, not a URL, wildcard, IP, or port", list.name, host)
 			}
 		}
 	}

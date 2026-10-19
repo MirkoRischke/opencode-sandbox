@@ -1,6 +1,8 @@
 # Location: ~/.config/opencode-sandbox/config.toml
 # XDG_CONFIG_HOME overrides ~/.config.
-# Unless unrestricted is enabled: exact hostnames, HTTPS/WSS on TCP 443 only.
+# Unless unrestricted is enabled: DNS hosts/suffixes, HTTPS/WSS on TCP 443 only.
+# Network: example.com matches exactly; .example.com includes all subdomains and the base.
+# Secrets: example.com matches exactly; *.example.com includes all subdomains and the base.
 # Applied only when creating a VM. Recreate it after changing this file.
 # Missing configuration uses the built-in host allowlist; invalid configuration fails.
 

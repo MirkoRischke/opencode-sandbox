@@ -20,7 +20,7 @@ func TestEnvironmentInstructions(t *testing.T) {
 				AllowedHosts:   []string{"github.com", "registry.npmjs.org"},
 				ReadOnlyMounts: []string{"/reference/docs", "/reference/config.json"},
 			},
-			contains: []string{"HTTPS/WSS on TCP port 443", "- github.com", "- registry.npmjs.org", "Subdomains are not implicitly allowed", `- "/reference/docs"`, `- "/reference/config.json"`},
+			contains: []string{"HTTPS/WSS on TCP port 443", "- github.com", "- registry.npmjs.org", "Plain hostnames match exactly", "A leading dot includes the base domain", `- "/reference/docs"`, `- "/reference/config.json"`},
 			absent:   []string{"Public internet access is allowed", "Application internet access is blocked", "No additional read-only host mounts"},
 		},
 		{

@@ -8,12 +8,12 @@ are immediately visible on the host.
 Public internet access is allowed on any port/protocol.
 {{else if .AllowedHosts}}
 Outbound internet access is restricted to HTTPS/WSS on TCP port 443, using these
-exact hostnames:
+host patterns:
 {{range .AllowedHosts}}
 - {{.}}
 {{end}}
-Subdomains are not implicitly allowed. Redirects and downloads from other hosts
-require separate allowance.
+Plain hostnames match exactly. A leading dot includes the base domain and all
+nested subdomains. Redirects and downloads outside these patterns require separate allowance.
 {{else}}
 Application internet access is blocked.
 {{end}}

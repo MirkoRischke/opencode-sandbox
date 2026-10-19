@@ -40,7 +40,7 @@ func TestSecretSettingsRejectInvalidScopes(t *testing.T) {
 		"file = 'creds/token'", // missing environment name and scope
 		"file = 'creds/token'\nenv = 'BAD-NAME'\nallowed_hosts = ['github.com']\nheaders = ['authorization']",
 		"file = 'creds/token'\nenv = 'TOKEN'\nallowed_hosts = []\nheaders = ['authorization']",
-		"file = 'creds/token'\nenv = 'TOKEN'\nallowed_hosts = ['*.github.com']\nheaders = ['authorization']",
+		"file = 'creds/token'\nenv = 'TOKEN'\nallowed_hosts = ['.github.com']\nheaders = ['authorization']",
 		"file = 'creds/token'\nenv = 'TOKEN'\nallowed_hosts = ['github.com']\nheaders = []",
 		"file = 'creds/token'\nenv = 'TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['bad header']",
 		"file = 'creds/token'\nenv = 'TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\nvalue = 'inline-secrets-not-supported'",

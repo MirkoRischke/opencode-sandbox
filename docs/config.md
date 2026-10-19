@@ -381,7 +381,10 @@ make HTTPS requests through the inspected network must trust that CA themselves.
 
 ### Network policy
 
-By default, only exact DNS hostnames are accepted. Connections are limited to TCP port 443
+Both network host lists accept Microsandbox's native syntax: `example.com` matches
+only that host; `.example.com` matches the base domain and all nested subdomains.
+Values are passed unchanged; `*.example.com`, URLs, IPs, and ports are rejected.
+Connections are limited to TCP port 443
 with strict hostname checks and verified TLS inspection. Other outbound traffic
 is denied, apart from DNS through Microsandbox's gateway. Host/private networks,
 loopback, link-local and metadata destinations remain blocked. Both host lists
@@ -511,7 +514,7 @@ headers = ["authorization"]
 ```
 
 Add other named `[secrets.<name>]` sections in the same form. Each must have a
-unique environment variable name, a file, non-empty exact hostnames, and non-empty
+unique environment variable name, a file, non-empty host patterns, and non-empty
 HTTP header names. Relative paths resolve against the config directory supplying
 the `file` field (global or repo);
 absolute paths are also accepted. Inline values and environment sources are not
@@ -519,6 +522,12 @@ supported. Use mode `700` on the credential directory and `600` on the file.
 Symlinked paths, oversized files (over 16 KiB), empty values, multiple lines, and
 NUL bytes are rejected. A trailing newline is stripped. Configured files are
 validated on every launch; missing/invalid files fail launch, even for existing VMs.
+
+Secret host patterns use Microsandbox's native secret syntax, different from the
+network lists: `example.com` matches exactly; `*.example.com` matches the base
+domain and all nested subdomains. Values are passed unchanged. A leading dot
+(`.example.com`) and unrestricted `*` are rejected for secrets. Wildcards authorize
+every matching subdomain to receive the credential; scope them carefully.
 
 Guests receive placeholders such as `$MSB_GH_TOKEN`, never the source value.
 Microsandbox substitutes values only in the selected headers for the selected

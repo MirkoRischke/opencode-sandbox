@@ -3,12 +3,13 @@ package config
 import (
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 type SecretSettings struct {
 	File         string   `toml:"file" description:"Host credential file; relative to the config supplying this field. Use directory mode 700 and file mode 600. Do not commit credentials."`
 	Env          string   `toml:"env" description:"Unique guest environment variable receiving a placeholder, not the real credential."`
-	AllowedHosts []string `toml:"allowed_hosts" description:"Exact HTTPS hosts permitted to receive this credential. Network access must be allowed separately."`
+	AllowedHosts []string `toml:"allowed_hosts" description:"HTTPS hosts permitted to receive this credential: example.com matches exactly; *.example.com includes the base domain and all subdomains. Passed unchanged to Microsandbox. Network access must be allowed separately."`
 	Headers      []string `toml:"headers" description:"HTTP headers in which the host proxy may substitute the credential."`
 }
 
@@ -29,8 +30,11 @@ func ValidateSecrets(secrets map[string]SecretSettings) error {
 		if len(secret.AllowedHosts) == 0 || len(secret.Headers) == 0 {
 			return fmt.Errorf("secret %q requires non-empty allowed_hosts and headers", name)
 		}
-		if err := (NetworkSettings{AllowedHosts: secret.AllowedHosts}).validate(); err != nil {
-			return fmt.Errorf("secret %q: %w", name, err)
+		for _, host := range secret.AllowedHosts {
+			hostname := strings.TrimPrefix(host, "*.")
+			if len(hostname) > 253 || !hostnamePattern.MatchString(hostname) {
+				return fmt.Errorf("secret %q: allowed_hosts: %q must be a DNS hostname or *.prefixed wildcard", name, host)
+			}
 		}
 		for _, header := range secret.Headers {
 			if !headerPattern.MatchString(header) {

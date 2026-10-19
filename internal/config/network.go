@@ -2,7 +2,7 @@ package config
 
 import "strings"
 
-// EffectiveAllowedHosts resolves the exact hostnames shared by the runtime policy
+// EffectiveAllowedHosts resolves the host patterns shared by the runtime policy
 // and its guest-facing description. Unrestricted access ignores both host lists.
 func (n NetworkSettings) EffectiveAllowedHosts() []string {
 	if n.Unrestricted {
@@ -12,9 +12,9 @@ func (n NetworkSettings) EffectiveAllowedHosts() []string {
 	seen := make(map[string]bool)
 	for _, list := range [][]string{n.AllowedHosts, n.AdditionalAllowedHosts} {
 		for _, host := range list {
-			host = strings.ToLower(host)
-			if !seen[host] {
-				seen[host] = true
+			key := strings.ToLower(host)
+			if !seen[key] {
+				seen[key] = true
 				hosts = append(hosts, host)
 			}
 		}

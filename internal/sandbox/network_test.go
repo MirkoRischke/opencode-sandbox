@@ -29,7 +29,7 @@ func TestNetworkPolicyCombinesAndDeduplicatesHostLists(t *testing.T) {
 		require.Equal(t, "443", rule.Port)
 		destinations = append(destinations, rule.Destination)
 	}
-	require.Equal(t, []string{"github.com", "api.github.com", "registry.npmjs.org"}, destinations)
+	require.Equal(t, []string{"GitHub.com", "api.github.com", "registry.npmjs.org"}, destinations)
 	require.Equal(t, "GitHub.com", settings.AllowedHosts[0], "policy must not mutate settings")
 }
 
@@ -41,6 +41,16 @@ func TestNetworkPolicyAdditionalHostsWithoutBaseline(t *testing.T) {
 	require.NoError(t, settings.Validate())
 	policy := networkPolicy(settings.Network)
 	require.Equal(t, "registry.npmjs.org", policy.Rules[len(policy.Rules)-1].Destination)
+}
+
+func TestNetworkPolicyPreservesDomainSuffix(t *testing.T) {
+	t.Parallel()
+	settings := config.DefaultSettings()
+	settings.Network.AllowedHosts = []string{"Example.com", ".Example.com"}
+	require.NoError(t, settings.Validate())
+	policy := networkPolicy(settings.Network)
+	require.Equal(t, "Example.com", policy.Rules[len(policy.Rules)-2].Destination)
+	require.Equal(t, ".Example.com", policy.Rules[len(policy.Rules)-1].Destination)
 }
 
 func TestUnrestrictedNetworkAllowsOnlyPublicDestinationsAndIgnoresHostLists(t *testing.T) {
