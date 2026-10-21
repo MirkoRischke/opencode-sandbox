@@ -12,9 +12,10 @@ retain installed tools and guest files for the next launch.
   HTTPS headers by the host proxy without exposing their values to the guest.
 - **Workspace configuration:** override global settings with a directory-local
   `.opencode-sandbox.toml`; new or changed configs require approval.
-- **Read-only host mounts:** explicitly share selected files or directories,
+- **Host file mappings:** explicitly mount selected files or directories read-only,
+  or copy them into writable guest storage on creation and snapshot restore,
   including OpenCode configuration, instructions, and skills. No extra host files
-  are shared by default. See [mount configuration](docs/config.md#read-only-host-mounts).
+  are shared by default. See [`[[files]]` configuration](docs/config.md#read-only-host-mounts).
 - **Sandbox-aware instructions:** OpenCode gets information about the sandbox
   it is running in.
 - **AWS roles:** assume a role on the host and provide automatically refreshed,

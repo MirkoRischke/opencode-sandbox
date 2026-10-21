@@ -10,11 +10,11 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Examples document optional mounts and named sections without enabling them.
+// Examples document optional file mappings and named sections without enabling them.
 // Values are serialized by the same encoder as actual defaults.
 var configExamples = map[reflect.Type]any{
-	reflect.TypeFor[MountSettings](): MountSettings{
-		Source: "~/.config/opencode/skills", Target: "/root/.config/opencode/skills",
+	reflect.TypeFor[FileSettings](): FileSettings{
+		Source: "~/.config/opencode/skills", Target: "/root/.config/opencode/skills", Mode: "mount",
 	},
 	reflect.TypeFor[SecretSettings](): SecretSettings{
 		File: "creds/token", Env: "API_TOKEN",

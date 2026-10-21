@@ -93,7 +93,7 @@ func CreateWorkspaceSnapshot(ctx context.Context, w workspace.Workspace, secrets
 	if err := settings.Validate(); err != nil {
 		return "", err
 	}
-	if err := settings.ValidateMountSources(); err != nil {
+	if err := settings.ValidateFileSources(); err != nil {
 		return "", err
 	}
 	diagnosticOptions, err := resolveDiagnostics(settings.Network.Diagnostics, diagnostics)
@@ -172,6 +172,11 @@ func createPreparationVM(ctx context.Context, w workspace.Workspace, name string
 	prep := &Sandbox{Name: name, Worktree: snapshotWorktree, vm: vm}
 	if settings.Network.Diagnostics {
 		prep.diagnostics = startNetworkDiagnostics(vm, w.Root(), started, diagnostics)
+	}
+	if err := prep.copyFiles(ctx, settings); err != nil {
+		cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return nil, errors.Join(err, prep.Remove(cleanup))
 	}
 	if err := prep.configureEnvironment(ctx, settings); err != nil {
 		cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)

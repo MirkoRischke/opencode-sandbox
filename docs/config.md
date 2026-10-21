@@ -116,46 +116,52 @@ AWS role access is enabled per launch with `--aws-role` and optional
 `--aws-profile`, not with global configuration. See [AWS credentials](aws.md).
 
 The launcher always stops its VM on exit, including errors and handled termination
-signals. It never removes the VM: installed tools and guest files persist for the
-next launch. Forced termination (`SIGKILL`) or a host crash cannot run cleanup.
+signals. Installed tools and guest files persist for the next launch. A newly
+created/restored VM is removed if initial file copying or environment setup fails.
+Forced termination (`SIGKILL`) or a host crash cannot run cleanup.
 
 ### Read-only host mounts
 
-Explicitly expose host files or directories with `[[mounts]]` entries in global
+Explicitly expose host files or directories with `[[files]]` entries in global
 `config.toml` or an approved workspace `.opencode-sandbox.toml`. No extra host files,
 OpenCode configuration, instructions, or skills are shared by default.
 
 ```toml
-[[mounts]]
+[[files]]
 source = "~/.config/opencode/AGENTS.md"
 target = "/root/.config/opencode/AGENTS.md"
 
-[[mounts]]
+[[files]]
 source = "~/.config/opencode/skills"
 target = "/root/.config/opencode/skills"
 
-[[mounts]]
+[[files]]
 source = "~/.config/opencode-sandbox/opencode.json"
 target = "/etc/opencode/opencode.json"
 
-[[mounts]]
+[[files]]
 source = "~/.config/opencode/cli.json"
 target = "/root/.config/opencode/cli.json"
+
+[[files]]
+source = "~/.config/opencode-sandbox/gitconfig"
+target = "/root/.gitconfig"
+mode = "copy"
 ```
 
 Sources must exist as regular files or directories. `~/` expands to the host
 home directory; relative sources resolve against the configuration file supplying
 the list. Targets must be clean absolute guest paths. Missing sources fail launch
 before VM startup, with the entry index and host path. There are no globs or
-optional mounts. Both files and directories are always read-only, even for guest
+optional mappings. The default `mode = "mount"` makes files and directories read-only, even for guest
 root; mounting one file does not expose its host siblings. Mounting a directory
 exposes its contents, including skill scripts and references. Read-only prevents
 guest modification, **not reading or exfiltration**. Host edits remain visible;
 OpenCode's own reload behavior still applies. Its settings UI cannot save to a
 read-only `cli.json`.
 
-Mount arrays replace, rather than append, across configuration layers. Use
-`mounts = []` at the top level of a workspace config to disable inherited mounts.
+File arrays replace, rather than append, across configuration layers. Use
+`files = []` at the top level of a workspace config to disable inherited mappings.
 New/changed workspace configuration requires the normal approval, which authorizes
 the displayed host paths. Duplicate or nested targets and overlaps with the
 workspace, Git metadata, Docker storage, or runtime mounts are rejected.
@@ -166,6 +172,20 @@ explicitly rebound on restore; their host contents are not copied into the snaps
 Recreate a prepared baseline when removing/changing its required mount targets.
 Each mapping consumes a runtime device, so mounts are not unlimited; a handful
 of configuration/skill mounts is well below the runtime device budget.
+
+With `mode = "copy"`, the source is copied into the guest's writable filesystem,
+not mounted. Guest edits never change the host source, and host edits are not
+live. Copying runs before GitHub/project initialization for fresh VMs, snapshot
+preparation, and new VMs restored from snapshots, using current host contents.
+Ordinary stop/start resumes do not recopy, preserving guest edits.
+
+The target is always the exact destination: a directory's contents merge directly
+into it, even if it already exists. Matching files are overwritten; destination-only
+files (including snapshot files deleted from the host) remain. File/directory type
+conflicts fail rather than implicitly deleting a directory. Copying is not atomic;
+on failure the newly created VM is removed. Copied contents are captured in
+snapshots, so removing a copy entry does not erase its previously captured files.
+Unlike mounts, copies do not consume permanent mount devices.
 
 OpenCode interprets the mounted paths normally. `/etc/opencode/opencode.json` is
 system configuration and overrides project settings; mount at

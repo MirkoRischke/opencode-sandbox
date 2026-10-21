@@ -37,7 +37,7 @@ func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secr
 	if err := settings.Validate(); err != nil {
 		return nil, err
 	}
-	if err := settings.ValidateMountSources(); err != nil {
+	if err := settings.ValidateFileSources(); err != nil {
 		return nil, err
 	}
 	diagnosticOptions, err := resolveDiagnostics(settings.Network.Diagnostics, diagnostics)
@@ -61,6 +61,11 @@ func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secr
 		s.diagnostics = startNetworkDiagnostics(s.vm, w.Root(), started, diagnosticOptions)
 	}
 	if created {
+		if err := s.copyFiles(ctx, settings); err != nil {
+			cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			return nil, errors.Join(err, s.Remove(cleanup))
+		}
 		if err := s.configureEnvironment(ctx, settings); err != nil {
 			cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()

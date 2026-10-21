@@ -36,16 +36,16 @@ func mergeSettings(settings Settings, data []byte, origin string) (Settings, err
 		partial.Secrets[name] = secret
 	}
 	delete(overlay, "secrets")
-	if metadata.IsDefined("mounts") {
-		for i := range partial.Mounts {
-			source, err := resolveMountSource(partial.Mounts[i].Source, origin)
+	if metadata.IsDefined("files") {
+		for i := range partial.Files {
+			source, err := resolveFileSource(partial.Files[i].Source, origin)
 			if err != nil {
-				return settings, fmt.Errorf("mounts[%d].source: %w", i, err)
+				return settings, fmt.Errorf("files[%d].source: %w", i, err)
 			}
-			partial.Mounts[i].Source = source
+			partial.Files[i].Source = source
 		}
 		// Decode array tables through TOML, not koanf's weakly typed map decoder.
-		delete(overlay, "mounts")
+		delete(overlay, "files")
 	}
 	k := koanf.New(".")
 	base := settings
@@ -70,9 +70,9 @@ func mergeSettings(settings Settings, data []byte, origin string) (Settings, err
 			merged.Secrets[name] = secret
 		}
 	}
-	merged.Mounts = settings.Mounts
-	if metadata.IsDefined("mounts") {
-		merged.Mounts = partial.Mounts
+	merged.Files = settings.Files
+	if metadata.IsDefined("files") {
+		merged.Files = partial.Files
 	}
 	return merged, merged.Validate()
 }

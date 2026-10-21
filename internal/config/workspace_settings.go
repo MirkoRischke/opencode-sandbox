@@ -37,7 +37,7 @@ func (p Paths) LoadWorkspaceSettings(directory string, approve func(string, []by
 	path := filepath.Join(root, workspaceConfigName)
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return settings, settings.ValidateMountSources()
+		return settings, settings.ValidateFileSources()
 	}
 	if err != nil {
 		return settings, fmt.Errorf("read workspace settings: %w", err)
@@ -46,7 +46,7 @@ func (p Paths) LoadWorkspaceSettings(directory string, approve func(string, []by
 	if err != nil {
 		return settings, fmt.Errorf("workspace settings %s: %w", path, err)
 	}
-	if err := settings.ValidateMountSources(); err != nil {
+	if err := settings.ValidateFileSources(); err != nil {
 		return settings, fmt.Errorf("workspace settings %s: %w", path, err)
 	}
 	if err := trustWorkspaceSettings(p.StateDir, root, data, func() error {

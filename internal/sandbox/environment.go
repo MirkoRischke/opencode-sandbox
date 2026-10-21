@@ -41,7 +41,10 @@ func (s *Sandbox) configureEnvironment(ctx context.Context, settings config.Sett
 		Unrestricted: settings.Network.Unrestricted,
 		AllowedHosts: settings.Network.EffectiveAllowedHosts(),
 	}
-	for _, mount := range settings.Mounts {
+	for _, mount := range settings.Files {
+		if mount.IsCopy() {
+			continue
+		}
 		environment.ReadOnlyMounts = append(environment.ReadOnlyMounts, mount.Target)
 	}
 	contents, err := renderEnvironmentInstructions(environment)

@@ -23,7 +23,7 @@ func TestDefaultConfigRoundTripsToRuntimeDefaults(t *testing.T) {
 	require.Equal(t, DefaultSettings(), settings)
 	require.NoError(t, settings.Validate())
 	require.Empty(t, settings.Secrets, "examples must not enable credentials")
-	require.Empty(t, settings.Mounts, "examples must not expose host files")
+	require.Empty(t, settings.Files, "examples must not expose host files")
 	require.Contains(t, out.String(), "additional_allowed_hosts = []")
 	require.Contains(t, out.String(), "diagnostics = false")
 	require.Contains(t, out.String(), "unrestricted = false")
@@ -146,7 +146,7 @@ func TestDefaultConfigSecretExampleIsValid(t *testing.T) {
 		if line == "# keyring = {}" {
 			continue // Alternative to the file source, not an additional source.
 		}
-		if strings.HasPrefix(line, "# [[mounts]]") || strings.HasPrefix(line, "# source =") || strings.HasPrefix(line, "# target =") {
+		if strings.HasPrefix(line, "# [[files]]") || strings.HasPrefix(line, "# source =") || strings.HasPrefix(line, "# target =") || strings.HasPrefix(line, "# mode =") {
 			continue
 		}
 		if content, ok := strings.CutPrefix(line, "# "); ok &&
@@ -162,17 +162,17 @@ func TestDefaultConfigSecretExampleIsValid(t *testing.T) {
 	require.Equal(t, configExamples[reflect.TypeFor[SecretSettings]()], settings.Secrets["example"])
 }
 
-func TestDefaultConfigMountExampleIsValid(t *testing.T) {
+func TestDefaultConfigFileExampleIsValid(t *testing.T) {
 	t.Parallel()
 	var out bytes.Buffer
 	require.NoError(t, WriteDefaultConfig(&out))
 	lines := strings.Split(out.String(), "\n")
 	inMount := false
 	for i, line := range lines {
-		if line == "mounts = []" {
+		if line == "files = []" {
 			lines[i] = ""
 		}
-		if line == "# [[mounts]]" {
+		if line == "# [[files]]" {
 			inMount = true
 		}
 		if inMount {
@@ -187,9 +187,9 @@ func TestDefaultConfigMountExampleIsValid(t *testing.T) {
 	}
 	settings, err := mergeSettings(DefaultSettings(), []byte(strings.Join(lines, "\n")), t.TempDir())
 	require.NoError(t, err)
-	require.Len(t, settings.Mounts, 1)
-	require.Equal(t, "/root/.config/opencode/skills", settings.Mounts[0].Target)
-	require.True(t, filepath.IsAbs(settings.Mounts[0].Source))
+	require.Len(t, settings.Files, 1)
+	require.Equal(t, "/root/.config/opencode/skills", settings.Files[0].Target)
+	require.True(t, filepath.IsAbs(settings.Files[0].Source))
 }
 
 func TestDefaultConfigRejectsMissingMetadata(t *testing.T) {

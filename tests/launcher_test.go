@@ -86,7 +86,7 @@ func TestLauncherListsVMsOutsideGitWithoutLoadingSettings(t *testing.T) {
 func TestLauncherRejectsMissingMountBeforeStartingVM(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	writeSettingsAt(t, dir, "[[mounts]]\nsource = 'missing.json'\ntarget = '/etc/opencode/opencode.json'\n")
+	writeSettingsAt(t, dir, "[[files]]\nsource = 'missing.json'\ntarget = '/etc/opencode/opencode.json'\n")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	command := exec.CommandContext(ctx, buildLauncher(t))
@@ -96,7 +96,7 @@ func TestLauncherRejectsMissingMountBeforeStartingVM(t *testing.T) {
 	output, err := command.CombinedOutput()
 
 	require.Error(t, err)
-	require.Contains(t, string(output), "mounts[0].source")
+	require.Contains(t, string(output), "files[0].source")
 	require.Contains(t, string(output), filepath.Join(dir, "opencode-sandbox", "missing.json"))
 }
 

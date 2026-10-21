@@ -25,7 +25,7 @@ func TestRepositorySnapshotWithoutPreparationCommand(t *testing.T) {
 	settings.VM.RootDiskMiB, settings.VM.DockerDiskMiB = 512, 256
 	source := filepath.Join(t.TempDir(), "instructions.md")
 	require.NoError(t, os.WriteFile(source, []byte("before snapshot"), 0600))
-	settings.Mounts = []config.MountSettings{{Source: source, Target: "/opt/instructions.md"}}
+	settings.Files = []config.FileSettings{{Source: source, Target: "/opt/instructions.md"}}
 	t.Cleanup(func() {
 		cleanup, done := context.WithTimeout(context.Background(), time.Minute)
 		defer done()
@@ -37,7 +37,7 @@ func TestRepositorySnapshotWithoutPreparationCommand(t *testing.T) {
 	require.NoError(t, os.WriteFile(source, []byte("current host contents"), 0600))
 	skills := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(skills, "SKILL.md"), []byte("current skill"), 0600))
-	settings.Mounts = append(settings.Mounts, config.MountSettings{Source: skills, Target: "/opt/skills"})
+	settings.Files = append(settings.Files, config.FileSettings{Source: skills, Target: "/opt/skills"})
 	settings.Network.AllowedHosts = []string{"example.com"}
 	settings.Network.AdditionalAllowedHosts = nil
 	child := prepareSnapshotChild(t, ctx, worktree, settings)

@@ -23,7 +23,7 @@ func TestSandboxInstructionsPreserveUserConfigAndSurviveReconnect(t *testing.T) 
 	settings := testSettings(t)
 	settings.Network.AllowedHosts = []string{"GitHub.com"}
 	settings.Network.AdditionalAllowedHosts = []string{"github.com", "api.github.com"}
-	settings.Mounts = []config.MountSettings{{Source: source, Target: "/root/.config/opencode/opencode.json"}}
+	settings.Files = []config.FileSettings{{Source: source, Target: "/root/.config/opencode/opencode.json"}}
 	s := prepareSandboxWithSettings(t, newWorktree(t), settings)
 	instructions := execInSandbox(t, s, "cat", guestInstructions)
 	require.Contains(t, instructions, "- GitHub.com\n")
@@ -42,7 +42,7 @@ func TestSandboxInstructionsPreserveUserConfigAndSurviveReconnect(t *testing.T) 
 	instructions = execInSandbox(t, s, "cat", guestInstructions)
 	require.NoError(t, s.Shutdown())
 	settings.Network.Unrestricted = true
-	settings.Mounts = nil
+	settings.Files = nil
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, settings)

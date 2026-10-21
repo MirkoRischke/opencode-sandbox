@@ -23,7 +23,7 @@ func TestReadOnlyFileAndDirectoryMounts(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(skills, "example"), 0700))
 	require.NoError(t, os.WriteFile(filepath.Join(skills, "example", "SKILL.md"), []byte("skill contents"), 0600))
 	settings := testSettings(t)
-	settings.Mounts = []launcherconfig.MountSettings{
+	settings.Files = []launcherconfig.FileSettings{
 		{Source: config, Target: "/root/.config/opencode/cli.json"},
 		{Source: skills, Target: "/root/.config/opencode/skills"},
 	}
