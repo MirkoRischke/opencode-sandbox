@@ -76,9 +76,15 @@ func DefaultSettings() Settings {
 // LoadSettings overlays the user's config.toml onto built-in defaults.
 // A missing file uses defaults; an invalid file is an error.
 func LoadSettings(configDir string) (Settings, error) {
+	return (Paths{ConfigDir: configDir}).loadGlobalSettings()
+}
+
+func (p Paths) loadGlobalSettings() (Settings, error) {
 	settings := DefaultSettings()
-	path := filepath.Join(configDir, "opencode-sandbox", "config.toml")
+	p.log("Default configuration", "settings", settings)
+	path := filepath.Join(p.ConfigDir, "opencode-sandbox", "config.toml")
 	data, err := os.ReadFile(path)
+	p.log("Configuration source", "source", "global", "path", path, "present", !os.IsNotExist(err), "raw", string(data), "error", err)
 	if os.IsNotExist(err) {
 		return settings, nil
 	}

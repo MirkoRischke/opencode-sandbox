@@ -34,11 +34,13 @@ func (a AWSOptions) Validate() error {
 // only files managed by the launcher.
 func (s *Sandbox) StartAWS(ctx context.Context, settings *AWSOptions) (func(), error) {
 	if settings == nil {
-		if s.Exec(ctx, nil, nil, nil, "bash", "-eu", "-c", `
+		s.log().Info("AWS disabled; clearing managed credentials", "component", "aws")
+		if err := s.Exec(ctx, nil, nil, nil, "bash", "-eu", "-c", `
 test ! -L /root/.aws
 if [ -f /root/.aws/.opencode-sandbox-managed ]; then
   rm -f /root/.aws/credentials /root/.aws/config /root/.aws/.opencode-sandbox-managed
-fi`) != nil {
+fi`); err != nil {
+			s.log().Error("Clear guest AWS credentials failed", "component", "aws", "error", err)
 			return nil, fmt.Errorf("clear launcher-managed AWS credentials failed (details suppressed)")
 		}
 		return func() {}, nil
@@ -55,6 +57,9 @@ fi`) != nil {
 		return nil, fmt.Errorf("host AWS region is invalid")
 	}
 	refresh := func(ctx context.Context) (time.Time, error) {
+		started := time.Now()
+		logger := s.log().With("component", "aws", "role", settings.RoleARN, "region", settings.Region)
+		logger.Info("Assuming AWS role")
 		refreshCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 		defer cancel()
 		result, err := settings.Client.AssumeRole(refreshCtx, &sts.AssumeRoleInput{
@@ -62,6 +67,7 @@ fi`) != nil {
 			DurationSeconds: aws.Int32(3600),
 		})
 		if err != nil {
+			logger.Error("Assume AWS role failed", "error", err, "duration_ms", time.Since(started).Milliseconds())
 			return time.Time{}, fmt.Errorf("assume AWS role failed; check host authentication and role permissions (details suppressed)")
 		}
 		if result.Credentials == nil || result.Credentials.Expiration == nil || !result.Credentials.Expiration.After(time.Now()) {
@@ -75,9 +81,11 @@ fi`) != nil {
 			}
 		}
 		payload := fmt.Sprintf("[default]\naws_access_key_id = %s\naws_secret_access_key = %s\naws_session_token = %s\n", values[0], values[1], values[2])
-		if s.writeAWSFiles(refreshCtx, payload, settings.Region) != nil {
+		if err := s.writeAWSFiles(refreshCtx, payload, settings.Region); err != nil {
+			logger.Error("Write guest AWS credentials failed", "error", err)
 			return time.Time{}, fmt.Errorf("write guest AWS credentials failed; check for unmanaged ~/.aws files (details suppressed)")
 		}
+		logger.Info("AWS credentials refreshed", "expires_at", *credentials.Expiration, "duration_ms", time.Since(started).Milliseconds())
 		return *credentials.Expiration, nil
 	}
 	expires, err := refresh(initialCtx)
@@ -90,6 +98,7 @@ fi`) != nil {
 		defer close(done)
 		for {
 			delay := max(time.Until(expires.Add(-5*time.Minute)), time.Second)
+			s.log().Info("AWS credential refresh scheduled", "component", "aws", "refresh_at", time.Now().Add(delay), "expires_at", expires)
 			timer := time.NewTimer(delay)
 			select {
 			case <-refreshCtx.Done():
@@ -107,6 +116,7 @@ fi`) != nil {
 					break
 				}
 				fmt.Fprintln(os.Stderr, "AWS credential refresh failed; retrying in 30s. Existing credentials expire at", expires.UTC().Format(time.RFC3339))
+				s.log().Warn("AWS credential refresh will retry", "component", "aws", "error", err, "retry_in_seconds", 30, "expires_at", expires)
 				timer := time.NewTimer(30 * time.Second)
 				select {
 				case <-refreshCtx.Done():
@@ -117,7 +127,11 @@ fi`) != nil {
 			}
 		}
 	}()
-	return func() { cancel(); <-done }, nil
+	return func() {
+		cancel()
+		<-done
+		s.log().Info("AWS credential refresh stopped", "component", "aws")
+	}, nil
 }
 
 func (s *Sandbox) writeAWSFiles(ctx context.Context, credentials, region string) error {

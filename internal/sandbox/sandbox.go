@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"time"
 
 	launcherconfig "opencode-sandbox/internal/config"
+	"opencode-sandbox/internal/logging"
 	"opencode-sandbox/internal/workspace"
 
 	m "github.com/superradcompany/microsandbox/sdk/go"
@@ -19,6 +21,14 @@ type Sandbox struct {
 	Worktree    string
 	vm          *m.Sandbox
 	diagnostics *networkDiagnostics
+	logger      *slog.Logger
+}
+
+func (s *Sandbox) log() *slog.Logger {
+	if s.logger != nil {
+		return s.logger
+	}
+	return logging.FromContext(context.Background())
 }
 
 // Prepare resolves an exact directory and prepares its workspace VM.
@@ -50,15 +60,18 @@ func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secr
 	if err := configureRuntime(); err != nil {
 		return nil, fmt.Errorf("locate Microsandbox runtime: %w", err)
 	}
-	s := &Sandbox{Name: sandboxName(w), Worktree: w.Root()}
+	s := &Sandbox{Name: sandboxName(w), Worktree: w.Root(), logger: logging.FromContext(ctx).With("vm", sandboxName(w))}
+	s.log().Info("Preparing VM")
 	started := time.Now().UTC()
 	var created bool
 	s.vm, created, err = connectOrRestore(ctx, s.Name, w, secrets, settings, sandboxOptions(w, w.Root(), settings))
 	if err != nil {
+		s.log().Error("Prepare VM failed", "error", err)
 		return nil, fmt.Errorf("prepare sandbox: %w", err)
 	}
+	s.log().Info("VM connected", "created", created, "duration_ms", time.Since(started).Milliseconds())
 	if settings.Network.Diagnostics {
-		s.diagnostics = startNetworkDiagnostics(s.vm, w.Root(), started, diagnosticOptions)
+		s.diagnostics = startNetworkDiagnostics(ctx, s.vm, w.Root(), started, diagnosticOptions)
 	}
 	if created {
 		if err := s.copyFiles(ctx, settings); err != nil {
@@ -75,6 +88,7 @@ func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secr
 	if err := s.initializeProject(ctx, secrets); err != nil {
 		return nil, errors.Join(err, s.Shutdown())
 	}
+	s.log().Info("VM ready", "duration_ms", time.Since(started).Milliseconds())
 	return s, nil
 }
 
@@ -199,6 +213,7 @@ func (s *Sandbox) Exec(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 }
 
 func (s *Sandbox) Open(ctx context.Context) error {
+	s.log().Info("Attaching guest terminal")
 	terminalEnv := make(map[string]string)
 	for _, key := range []string{"TERM", "COLORTERM"} {
 		if value := os.Getenv(key); value != "" {
@@ -208,6 +223,7 @@ func (s *Sandbox) Open(ctx context.Context) error {
 	// Keep the terminal attached until the guest shell exits, not just OpenCode.
 	code, err := s.vm.AttachWith(ctx, "bash", []string{"-c", "opencode; exec bash -i"},
 		m.WithAttachCwd(s.Worktree), m.WithAttachEnv(terminalEnv))
+	s.log().Info("Guest terminal detached", "exit_code", code, "error", err)
 	if err != nil {
 		return err
 	}
@@ -215,6 +231,8 @@ func (s *Sandbox) Open(ctx context.Context) error {
 }
 
 func (s *Sandbox) Remove(ctx context.Context) (err error) {
+	s.log().Info("Removing VM")
+	defer func() { s.log().Info("VM removal finished", "error", err) }()
 	defer func() { err = errors.Join(err, s.Close()) }()
 	if s.diagnostics != nil {
 		if err := s.Stop(ctx); err != nil {
@@ -231,8 +249,10 @@ func (s *Sandbox) Close() error {
 }
 
 func (s *Sandbox) Stop(ctx context.Context) error {
+	s.log().Info("Stopping VM")
 	err := s.vm.Stop(ctx)
 	s.diagnostics.finish()
+	s.log().Info("VM stop finished", "error", err)
 	return err
 }
 

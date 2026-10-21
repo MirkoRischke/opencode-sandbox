@@ -108,7 +108,7 @@ func TestSnapshotRemoveAllFlag(t *testing.T) {
 
 func TestDiagnosticsCommandRejectsInvalidArguments(t *testing.T) {
 	t.Parallel()
-	for _, args := range [][]string{{"diagnostics"}, {"diagnostics", "unknown"}, {"diagnostics", "network", "extra"}} {
+	for _, args := range [][]string{{"diagnostics"}, {"diagnostics", "unknown"}, {"diagnostics", "network", "extra"}, {"diagnostics", "logs", "extra"}} {
 		t.Run(strings.Join(args, "/"), func(t *testing.T) {
 			if _, err := executeCommand(args...); err == nil {
 				t.Fatal("expected diagnostics argument error")
@@ -133,6 +133,7 @@ func TestCommandHelp(t *testing.T) {
 		{"--help"}, {"list", "--help"}, {"remove", "--help"},
 		{"config", "--help"}, {"config", "default", "--help"},
 		{"diagnostics", "--help"}, {"diagnostics", "network", "--help"},
+		{"diagnostics", "logs", "--help"},
 		{"snapshot", "--help"}, {"snapshot", "create", "--help"}, {"snapshot", "remove", "--help"},
 		{"snapshot", "list", "--help"},
 		{"completion", "--help"},

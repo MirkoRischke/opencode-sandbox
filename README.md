@@ -71,6 +71,7 @@ opencode-sandbox secret set github # Store/replace a keyring secret (hidden inpu
 opencode-sandbox secret remove github # Remove its keyring entry after confirmation (alias: rm)
 opencode-sandbox secret list # List account names in the opencode-sandbox keyring namespace (alias: ls)
 opencode-sandbox diagnostics network # Print saved network diagnostics JSON for this directory
+opencode-sandbox diagnostics logs # Print this workspace's host log directory
 opencode-sandbox snapshot create # Prepare a fresh VM and replace this directory's baseline
 opencode-sandbox snapshot list   # List all snapshots; current directory gets its own section
 opencode-sandbox snapshot remove # Delete this directory's baseline, leaving VMs untouched

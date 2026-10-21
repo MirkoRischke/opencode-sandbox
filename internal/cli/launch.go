@@ -8,10 +8,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 
 	launcherconfig "opencode-sandbox/internal/config"
+	"opencode-sandbox/internal/logging"
 	"opencode-sandbox/internal/sandbox"
 	"opencode-sandbox/internal/workspace"
 )
@@ -33,6 +35,11 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 	if err != nil {
 		return err
 	}
+	ctx, finish := startLogging(ctx, stateDir, w.Root(), "launch", os.Stderr)
+	defer func() { finish(err) }()
+	logger := logging.FromContext(ctx)
+	paths.Logger = logger
+	logger.Info("CLI configuration overrides", "aws_role", awsRole, "aws_profile", awsProfile)
 	settings, err := paths.LoadWorkspaceSettings(w.Root(), approveWorkspaceConfig)
 	if err != nil {
 		return err
@@ -41,6 +48,8 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 	if err != nil {
 		return err
 	}
+	settings.AWS = awsSettings
+	logger.Info("Effective configuration", "settings", settings)
 	var awsOptions *sandbox.AWSOptions
 	if awsSettings.Role != "" {
 		awsOptions = &sandbox.AWSOptions{RoleARN: awsSettings.Role}
@@ -65,10 +74,24 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 		}
 		cfg, err := awsconfig.LoadDefaultConfig(loadCtx, loadOptions...)
 		if err != nil {
+			logger.Error("Load host AWS configuration failed", "error", err)
 			return fmt.Errorf("load host AWS profile failed (details suppressed)")
 		}
+		// Preserve the SDK's provider/cache behavior, recording only metadata.
+		// This distinguishes aws login/SSO from overriding environment keys.
+		provider := cfg.Credentials
+		cfg.Credentials = aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
+			credentials, err := provider.Retrieve(ctx)
+			if err != nil {
+				logger.Error("Retrieve host AWS credentials failed", "error", err)
+			} else {
+				logger.Info("Host AWS credentials retrieved", "source", credentials.Source, "can_expire", credentials.CanExpire, "expires_at", credentials.Expires)
+			}
+			return credentials, err
+		})
 		awsOptions.Region = cfg.Region
 		awsOptions.Client = sts.NewFromConfig(cfg)
+		logger.Info("Host AWS configuration loaded", "profile", awsSettings.Profile, "region", cfg.Region)
 	}
 	stopAWS, err := s.StartAWS(ctx, awsOptions)
 	if err != nil {

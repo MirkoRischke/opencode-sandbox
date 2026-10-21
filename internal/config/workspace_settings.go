@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 )
@@ -16,13 +17,20 @@ const workspaceConfigName = ".opencode-sandbox.toml"
 type Paths struct {
 	ConfigDir string
 	StateDir  string
+	Logger    *slog.Logger
+}
+
+func (p Paths) log(message string, args ...any) {
+	if p.Logger != nil {
+		p.Logger.Info(message, args...)
+	}
 }
 
 // LoadWorkspaceSettings layers exact-directory settings over global settings.
 // Approval is required for each new directory/content pair before credentials are read.
 // approve receives the exact file bytes and the effective settings for review.
 func (p Paths) LoadWorkspaceSettings(directory string, approve func(string, []byte, Settings) error) (Settings, error) {
-	settings, err := LoadSettings(p.ConfigDir)
+	settings, err := p.loadGlobalSettings()
 	if err != nil {
 		return settings, err
 	}
@@ -36,6 +44,7 @@ func (p Paths) LoadWorkspaceSettings(directory string, approve func(string, []by
 	}
 	path := filepath.Join(root, workspaceConfigName)
 	data, err := os.ReadFile(path)
+	p.log("Configuration source", "source", "workspace", "path", path, "present", !os.IsNotExist(err), "raw", string(data), "error", err)
 	if os.IsNotExist(err) {
 		return settings, settings.ValidateFileSources()
 	}
@@ -55,8 +64,10 @@ func (p Paths) LoadWorkspaceSettings(directory string, approve func(string, []by
 		}
 		return approve(path, data, settings)
 	}); err != nil {
+		p.log("Workspace configuration trust", "path", path, "accepted", false, "error", err)
 		return settings, err
 	}
+	p.log("Workspace configuration trust", "path", path, "accepted", true)
 	return settings, nil
 }
 

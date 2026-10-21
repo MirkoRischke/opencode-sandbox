@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"opencode-sandbox/internal/logging"
 	"opencode-sandbox/internal/workspace"
 
 	m "github.com/superradcompany/microsandbox/sdk/go"
@@ -55,6 +57,7 @@ type networkDiagnostics struct {
 	collectionFailure string
 	saveFailure       string
 	output            io.Writer
+	logger            *slog.Logger
 }
 
 // DiagnosticsOptions supplies host-owned state and output explicitly. The CLI
@@ -130,13 +133,17 @@ func loadDiagnostics(worktree string, since time.Time, options DiagnosticsOption
 	return d, nil
 }
 
-func startNetworkDiagnostics(vm *m.Sandbox, worktree string, since time.Time, options DiagnosticsOptions) *networkDiagnostics {
+func startNetworkDiagnostics(ctx context.Context, vm *m.Sandbox, worktree string, since time.Time, options DiagnosticsOptions) *networkDiagnostics {
+	logger := logging.FromContext(ctx).With("component", "network_diagnostics")
 	d, err := loadDiagnostics(worktree, since, options)
 	if err != nil {
+		logger.Warn("Network diagnostics unavailable", "error", err)
 		fmt.Fprintln(options.Output, "warning: network diagnostics unavailable; existing history was not changed") //nolint:errcheck // Diagnostic notices are best-effort; never prevent VM use.
 		return nil
 	}
 	d.vm = vm
+	d.logger = logger
+	logger.Info("Network diagnostics started", "path", d.path)
 	fmt.Fprintln(d.output, "Network diagnostics:", d.path) //nolint:errcheck // Diagnostic notices are best-effort; never prevent VM use.
 	go d.run(d.collect)
 	return d
@@ -148,11 +155,17 @@ func (d *networkDiagnostics) run(collect func() error) {
 	defer ticker.Stop()
 	poll := func() {
 		if err := collect(); err != nil {
+			if d.logger != nil && d.collectionFailure == "" {
+				d.logger.Warn("Network diagnostics collection failed", "error", err)
+			}
 			d.collectionFailure = diagnosticErrorKind(err)
 		} else {
 			d.collectionFailure = ""
 		}
 		if err := d.save(); err != nil && d.saveFailure == "" {
+			if d.logger != nil {
+				d.logger.Warn("Network diagnostics save failed", "error", err)
+			}
 			d.saveFailure = diagnosticErrorKind(err)
 		}
 	}

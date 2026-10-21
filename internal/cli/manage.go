@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"text/tabwriter"
 
+	"opencode-sandbox/internal/logging"
 	"opencode-sandbox/internal/sandbox"
 
 	"github.com/spf13/cobra"
@@ -46,11 +48,17 @@ func newRemoveCommand() *cobra.Command {
 		Short:   "Stop and delete this directory's VM without confirmation",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return reportRemovals(cmd.OutOrStdout(), "VM", func(observer sandbox.RemovalObserver) error {
-				if all {
-					return sandbox.RemoveAll(cmd.Context(), observer)
-				}
-				return sandbox.Remove(cmd.Context(), ".", observer)
+			return logWorkspaceOperation(cmd.Context(), "remove", cmd.ErrOrStderr(), func(ctx context.Context) error {
+				return reportRemovals(cmd.OutOrStdout(), "VM", func(observer sandbox.RemovalObserver) error {
+					logged := func(name string, size *uint64) {
+						logging.FromContext(ctx).Info("VM removed", "vm", name)
+						observer(name, size)
+					}
+					if all {
+						return sandbox.RemoveAll(ctx, logged)
+					}
+					return sandbox.Remove(ctx, ".", logged)
+				})
 			})
 		},
 	}

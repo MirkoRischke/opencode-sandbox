@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"opencode-sandbox/internal/config"
+	"opencode-sandbox/internal/logging"
 	"opencode-sandbox/internal/workspace"
 
 	m "github.com/superradcompany/microsandbox/sdk/go"
@@ -90,6 +91,7 @@ func CreateSnapshot(ctx context.Context, directory string, secrets []Secret, set
 
 // CreateWorkspaceSnapshot captures a baseline for an already resolved workspace.
 func CreateWorkspaceSnapshot(ctx context.Context, w workspace.Workspace, secrets []Secret, settings config.Settings, diagnostics ...DiagnosticsOptions) (reference string, err error) {
+	logging.FromContext(ctx).Info("Preparing workspace snapshot")
 	if err := settings.Validate(); err != nil {
 		return "", err
 	}
@@ -167,11 +169,13 @@ func createPreparationVM(ctx context.Context, w workspace.Workspace, name string
 	started := time.Now().UTC()
 	vm, err := m.CreateSandbox(ctx, name, opts...)
 	if err != nil {
+		logging.FromContext(ctx).Error("Create preparation VM failed", "vm", name, "error", err)
 		return nil, fmt.Errorf("create preparation VM (runtime details suppressed)")
 	}
-	prep := &Sandbox{Name: name, Worktree: snapshotWorktree, vm: vm}
+	prep := &Sandbox{Name: name, Worktree: snapshotWorktree, vm: vm, logger: logging.FromContext(ctx).With("vm", name)}
+	prep.log().Info("Preparation VM created")
 	if settings.Network.Diagnostics {
-		prep.diagnostics = startNetworkDiagnostics(vm, w.Root(), started, diagnostics)
+		prep.diagnostics = startNetworkDiagnostics(ctx, vm, w.Root(), started, diagnostics)
 	}
 	if err := prep.copyFiles(ctx, settings); err != nil {
 		cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -338,12 +342,15 @@ func (r workspaceSnapshot) removeMembers(ctx context.Context, keepID string, obs
 }
 
 func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, secrets []Secret, settings config.Settings, opts []m.SandboxOption) (*m.Sandbox, bool, error) {
+	logger := logging.FromContext(ctx).With("vm", name)
 	_, err := m.GetSandbox(ctx, name)
 	if err == nil {
+		logger.Info("Reusing workspace VM")
 		vm, err := connectWithSecrets(ctx, name, secrets, opts)
 		return vm, false, err
 	}
 	if !m.IsKind(err, m.ErrSandboxNotFound) {
+		logger.Error("Find workspace VM failed", "error", err)
 		return nil, false, fmt.Errorf("find worktree VM (runtime details suppressed)")
 	}
 	repo := snapshotIdentity(w.Root())
@@ -357,6 +364,7 @@ func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, s
 		vm, err := connectWithSecrets(ctx, name, secrets, opts)
 		return vm, false, err
 	} else if !m.IsKind(err, m.ErrSandboxNotFound) {
+		logger.Error("Find workspace VM failed", "error", err)
 		return nil, false, fmt.Errorf("find worktree VM (runtime details suppressed)")
 	}
 	head, err := repo.head(ctx)
@@ -364,15 +372,18 @@ func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, s
 		return nil, false, err
 	}
 	if head == nil {
+		logger.Info("Creating workspace VM")
 		for _, secret := range secrets {
 			opts = append(opts, m.WithSecrets(secret.entry))
 		}
 		vm, err := m.CreateSandbox(ctx, name, opts...)
 		if err != nil {
+			logger.Error("Create workspace VM failed", "error", err)
 			return nil, false, fmt.Errorf("create worktree VM (runtime details suppressed)")
 		}
 		return vm, true, nil
 	}
+	logger.Info("Restoring workspace VM", "snapshot", head.Reference())
 	vm, err := restoreWorktree(ctx, head, name, w, secrets, settings)
 	return vm, err == nil, err
 }
@@ -391,6 +402,7 @@ func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, w
 	}
 	restored, err := m.RestoreSandbox(ctx, head, name, m.WithRestoreConfig(restore))
 	if err != nil {
+		logging.FromContext(ctx).Error("Restore workspace snapshot failed", "vm", name, "error", err)
 		return nil, fmt.Errorf("restore workspace snapshot (runtime details suppressed)")
 	}
 	defer restored.Close() //nolint:errcheck // Release the original handle on every path; the restarted handle belongs to the caller.
@@ -400,6 +412,7 @@ func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, w
 	}
 	restarted, err := handle.StartDetached(ctx)
 	if err != nil {
+		logging.FromContext(ctx).Error("Start restored VM failed", "vm", name, "error", err)
 		return nil, discardRestoredVM(restored, fmt.Errorf("start configured restored VM (runtime details suppressed)"))
 	}
 	return restarted, nil
@@ -429,15 +442,18 @@ func configureRestoredWorktree(ctx context.Context, restored *m.Sandbox, name, r
 	}
 	handle, err := m.GetSandbox(ctx, name)
 	if err != nil {
+		logging.FromContext(ctx).Error("Find restored VM failed", "vm", name, "error", err)
 		return nil, fmt.Errorf("find restored VM (runtime details suppressed)")
 	}
 	plan, err := handle.Modify(ctx, patch)
 	if err != nil || !plan.Applied {
+		logging.FromContext(ctx).Error("Configure restored VM failed", "vm", name, "error", err)
 		return nil, fmt.Errorf("configure restored VM credentials and labels (runtime details suppressed)")
 	}
 	if len(secrets) == 0 {
 		plan, err = handle.Modify(ctx, m.ModifyOptions{Policy: m.ModificationPolicyNextStart, SecretsRemove: []string{tlsBootstrap}})
 		if err != nil || !plan.Applied {
+			logging.FromContext(ctx).Error("Finalize restored VM TLS failed", "vm", name, "error", err)
 			return nil, fmt.Errorf("finalize restored VM TLS inspection (runtime details suppressed)")
 		}
 	}
