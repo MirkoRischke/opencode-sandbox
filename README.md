@@ -8,7 +8,7 @@ retain installed tools and guest files for the next launch.
 
 - **Network allowlist:** allow common development services over HTTPS by default;
   customize allowed hosts or deny all application internet access.
-- **Custom credentials:** configure file-backed secrets, injected into selected
+- **Custom credentials:** configure file- or OS-keyring-backed secrets, injected into selected
   HTTPS headers by the host proxy without exposing their values to the guest.
 - **Workspace configuration:** override global settings with a directory-local
   `.opencode-sandbox.toml`; new or changed configs require approval.
@@ -66,6 +66,9 @@ opencode-sandbox remove # Delete this directory's VM without confirmation (alias
 opencode-sandbox remove --all # Delete ALL managed VMs without confirmation
 opencode-sandbox --help # Show launch options
 opencode-sandbox config default # Print documented launcher defaults
+opencode-sandbox secret set github # Store/replace a keyring secret (hidden input; config unchanged)
+opencode-sandbox secret remove github # Remove its keyring entry after confirmation (alias: rm)
+opencode-sandbox secret list # List account names in the opencode-sandbox keyring namespace (alias: ls)
 opencode-sandbox diagnostics network # Print saved network diagnostics JSON for this directory
 opencode-sandbox snapshot create # Prepare a fresh VM and replace this directory's baseline
 opencode-sandbox snapshot list   # List all snapshots; current directory gets its own section

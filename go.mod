@@ -14,6 +14,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	github.com/superradcompany/microsandbox/sdk/go v0.7.8
+	github.com/zalando/go-keyring v0.2.9-0.20260724212736-66b55cc0c51c
 	golang.org/x/term v0.47.0
 )
 
@@ -29,9 +30,11 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.38.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.43.4 // indirect
 	github.com/aws/smithy-go v1.28.5 // indirect
+	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
+	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/knadh/koanf/maps v0.1.2 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect

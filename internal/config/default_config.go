@@ -67,6 +67,8 @@ func writeConfigTable(out *bytes.Buffer, value reflect.Value, path string, comme
 			continue
 		}
 		switch fieldValue.Kind() {
+		case reflect.Pointer:
+			fmt.Fprintf(out, "# %s\n# %s = {}\n", description, name)
 		case reflect.Struct:
 			fmt.Fprintf(out, "\n# %s\n%s[%s]\n", description, prefix, fieldPath)
 			if err := writeConfigTable(out, fieldValue, fieldPath, commented); err != nil {

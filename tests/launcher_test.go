@@ -119,7 +119,7 @@ func TestLauncherRejectsInvalidSettingsBeforeStartingVM(t *testing.T) {
 
 func TestLauncherRejectsUntrustedRepoConfigBeforeLoadingSecrets(t *testing.T) {
 	t.Parallel()
-	root, _, paths := repoSettingsFixture(t, "[secrets.github]\nallowed_hosts = ['other.example.com']\n")
+	root, _, paths := repoSettingsFixture(t, "[secrets.github]\nkeyring = {}\nenv = 'GH_TOKEN'\nallowed_hosts = ['other.example.com']\nheaders = ['authorization']\n")
 	writeSettingsAt(t, paths.ConfigDir, "[secrets.github]\nfile = 'missing-token'\nenv = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -133,6 +133,52 @@ func TestLauncherRejectsUntrustedRepoConfigBeforeLoadingSecrets(t *testing.T) {
 	require.NotContains(t, string(output), "missing-token")
 	_, err = os.Stat(filepath.Join(paths.StateDir, "opencode-sandbox", "trust.json"))
 	require.True(t, os.IsNotExist(err))
+}
+
+func TestSecretCommandsIgnoreConfiguration(t *testing.T) {
+	t.Parallel()
+	root, path, paths := repoSettingsFixture(t, "[secrets.github]\nfile = 'missing-token'\n")
+	writeSettingsAt(t, paths.ConfigDir, "invalid TOML [")
+	for _, operation := range []string{"set", "remove", "rm"} {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		command := exec.CommandContext(ctx, buildLauncher(t), "secret", operation, "github")
+		command.Dir = root
+		command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+paths.ConfigDir, "XDG_STATE_HOME="+paths.StateDir)
+		command.Stdin = strings.NewReader("no\n")
+		output, err := command.CombinedOutput()
+		cancel()
+		require.Error(t, err)
+		require.Contains(t, string(output), `keyring service "opencode-sandbox", account "github"`)
+		if operation == "set" {
+			require.Contains(t, string(output), "requires an interactive terminal")
+		} else {
+			require.Contains(t, string(output), "not confirmed")
+		}
+		require.NotContains(t, string(output), "config.toml")
+		require.NotContains(t, string(output), "untrusted workspace config")
+		require.NotContains(t, string(output), "file-backed")
+	}
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, "[secrets.github]\nfile = 'missing-token'\n", string(data))
+	_, err = os.Stat(filepath.Join(paths.StateDir, "opencode-sandbox", "trust.json"))
+	require.True(t, os.IsNotExist(err))
+}
+
+func TestSecretSetWorksOutsideWorkspaceWithoutHostPaths(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	command := exec.CommandContext(ctx, buildLauncher(t), "secret", "set", "github")
+	command.Dir = "/"
+	command.Env = append(os.Environ(), "HOME=", "XDG_CONFIG_HOME=", "XDG_STATE_HOME=")
+	command.Stdin = strings.NewReader("FAKE_TOKEN\n")
+	output, err := command.CombinedOutput()
+	require.Error(t, err)
+	require.Contains(t, string(output), `keyring service "opencode-sandbox", account "github"`)
+	require.Contains(t, string(output), "requires an interactive terminal")
+	require.NotContains(t, string(output), "FAKE_TOKEN")
+	require.NotContains(t, string(output), "missing-token")
 }
 
 func TestLauncherValidatesAWSFlagsBeforeStartingVM(t *testing.T) {

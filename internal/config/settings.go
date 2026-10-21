@@ -17,7 +17,7 @@ type Settings struct {
 	VM       VMSettings                `toml:"vm" description:"VM resources. Recreate the VM after changing these settings."`
 	Network  NetworkSettings           `toml:"network" description:"Outbound network access. Recreate the VM after policy changes."`
 	Snapshot SnapshotSettings          `toml:"snapshot" description:"Optional per-directory prepared disk baseline. Created and removed explicitly with the snapshot commands."`
-	Secrets  map[string]SecretSettings `toml:"secrets" description:"Optional file-backed secrets, substituted by the host proxy. Uncomment and adjust the example to enable."`
+	Secrets  map[string]SecretSettings `toml:"secrets" description:"Optional file- or OS-keyring-backed secrets, substituted by the host proxy. Workspace entries replace same-named global entries completely. Uncomment and adjust the example to enable."`
 }
 
 type SnapshotSettings struct {

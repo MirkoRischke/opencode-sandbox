@@ -143,6 +143,9 @@ func TestDefaultConfigSecretExampleIsValid(t *testing.T) {
 	require.NoError(t, WriteDefaultConfig(&out))
 	lines := strings.Split(out.String(), "\n")
 	for i, line := range lines {
+		if line == "# keyring = {}" {
+			continue // Alternative to the file source, not an additional source.
+		}
 		if strings.HasPrefix(line, "# [[mounts]]") || strings.HasPrefix(line, "# source =") || strings.HasPrefix(line, "# target =") {
 			continue
 		}

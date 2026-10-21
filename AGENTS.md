@@ -8,3 +8,7 @@ outdated by your changes. Exceptions:
 # Implementation
 
 - Do not consider migration scenarios; recreation of sandboxes/VMs is acceptable.
+
+# CLI conventions
+
+- Use `remove` (alias `rm`) for removal commands and `list` (alias `ls`) for listing commands, including subcommands.

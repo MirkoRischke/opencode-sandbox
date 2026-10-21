@@ -21,7 +21,7 @@ func NewCommand() *cobra.Command {
 	}
 	root.Flags().StringVar(&awsRole, "aws-role", "", "IAM role ARN to assume for this session (optional)")
 	root.Flags().StringVar(&awsProfile, "aws-profile", "", "Optional host AWS source profile (requires --aws-role)")
-	root.AddCommand(newListCommand(), newRemoveCommand(), newConfigCommand(), newDiagnosticsCommand(), newSnapshotCommand())
+	root.AddCommand(newListCommand(), newRemoveCommand(), newConfigCommand(), newDiagnosticsCommand(), newSnapshotCommand(), newSecretCommand())
 	return root
 }
 

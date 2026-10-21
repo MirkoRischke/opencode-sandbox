@@ -30,7 +30,7 @@ directory has its own config, approval, VM, and snapshot baseline.
 
 Settings load in this order: built-in defaults, global `config.toml`, then workspace
 config. Tables merge recursively, scalars and arrays replace, and omitted keys
-inherit. These rules apply to every setting, including named secrets. For example:
+inherit, except that each named secret is replaced completely. For example:
 
 ```toml
 # .opencode-sandbox.toml
@@ -42,14 +42,19 @@ allowed_hosts = []
 additional_allowed_hosts = []
 
 [secrets.github]
+keyring = {}
+env = "GH_TOKEN"
 allowed_hosts = ["api.github.com"]
+headers = ["authorization"]
 ```
 
 This preserves global CPU/disk settings, disables application internet access,
-and overrides only the GitHub secret's destination list. Empty tables do not
-clear inherited entries; empty arrays replace inherited arrays. Relative secret
-file paths resolve against the directory of the config supplying the `file`
-field. Overriding another secret field does not change the inherited file's origin.
+and replaces the entire GitHub secret definition. Other global secrets remain
+available. A workspace secret must supply its own source, environment name,
+hosts, and headers; no fields inherit from the same-named global secret.
+An empty named secret table is invalid. Other empty tables do not clear inherited
+entries; empty arrays replace inherited arrays. Relative secret file paths resolve
+against the directory of the config defining that secret.
 Do not commit credential files.
 
 To add workspace-specific destinations without replacing global `allowed_hosts`, use:
@@ -497,7 +502,7 @@ tests enforce descriptions and verify that printed values match runtime defaults
 
 The `internal/config` package owns launcher settings, merging, trust storage,
 validation, and default-config generation. Interactive approval remains in the CLI;
-credential file loading and Microsandbox policy conversion remain in
+credential loading and Microsandbox policy conversion remain in
 `internal/sandbox`. Guest OpenCode JSON and TUI configuration are separate.
 
 ## Secrets
@@ -514,14 +519,79 @@ headers = ["authorization"]
 ```
 
 Add other named `[secrets.<name>]` sections in the same form. Each must have a
-unique environment variable name, a file, non-empty host patterns, and non-empty
-HTTP header names. Relative paths resolve against the config directory supplying
-the `file` field (global or repo);
+unique environment variable name, exactly one source (`file` or a `keyring` table),
+non-empty host patterns, and non-empty HTTP header names. Relative paths resolve
+against the config directory supplying the `file` field (global or repo);
 absolute paths are also accepted. Inline values and environment sources are not
 supported. Use mode `700` on the credential directory and `600` on the file.
 Symlinked paths, oversized files (over 16 KiB), empty values, multiple lines, and
 NUL bytes are rejected. A trailing newline is stripped. Configured files are
 validated on every launch; missing/invalid files fail launch, even for existing VMs.
+
+### OS keyring
+
+Use an empty table to select the host OS keyring with default identifiers:
+
+```toml
+[secrets.github]
+keyring = {}
+env = "GH_TOKEN"
+allowed_hosts = ["github.com", "api.github.com"]
+headers = ["authorization"]
+```
+
+The default service is `opencode-sandbox`; the account is the secret name (`github`
+above). Override either identifier when needed:
+
+```toml
+keyring = { service = "my-company", account = "work-github" }
+```
+
+Empty or omitted identifier fields use defaults. Same service/account pairs share
+one entry across projects. Workspace definitions completely replace same-named
+global secrets, including keyring identifiers; defaults apply to the replacement.
+`keyring = true` and configuring both `file` and `keyring` are invalid.
+
+The launcher uses [zalando/go-keyring](https://github.com/zalando/go-keyring):
+macOS Keychain on macOS, and Secret Service (normally GNOME Keyring) on Ubuntu.
+Ubuntu requires a running user D-Bus session and an available keyring; headless/SSH
+sessions may need additional setup. The OS may prompt to unlock or authorize access.
+There is no automatic fallback to a file. Missing entries and access failures stop
+launch, even for existing VMs. Values must be non-empty single-line strings without
+NUL bytes, at most 16 KiB; providers may impose smaller storage limits.
+
+Manage keyring entries independently of launcher configuration, from any directory:
+
+```sh
+opencode-sandbox secret set github
+opencode-sandbox secret remove github # alias: rm
+opencode-sandbox secret list # alias: ls
+```
+
+These commands do not read or change global/workspace configuration, request
+workspace approval, or launch a VM. The default service namespace is
+`opencode-sandbox`, and the account is the supplied name, whether or not that name
+is configured (including names currently configured as file-backed).
+Use `--service` to select another namespace, and `--account` on `set`/`remove` to
+override the account when using custom identifiers:
+
+```sh
+opencode-sandbox secret set github --service my-company --account work-github
+opencode-sandbox secret list --service my-company
+```
+
+`list` enumerates stored account names in the selected namespace, sorted and
+quoted for safe display; it does not retrieve or print credential values and
+does not list configured file sources. Listing uses an upstream go-keyring commit
+pinned in `go.mod`, because the latest tagged release lacks enumeration.
+`set` requires a terminal and prompts for hidden input; it stores or replaces the
+entry without accepting the value as a command argument or printing it.
+`remove` asks for confirmation and warns that the entry may be shared across projects.
+A missing entry is harmless after confirmation. No command prints resolved secrets.
+To use a stored entry on launch, separately configure `keyring = {}` (or the matching
+custom service/account) instead of `file` in the secret definition.
+
+### Proxy scope and persistence
 
 Secret host patterns use Microsandbox's native secret syntax, different from the
 network lists: `example.com` matches exactly; `*.example.com` matches the base
@@ -537,8 +607,11 @@ GitHub's guest HTTPS Git credential helper. OpenAI subscription authentication
 remains separate and unchanged.
 
 Real values persist in Microsandbox's **host-side VM configuration**. Never log
-resolved secrets or commit credential files. Allowed upstreams receive real
-values and could reflect them back; this is not an absolute secrecy guarantee.
+resolved secrets or commit credential files. Keyring storage protects the source
+credential but does not eliminate the copy in host-side VM configuration.
+Allowed upstreams receive real values and could reflect them back; this is not
+an absolute secrecy guarantee.
 Only new VMs receive changes: recreate a VM to rotate or remove its stored
-credentials. Removing an entry stops reading its file, but does not revoke
+credentials. Updating/deleting a keyring entry does not update existing VMs.
+Removing a secret definition stops loading its source, but does not revoke
 credentials in existing VMs. Revoke credentials upstream for immediate revocation.

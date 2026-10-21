@@ -118,6 +118,8 @@ docker_disk_mib = 20480
 [network]
 allowed_hosts = []
 [secrets.github]
+file = 'creds/repo-github-token'
+env = 'GH_TOKEN'
 allowed_hosts = ['custom.example.com']
 headers = ['x-token']
 [secrets.other]
@@ -153,7 +155,7 @@ headers = ['authorization']
 	require.Equal(t, launcherconfig.VMSettings{Image: "opencode-sandbox:poc", CPUs: 4, MemoryMiB: 8192, RootDiskMiB: 9000, DockerDiskMiB: 20480}, settings.VM)
 	require.Empty(t, settings.Network.AllowedHosts)
 	require.Equal(t, launcherconfig.SecretSettings{
-		File: filepath.Join(paths.ConfigDir, "opencode-sandbox", "creds/github-token"), Env: "GH_TOKEN",
+		File: filepath.Join(root, "creds/repo-github-token"), Env: "GH_TOKEN",
 		AllowedHosts: []string{"custom.example.com"}, Headers: []string{"x-token"},
 	}, settings.Secrets["github"])
 	require.Equal(t, filepath.Join(root, "creds/other"), settings.Secrets["other"].File)
@@ -166,7 +168,7 @@ headers = ['authorization']
 
 func TestRepoSettingsSecretFileOverrideUsesRepoOrigin(t *testing.T) {
 	t.Parallel()
-	root, _, paths := repoSettingsFixture(t, "[secrets.github]\nfile = 'local-token'\n")
+	root, _, paths := repoSettingsFixture(t, "[secrets.github]\nfile = 'local-token'\nenv = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
 	writeSettingsAt(t, paths.ConfigDir, "[secrets.github]\nfile = 'global-token'\nenv = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
 	settings, err := paths.LoadWorkspaceSettings(root, approveSettings)
 	require.NoError(t, err)

@@ -6,22 +6,54 @@ import (
 	"strings"
 )
 
+const DefaultKeyringService = "opencode-sandbox"
+
 type SecretSettings struct {
-	File         string   `toml:"file" description:"Host credential file; relative to the config supplying this field. Use directory mode 700 and file mode 600. Do not commit credentials."`
-	Env          string   `toml:"env" description:"Unique guest environment variable receiving a placeholder, not the real credential."`
-	AllowedHosts []string `toml:"allowed_hosts" description:"HTTPS hosts permitted to receive this credential: example.com matches exactly; *.example.com includes the base domain and all subdomains. Passed unchanged to Microsandbox. Network access must be allowed separately."`
-	Headers      []string `toml:"headers" description:"HTTP headers in which the host proxy may substitute the credential."`
+	File         string           `toml:"file" description:"Host credential file; relative to the config supplying this field. Use directory mode 700 and file mode 600. Do not commit credentials."`
+	Keyring      *KeyringSettings `toml:"keyring,omitempty" description:"Use the OS keyring instead of file. An empty table uses service opencode-sandbox and the secret name as account; optional service/account fields override these defaults."`
+	Env          string           `toml:"env" description:"Unique guest environment variable receiving a placeholder, not the real credential."`
+	AllowedHosts []string         `toml:"allowed_hosts" description:"HTTPS hosts permitted to receive this credential: example.com matches exactly; *.example.com includes the base domain and all subdomains. Passed unchanged to Microsandbox. Network access must be allowed separately."`
+	Headers      []string         `toml:"headers" description:"HTTP headers in which the host proxy may substitute the credential."`
+}
+
+// KeyringSettings identifies an OS-keyring entry without storing its value.
+type KeyringSettings struct {
+	Service string `toml:"service" description:"Keyring service; defaults to opencode-sandbox."`
+	Account string `toml:"account" description:"Keyring account; defaults to the secret name."`
+}
+
+// Reference supplies defaults for omitted service and account identifiers.
+func (k KeyringSettings) Reference(name string) (service, account string) {
+	service, account = k.Service, k.Account
+	if service == "" {
+		service = DefaultKeyringService
+	}
+	if account == "" {
+		account = name
+	}
+	return service, account
 }
 
 var envPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 var headerPattern = regexp.MustCompile("^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 
-// ValidateSecrets checks named credential definitions without reading their files.
+// ValidateSecrets checks named credential definitions without accessing their sources.
 func ValidateSecrets(secrets map[string]SecretSettings) error {
 	envs := map[string]bool{}
 	for name, secret := range secrets {
-		if secret.File == "" || !envPattern.MatchString(secret.Env) {
-			return fmt.Errorf("secret %q requires a file and a valid environment variable name", name)
+		if (secret.File != "") == (secret.Keyring != nil) {
+			return fmt.Errorf("secret %q requires exactly one source: file or keyring", name)
+		}
+		if !envPattern.MatchString(secret.Env) {
+			return fmt.Errorf("secret %q requires a valid environment variable name", name)
+		}
+		if secret.Keyring != nil {
+			service, account := secret.Keyring.Reference(name)
+			for _, value := range []string{service, account} {
+				if strings.TrimSpace(value) == "" || strings.ContainsAny(value, "\r\n\x00") {
+					return fmt.Errorf("secret %q: keyring service/account must be non-empty and contain no newlines or NUL bytes", name)
+				}
+			}
 		}
 		if envs[secret.Env] {
 			return fmt.Errorf("duplicate secret environment variable %q", secret.Env)

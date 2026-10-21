@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"opencode-sandbox/internal/config"
 
 	m "github.com/superradcompany/microsandbox/sdk/go"
+	"github.com/zalando/go-keyring"
 )
 
 // Secret contains a resolved host credential. Never log it or expose it to guests.
@@ -18,10 +20,14 @@ type Secret struct {
 	entry m.SecretEntry
 }
 
-// LoadSecrets reads only explicitly configured files. Remaining relative paths
+// LoadSecrets reads only explicitly configured files or keyring entries. Relative paths
 // are resolved by the settings loader before this function is called.
 // Host environment credentials are ignored.
 func LoadSecrets(settings config.Settings) ([]Secret, error) {
+	return loadSecrets(settings, keyring.Get)
+}
+
+func loadSecrets(settings config.Settings, get func(string, string) (string, error)) ([]Secret, error) {
 	if err := config.ValidateSecrets(settings.Secrets); err != nil {
 		return nil, err
 	}
@@ -36,11 +42,24 @@ func LoadSecrets(settings config.Settings) ([]Secret, error) {
 	var secrets []Secret
 	for _, name := range names {
 		config := settings.Secrets[name]
-		path := config.File
-		if !filepath.IsAbs(path) {
-			return nil, fmt.Errorf("secret %q: credential path must be absolute", name)
+		var value string
+		var err error
+		if config.Keyring != nil {
+			service, account := config.Keyring.Reference(name)
+			value, err = get(service, account)
+			if errors.Is(err, keyring.ErrNotFound) {
+				return nil, fmt.Errorf("secret %q: keyring entry not found; run 'opencode-sandbox secret set %s'", name, name)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("secret %q: keyring access failed; check that the keyring is available and unlocked (details suppressed)", name)
+			}
+			err = ValidateSecretValue(value)
+		} else {
+			if !filepath.IsAbs(config.File) {
+				return nil, fmt.Errorf("secret %q: credential path must be absolute", name)
+			}
+			value, err = readSecretFile(config.File)
 		}
-		value, err := readSecretFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("load secret %q: %w", name, err)
 		}
@@ -89,10 +108,21 @@ func readSecretFile(path string) (string, error) {
 		return "", fmt.Errorf("read secret file: %w", err)
 	}
 	value := strings.TrimRight(string(data), "\r\n")
-	if value == "" || strings.ContainsAny(value, "\r\n\x00") {
-		return "", fmt.Errorf("secret must contain one non-empty line without NUL bytes")
+	if err := ValidateSecretValue(value); err != nil {
+		return "", err
 	}
 	return value, nil
+}
+
+// ValidateSecretValue applies the same credential constraints to file and keyring sources.
+func ValidateSecretValue(value string) error {
+	if len(value) > 16384 {
+		return fmt.Errorf("secret is too large (maximum 16 KiB)")
+	}
+	if value == "" || strings.ContainsAny(value, "\r\n\x00") {
+		return fmt.Errorf("secret must contain one non-empty line without NUL bytes")
+	}
+	return nil
 }
 
 func connectWithSecrets(ctx context.Context, name string, secrets []Secret, opts []m.SandboxOption) (*m.Sandbox, error) {
