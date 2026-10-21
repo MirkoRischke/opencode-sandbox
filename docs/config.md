@@ -411,8 +411,14 @@ only that host; `.example.com` matches the base domain and all nested subdomains
 Values are passed unchanged; `*.example.com`, URLs, IPs, and ports are rejected.
 Connections are limited to TCP port 443
 with strict hostname checks and verified TLS inspection. Other outbound traffic
-is denied, apart from DNS through Microsandbox's gateway. Host/private networks,
-loopback, link-local and metadata destinations remain blocked. Both host lists
+is denied, apart from DNS for allowed names through Microsandbox's gateway.
+Disallowed DNS queries are rejected locally without forwarding upstream; an
+empty effective allowlist also blocks external DNS lookups. The trusted resolver
+can follow CNAMEs while resolving an allowed name, without granting guest access
+to query the alias targets directly. Suffix entries also permit DNS queries for
+all matching subdomains, so avoid suffixes containing attacker-controlled names.
+Host/private networks, loopback, link-local and metadata destinations remain
+blocked. Both host lists
 must be empty and `unrestricted` must be false to deny application internet access. Missing files or omitted
 network settings use the built-in development-service allowlist. Malformed TOML, unknown keys,
 and invalid values fail launch before VM startup.

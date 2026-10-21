@@ -18,7 +18,7 @@ func TestNetworkPolicyCombinesAndDeduplicatesHostLists(t *testing.T) {
 	policy := networkPolicy(settings)
 	require.Equal(t, m.PolicyActionDeny, policy.DefaultEgress)
 	require.Equal(t, m.PolicyActionDeny, policy.DefaultIngress)
-	// DNS and protected-destination rules remain unchanged and precede host rules.
+	// Protected-destination rules precede hostname allows.
 	baseline := networkPolicy(config.NetworkSettings{})
 	require.Equal(t, baseline.Rules, policy.Rules[:len(baseline.Rules)])
 	var destinations []string
@@ -58,12 +58,16 @@ func TestUnrestrictedNetworkAllowsOnlyPublicDestinationsAndIgnoresHostLists(t *t
 	settings := config.DefaultSettings().Network
 	settings.Unrestricted = true
 	policy := networkPolicy(settings)
-	baseline := networkPolicy(config.NetworkSettings{})
+	baseline := []m.PolicyRule{m.Rule.AllowDNS()}
+	for _, destination := range []string{"host", "private", "loopback", "link-local", "metadata", "multicast", "0.0.0.0", "::"} {
+		baseline = append(baseline, m.PolicyRule{
+			Action: m.PolicyActionDeny, Direction: m.PolicyDirectionEgress, Destination: destination,
+		})
+	}
 	require.Equal(t, m.PolicyActionDeny, policy.DefaultEgress)
 	require.Equal(t, m.PolicyActionDeny, policy.DefaultIngress)
 	require.False(t, policy.DisableStrict)
-	require.Equal(t, baseline.Rules, policy.Rules[:len(baseline.Rules)])
-	require.Equal(t, append(baseline.Rules, m.PolicyRule{
+	require.Equal(t, append(baseline, m.PolicyRule{
 		Action: m.PolicyActionAllow, Direction: m.PolicyDirectionEgress, Destination: "public",
 	}), policy.Rules)
 	settings.AllowedHosts = []string{"github.com"}
@@ -71,8 +75,28 @@ func TestUnrestrictedNetworkAllowsOnlyPublicDestinationsAndIgnoresHostLists(t *t
 	require.Equal(t, policy, networkPolicy(settings))
 	settings.Unrestricted = false
 	restricted := networkPolicy(settings)
-	require.Equal(t, "github.com", restricted.Rules[len(baseline.Rules)].Destination)
-	require.Equal(t, "registry.npmjs.org", restricted.Rules[len(baseline.Rules)+1].Destination)
+	restrictedBaseline := networkPolicy(config.NetworkSettings{})
+	require.Equal(t, "github.com", restricted.Rules[len(restrictedBaseline.Rules)].Destination)
+	require.Equal(t, "registry.npmjs.org", restricted.Rules[len(restrictedBaseline.Rules)+1].Destination)
+}
+
+func TestRestrictedNetworkFiltersDNSWithoutWeakeningProtectedDestinations(t *testing.T) {
+	t.Parallel()
+	policy := networkPolicy(config.NetworkSettings{AllowedHosts: []string{"github.com"}})
+	require.Equal(t, m.PolicyActionDeny, policy.DefaultEgress)
+	require.Equal(t, m.PolicyRule{
+		Action: m.PolicyActionDeny, Direction: m.PolicyDirectionEgress, Destination: "host",
+		Protocol: m.PolicyProtocolTCP, Port: "443",
+	}, policy.Rules[0])
+	for _, rule := range policy.Rules[1 : len(policy.Rules)-1] {
+		require.Equal(t, m.PolicyActionDeny, rule.Action)
+		require.Empty(t, rule.Protocol)
+		require.Empty(t, rule.Port)
+	}
+	require.Equal(t, "github.com", policy.Rules[len(policy.Rules)-1].Destination)
+	for _, rule := range networkPolicy(config.NetworkSettings{}).Rules {
+		require.Equal(t, m.PolicyActionDeny, rule.Action, "empty allowlist must not grant DNS access")
+	}
 }
 
 func TestNetworkDiagnosticsOnlyChangesDenialResponsesNotRules(t *testing.T) {

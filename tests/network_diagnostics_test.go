@@ -127,7 +127,12 @@ func TestSnapshotRestoreBlocksHTTPSWithoutDenialDiagnostics(t *testing.T) {
 	// Microsandbox v0.7.8 restore loses the denial responder, not enforcement.
 	// Keep this expectation aligned with the documented snapshot limitation.
 	require.False(t, restoredConfig.Network.HTTP.DenyResponse)
-	requireNetworkBlocked(t, s, "https://example.org")
+	// Bypass DNS so this exercises the missing HTTPS responder rather than
+	// the DNS-name denial, which is still diagnosed after restore.
+	err = s.Exec(ctx, nil, nil, nil, "curl", "--noproxy", "*", "--fail", "--silent", "--show-error",
+		"--max-time", "5", "--resolve", "example.org:443:1.1.1.1", "https://example.org")
+	require.Error(t, err)
+	require.NoError(t, ctx.Err(), "guest curl must fail, not the SDK deadline")
 	require.NoError(t, s.Stop(ctx), "flush diagnostics before inspecting the report")
 	var output bytes.Buffer
 	require.NoError(t, sandbox.WriteNetworkDiagnostics(ctx, s.Worktree, state, &output))
