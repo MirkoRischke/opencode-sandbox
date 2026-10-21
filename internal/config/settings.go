@@ -14,10 +14,16 @@ import (
 // guest JSON configuration. Add new launcher settings as fields or sections.
 type Settings struct {
 	Files    []FileSettings            `toml:"files" description:"Explicit host file/directory mappings. Default mode mount is read-only; copy seeds writable guest files on creation and snapshot restore. Recreate the VM after changing mappings."`
+	AWS      AWSSettings               `toml:"aws" description:"Optional AWS role credentials for launches. CLI flags override individual fields; host credentials are never stored here."`
 	VM       VMSettings                `toml:"vm" description:"VM resources. Recreate the VM after changing these settings."`
 	Network  NetworkSettings           `toml:"network" description:"Outbound network access. Recreate the VM after policy changes."`
 	Snapshot SnapshotSettings          `toml:"snapshot" description:"Optional per-directory prepared disk baseline. Created and removed explicitly with the snapshot commands."`
 	Secrets  map[string]SecretSettings `toml:"secrets" description:"Optional file- or OS-keyring-backed secrets, substituted by the host proxy. Workspace entries replace same-named global entries completely. Uncomment and adjust the example to enable."`
+}
+
+type AWSSettings struct {
+	Role    string `toml:"role" description:"IAM role ARN to assume on the host. Empty disables AWS when profile is also empty."`
+	Profile string `toml:"profile" description:"Optional host AWS source profile. Requires a role after config and CLI overrides are combined."`
 }
 
 type SnapshotSettings struct {

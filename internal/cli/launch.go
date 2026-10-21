@@ -16,16 +16,9 @@ import (
 	"opencode-sandbox/internal/workspace"
 )
 
-func launch(ctx context.Context, awsRole, awsProfile string) (err error) {
+func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 	if err := identifyHerdrAgent(); err != nil {
 		return err
-	}
-	var awsOptions *sandbox.AWSOptions
-	if awsRole != "" || awsProfile != "" {
-		awsOptions = &sandbox.AWSOptions{RoleARN: awsRole}
-		if err := awsOptions.Validate(); err != nil {
-			return err
-		}
 	}
 	configDir, err := hostConfigDir(os.Getenv("XDG_CONFIG_HOME"), os.Getenv("HOME"))
 	if err != nil {
@@ -44,6 +37,14 @@ func launch(ctx context.Context, awsRole, awsProfile string) (err error) {
 	if err != nil {
 		return err
 	}
+	awsSettings, err := resolveAWSSettings(settings.AWS, awsRole, awsProfile)
+	if err != nil {
+		return err
+	}
+	var awsOptions *sandbox.AWSOptions
+	if awsSettings.Role != "" {
+		awsOptions = &sandbox.AWSOptions{RoleARN: awsSettings.Role}
+	}
 	secrets, err := sandbox.LoadSecrets(settings)
 	if err != nil {
 		return err
@@ -59,8 +60,8 @@ func launch(ctx context.Context, awsRole, awsProfile string) (err error) {
 		loadCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 		defer cancel()
 		loadOptions := []func(*awsconfig.LoadOptions) error{awsconfig.WithDefaultRegion("eu-west-1")}
-		if awsProfile != "" {
-			loadOptions = append(loadOptions, awsconfig.WithSharedConfigProfile(awsProfile))
+		if awsSettings.Profile != "" {
+			loadOptions = append(loadOptions, awsconfig.WithSharedConfigProfile(awsSettings.Profile))
 		}
 		cfg, err := awsconfig.LoadDefaultConfig(loadCtx, loadOptions...)
 		if err != nil {
@@ -78,6 +79,26 @@ func launch(ctx context.Context, awsRole, awsProfile string) (err error) {
 		return err
 	}
 	return s.Open(ctx)
+}
+
+// Validate AWS only after CLI overrides, so a profile-only config can use a CLI role.
+func resolveAWSSettings(settings launcherconfig.AWSSettings, role, profile *string) (launcherconfig.AWSSettings, error) {
+	if role != nil {
+		settings.Role = *role
+	}
+	if profile != nil {
+		settings.Profile = *profile
+	}
+	if settings.Role == "" && settings.Profile == "" {
+		return settings, nil
+	}
+	if settings.Role == "" {
+		return settings, fmt.Errorf("aws.profile (--aws-profile) requires aws.role or --aws-role")
+	}
+	if err := (sandbox.AWSOptions{RoleARN: settings.Role}).Validate(); err != nil {
+		return settings, fmt.Errorf("aws.role: %w", err)
+	}
+	return settings, nil
 }
 
 func identifyHerdrAgent() error {

@@ -1,6 +1,19 @@
 # AWS role credentials
 
-AWS access is opt-in for each launch, not configured in `config.toml`:
+AWS access is opt-in through global `config.toml`, approved workspace
+`.opencode-sandbox.toml`, or launch flags:
+
+```toml
+[aws]
+role = "arn:aws:iam::123456789012:role/SandboxReadOnly"
+profile = "my-sso-profile" # optional host source profile
+```
+
+Only role/profile settings are supported, not raw access keys or secret keys.
+Each field inherits independently: **CLI flag → workspace config → global config**.
+Omitted flags preserve configured values; explicit empty flags clear them.
+
+For a one-off launch or override:
 
 ```sh
 opencode-sandbox --aws-role arn:aws:iam::123456789012:role/SandboxReadOnly
@@ -10,9 +23,12 @@ opencode-sandbox --aws-role arn:aws:iam::123456789012:role/SandboxReadOnly \
   --aws-profile my-sso-profile
 ```
 
-Without `--aws-role`, no host AWS authentication is performed. Any previously
+Without a configured or CLI role/profile, no host AWS authentication is performed. Any previously
 launcher-managed AWS credentials/config in the reused VM are removed. Unmanaged
-guest files are left alone. `--aws-profile` is optional, but requires `--aws-role`.
+guest files are left alone. A profile is optional, but requires a role after config
+and CLI overrides are combined. To disable configured AWS access for one launch,
+use `--aws-role= --aws-profile=`. AWS settings are validated before credentials
+are loaded or a VM is started.
 
 The launcher uses the host AWS SDK credential chain (or the explicitly selected
 profile) to call STS `AssumeRole`. Sign in to SSO on the host first if required.
