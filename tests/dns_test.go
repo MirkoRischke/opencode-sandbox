@@ -20,53 +20,98 @@ import (
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
-func TestDNSQueriesAreFilteredBeforeForwarding(t *testing.T) {
+func TestRestrictedDNSForwardsOnlyAllowedNames(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"restricted", "empty", "unrestricted"} {
-		t.Run(mode, func(t *testing.T) {
-			settings := launcherconfig.DefaultSettings()
-			settings.Network.AllowedHosts = []string{"allowed.test", ".trusted.test", "protected.test", "host.microsandbox.internal"}
-			settings.Network.AdditionalAllowedHosts = []string{}
-			settings.Network.Unrestricted = mode == "unrestricted"
-			if mode == "empty" {
-				settings.Network.AllowedHosts = []string{}
-			}
-			source := startSandboxWithSettings(t, settings)
-			upstream, queries := startDNSUpstream(t)
-			probe := startDNSProbe(t, source, settings.VM.Image, upstream)
-			for _, transport := range []string{"+notcp", "+tcp"} {
-				for _, name := range []string{"allowed.test", "sub.trusted.test", "secret.attacker.test", "sub.allowed.test", "alias.other.test"} {
-					allowed := mode == "unrestricted" || mode == "restricted" && (name == "allowed.test" || name == "sub.trusted.test")
-					before := queries()
-					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-					out, err := probe.Exec(ctx, "dig", []string{transport, "+tries=1", "+time=2", name, "A"})
-					cancel()
-					require.NoError(t, err)
-					require.Zero(t, out.ExitCode(), out.Stderr())
-					if allowed {
-						require.Contains(t, out.Stdout(), "status: NOERROR", "%s %s", transport, name)
-						require.Contains(t, out.Stdout(), "1.1.1.1")
-						require.Contains(t, queries()[len(before):], name, "positive control must reach our upstream")
-						if name == "allowed.test" {
-							require.Contains(t, out.Stdout(), "alias.other.test.", "CNAME outside allowlist must resolve")
-						}
-					} else {
-						require.Contains(t, out.Stdout(), "status: NXDOMAIN", "%s %s", transport, name)
-						require.Equal(t, before, queries(), "denied name must never reach upstream")
-					}
+	probe, queries := startFilteringDNSProbe(t, launcherconfig.NetworkSettings{AllowedHosts: []string{"allowed.test", ".trusted.test"}})
+	for _, transport := range []string{"+notcp", "+tcp"} {
+		for _, query := range []struct {
+			name    string
+			allowed bool
+		}{
+			{"allowed.test", true}, {"sub.trusted.test", true}, {"secret.attacker.test", false}, {"sub.allowed.test", false}, {"alias.other.test", false},
+		} {
+			t.Run(transport+"/"+query.name, func(t *testing.T) {
+				before := queries()
+				output := queryDNS(t, probe, transport, query.name)
+				if query.allowed {
+					require.Contains(t, output, "status: NOERROR")
+					require.Contains(t, output, "1.1.1.1")
+					require.Contains(t, queries()[len(before):], query.name, "allowed queries must reach the upstream")
+				} else {
+					require.Contains(t, output, "status: NXDOMAIN")
+					require.Equal(t, before, queries(), "denied queries must never reach the upstream")
 				}
-			}
-			if mode == "restricted" {
-				for _, host := range []string{"protected.test", "host.microsandbox.internal"} {
-					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-					out, err := probe.Exec(ctx, "curl", []string{"--noproxy", "*", "--insecure", "--max-time", "3", "https://" + host})
-					cancel()
-					require.NoError(t, err)
-					require.NotZero(t, out.ExitCode(), "allowed hostname must not bypass protected destinations")
-				}
-			}
-		})
+			})
+		}
 	}
+}
+
+func TestEmptyDNSAllowlistNeverForwardsQueries(t *testing.T) {
+	t.Parallel()
+	probe, queries := startFilteringDNSProbe(t, launcherconfig.NetworkSettings{AllowedHosts: []string{}})
+	for _, transport := range []string{"+notcp", "+tcp"} {
+		for _, name := range []string{"allowed.test", "sub.trusted.test", "secret.attacker.test", "sub.allowed.test", "alias.other.test"} {
+			output := queryDNS(t, probe, transport, name)
+			require.Contains(t, output, "status: NXDOMAIN", "%s %s", transport, name)
+		}
+	}
+	require.Empty(t, queries(), "an empty allowlist must never forward a query")
+}
+
+func TestUnrestrictedDNSForwardsAllNames(t *testing.T) {
+	t.Parallel()
+	probe, queries := startFilteringDNSProbe(t, launcherconfig.NetworkSettings{AllowedHosts: []string{}, Unrestricted: true})
+	for _, transport := range []string{"+notcp", "+tcp"} {
+		for _, name := range []string{"allowed.test", "sub.trusted.test", "secret.attacker.test", "sub.allowed.test", "alias.other.test"} {
+			before := queries()
+			output := queryDNS(t, probe, transport, name)
+			require.Contains(t, output, "status: NOERROR", "%s %s", transport, name)
+			require.Contains(t, output, "1.1.1.1")
+			require.Contains(t, queries()[len(before):], name)
+		}
+	}
+}
+
+func TestAllowedDNSResolvesAliasesOutsideTheAllowlist(t *testing.T) {
+	t.Parallel()
+	probe, _ := startFilteringDNSProbe(t, launcherconfig.NetworkSettings{AllowedHosts: []string{"allowed.test"}})
+	for _, transport := range []string{"+notcp", "+tcp"} {
+		output := queryDNS(t, probe, transport, "allowed.test")
+		require.Contains(t, output, "status: NOERROR")
+		require.Contains(t, output, "alias.other.test.")
+		require.Contains(t, output, "1.1.1.1")
+	}
+}
+
+func TestAllowedDNSCannotBypassProtectedDestinations(t *testing.T) {
+	t.Parallel()
+	probe, _ := startFilteringDNSProbe(t, launcherconfig.NetworkSettings{AllowedHosts: []string{"protected.test", "host.microsandbox.internal"}})
+	for _, host := range []string{"protected.test", "host.microsandbox.internal"} {
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		out, err := probe.Exec(ctx, "curl", []string{"--noproxy", "*", "--insecure", "--max-time", "3", "https://" + host})
+		cancel()
+		require.NoError(t, err)
+		require.NotZero(t, out.ExitCode(), "allowed hostname %s must not bypass protected destinations", host)
+	}
+}
+
+func startFilteringDNSProbe(t *testing.T, network launcherconfig.NetworkSettings) (*m.Sandbox, func() []string) {
+	t.Helper()
+	settings := launcherconfig.DefaultSettings()
+	settings.Network = network
+	source := startSandboxWithSettings(t, settings)
+	upstream, queries := startDNSUpstream(t)
+	return startDNSProbe(t, source, settings.VM.Image, upstream), queries
+}
+
+func queryDNS(t *testing.T, probe *m.Sandbox, transport, name string) string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	out, err := probe.Exec(ctx, "dig", []string{transport, "+tries=1", "+time=2", name, "A"})
+	require.NoError(t, err)
+	require.Zero(t, out.ExitCode(), out.Stderr())
+	return out.Stdout()
 }
 
 // Clone the launcher's actual serialized network policy, changing only the
@@ -145,47 +190,14 @@ func startDNSUpstream(t *testing.T) (string, func() []string) {
 	var mu sync.Mutex
 	queries := []string{}
 	respond := func(query []byte) []byte {
-		if len(query) < 17 {
+		name, end := dnsQuestion(query)
+		if end == 0 {
 			return nil
 		}
-		var labels []string
-		end := 12
-		for query[end] != 0 {
-			length := int(query[end])
-			end++
-			if length > 63 || end+length >= len(query) {
-				return nil
-			}
-			labels = append(labels, string(query[end:end+length]))
-			end += length
-		}
-		end += 5 // terminating zero, type, class
-		if end > len(query) {
-			return nil
-		}
-		name := strings.Join(labels, ".")
 		mu.Lock()
 		queries = append(queries, name)
 		mu.Unlock()
-		response := append([]byte(nil), query[:end]...)
-		binary.BigEndian.PutUint16(response[2:4], 0x8180)
-		binary.BigEndian.PutUint16(response[6:8], 1)
-		clear(response[8:12])
-		owner := []byte{0xc0, 0x0c} // question name
-		if name == "allowed.test" {
-			alias := []byte("\x05alias\x05other\x04test\x00")
-			binary.BigEndian.PutUint16(response[6:8], 2)
-			response = append(response, owner...)
-			response = append(response, 0, 5, 0, 1, 0, 0, 0, 60, 0, byte(len(alias)))
-			response = append(response, alias...)
-			owner = alias
-		}
-		response = append(response, owner...)
-		response = append(response, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4)
-		if name == "protected.test" {
-			return append(response, 127, 0, 0, 1)
-		}
-		return append(response, 1, 1, 1, 1)
+		return dnsResponse(query, name, end)
 	}
 	var workers sync.WaitGroup
 	workers.Add(2)
@@ -194,46 +206,102 @@ func startDNSUpstream(t *testing.T) (string, func() []string) {
 		assert.NoError(t, tcp.Close())
 		workers.Wait()
 	})
-	go func() {
-		defer workers.Done()
-		buffer := make([]byte, 4096)
-		for {
-			n, peer, err := udp.ReadFrom(buffer)
-			if err != nil {
-				return
-			}
-			_, err = udp.WriteTo(respond(buffer[:n]), peer)
-			assert.NoError(t, err)
-		}
-	}()
-	go func() {
-		defer workers.Done()
-		for {
-			conn, err := tcp.Accept()
-			if err != nil {
-				return
-			}
-			for {
-				assert.NoError(t, conn.SetDeadline(time.Now().Add(5*time.Second)))
-				var size [2]byte
-				if _, err := io.ReadFull(conn, size[:]); err != nil {
-					break
-				}
-				query := make([]byte, binary.BigEndian.Uint16(size[:]))
-				if _, err := io.ReadFull(conn, query); err != nil {
-					break
-				}
-				response := respond(query)
-				binary.BigEndian.PutUint16(size[:], uint16(len(response)))
-				_, err = conn.Write(append(size[:], response...))
-				assert.NoError(t, err)
-			}
-			assert.NoError(t, conn.Close())
-		}
-	}()
+	go func() { defer workers.Done(); serveDNSUDP(t, udp, respond) }()
+	go func() { defer workers.Done(); serveDNSTCP(t, tcp, respond) }()
 	return tcp.Addr().String(), func() []string {
 		mu.Lock()
 		defer mu.Unlock()
 		return append([]string{}, queries...)
+	}
+}
+
+func dnsQuestion(query []byte) (string, int) {
+	if len(query) < 17 {
+		return "", 0
+	}
+	var labels []string
+	end := 12
+	for query[end] != 0 {
+		length := int(query[end])
+		end++
+		if length > 63 || end+length >= len(query) {
+			return "", 0
+		}
+		labels = append(labels, string(query[end:end+length]))
+		end += length
+	}
+	end += 5 // terminating zero, type, class
+	if end > len(query) {
+		return "", 0
+	}
+	return strings.Join(labels, "."), end
+}
+
+func dnsResponse(query []byte, name string, end int) []byte {
+	response := append([]byte(nil), query[:end]...)
+	binary.BigEndian.PutUint16(response[2:4], 0x8180)
+	binary.BigEndian.PutUint16(response[6:8], 1)
+	clear(response[8:12])
+	owner := []byte{0xc0, 0x0c} // question name
+	if name == "allowed.test" {
+		alias := []byte("\x05alias\x05other\x04test\x00")
+		binary.BigEndian.PutUint16(response[6:8], 2)
+		response = append(response, owner...)
+		response = append(response, 0, 5, 0, 1, 0, 0, 0, 60, 0, byte(len(alias)))
+		response = append(response, alias...)
+		owner = alias
+	}
+	response = append(response, owner...)
+	response = append(response, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4)
+	if name == "protected.test" {
+		return append(response, 127, 0, 0, 1)
+	}
+	return append(response, 1, 1, 1, 1)
+}
+
+func serveDNSUDP(t *testing.T, udp net.PacketConn, respond func([]byte) []byte) {
+	t.Helper()
+	buffer := make([]byte, 4096)
+	for {
+		n, peer, err := udp.ReadFrom(buffer)
+		if err != nil {
+			return
+		}
+		_, err = udp.WriteTo(respond(buffer[:n]), peer)
+		assert.NoError(t, err)
+	}
+}
+
+func serveDNSTCP(t *testing.T, tcp net.Listener, respond func([]byte) []byte) {
+	t.Helper()
+	for {
+		conn, err := tcp.Accept()
+		if err != nil {
+			return
+		}
+		serveDNSConnection(t, conn, respond)
+		assert.NoError(t, conn.Close())
+	}
+}
+
+func serveDNSConnection(t *testing.T, conn net.Conn, respond func([]byte) []byte) {
+	t.Helper()
+	for {
+		if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+			t.Errorf("set DNS connection deadline: %v", err)
+			return
+		}
+		var size [2]byte
+		if _, err := io.ReadFull(conn, size[:]); err != nil {
+			return
+		}
+		query := make([]byte, binary.BigEndian.Uint16(size[:]))
+		if _, err := io.ReadFull(conn, query); err != nil {
+			return
+		}
+		response := respond(query)
+		binary.BigEndian.PutUint16(size[:], uint16(len(response)))
+		_, err := conn.Write(append(size[:], response...))
+		assert.NoError(t, err)
 	}
 }
