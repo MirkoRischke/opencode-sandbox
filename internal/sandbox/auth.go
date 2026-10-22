@@ -19,9 +19,21 @@ func (s *Sandbox) ImportOpenAI(ctx context.Context) error {
 	if err != nil {
 		return errors.New("export host OpenAI credentials failed (output suppressed)")
 	}
+	payload, err := selectOpenAICredential(data)
+	if err != nil {
+		return err
+	}
+	if s.Exec(ctx, bytes.NewReader(payload), nil, nil, "opencode", "auth", "import") != nil {
+		return errors.New("import OpenAI credential failed (output suppressed)")
+	}
+	return s.Exec(ctx, nil, nil, nil, "touch", marker)
+}
+
+// Select one active subscription credential, preserving provider-specific fields.
+func selectOpenAICredential(data []byte) ([]byte, error) {
 	var records []json.RawMessage
 	if json.Unmarshal(data, &records) != nil {
-		return errors.New("invalid host credential export")
+		return nil, errors.New("invalid host credential export")
 	}
 	var selected []json.RawMessage
 	for _, record := range records {
@@ -33,25 +45,22 @@ func (s *Sandbox) ImportOpenAI(ctx context.Context) error {
 			} `json:"value"`
 		}
 		if json.Unmarshal(record, &credential) != nil {
-			return errors.New("invalid credential entry")
+			return nil, errors.New("invalid credential entry")
 		}
 		if credential.IntegrationID != "openai" || !credential.Active {
 			continue
 		}
 		if credential.Value.Type != "oauth" {
-			return errors.New("active OpenAI credential must use subscription OAuth")
+			return nil, errors.New("active OpenAI credential must use subscription OAuth")
 		}
 		selected = append(selected, record)
 	}
 	if len(selected) != 1 {
-		return errors.New("expected exactly one active host OpenAI credential")
+		return nil, errors.New("expected exactly one active host OpenAI credential")
 	}
 	payload, err := json.Marshal(selected)
 	if err != nil {
-		return errors.New("encode selected credential failed")
+		return nil, errors.New("encode selected credential failed")
 	}
-	if s.Exec(ctx, bytes.NewReader(payload), nil, nil, "opencode", "auth", "import") != nil {
-		return errors.New("import OpenAI credential failed (output suppressed)")
-	}
-	return s.Exec(ctx, nil, nil, nil, "touch", marker)
+	return payload, nil
 }

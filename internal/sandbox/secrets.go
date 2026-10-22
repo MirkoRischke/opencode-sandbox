@@ -43,26 +43,9 @@ func loadSecrets(settings config.Settings, get func(string, string) (string, err
 	var secrets []Secret
 	for _, name := range names {
 		config := settings.Secrets[name]
-		var value string
-		var err error
-		if config.Keyring != nil {
-			service, account := config.Keyring.Reference(name)
-			value, err = get(service, account)
-			if errors.Is(err, keyring.ErrNotFound) {
-				return nil, fmt.Errorf("secret %q: keyring entry not found; run 'opencode-sandbox secret set %s'", name, name)
-			}
-			if err != nil {
-				return nil, fmt.Errorf("secret %q: keyring access failed; check that the keyring is available and unlocked (details suppressed)", name)
-			}
-			err = ValidateSecretValue(value)
-		} else {
-			if !filepath.IsAbs(config.File) {
-				return nil, fmt.Errorf("secret %q: credential path must be absolute", name)
-			}
-			value, err = readSecretFile(config.File)
-		}
+		value, err := resolveSecretValue(name, config, get)
 		if err != nil {
-			return nil, fmt.Errorf("load secret %q: %w", name, err)
+			return nil, err
 		}
 		hosts := make([]string, len(config.AllowedHosts))
 		copy(hosts, config.AllowedHosts)
@@ -77,22 +60,34 @@ func loadSecrets(settings config.Settings, get func(string, string) (string, err
 	return secrets, nil
 }
 
-func readSecretFile(path string) (string, error) {
-	// Reject symlinks in the credential path, not just its final component.
-	for dir := filepath.Dir(path); ; dir = filepath.Dir(dir) {
-		info, err := os.Lstat(dir)
+func resolveSecretValue(name string, settings config.SecretSettings, get func(string, string) (string, error)) (string, error) {
+	if settings.Keyring != nil {
+		service, account := settings.Keyring.Reference(name)
+		value, err := get(service, account)
+		if errors.Is(err, keyring.ErrNotFound) {
+			return "", fmt.Errorf("secret %q: keyring entry not found; run 'opencode-sandbox secret set %s'", name, name)
+		}
 		if err != nil {
-			return "", fmt.Errorf("inspect credential directory: %w", err)
+			return "", fmt.Errorf("secret %q: keyring access failed; check that the keyring is available and unlocked (details suppressed)", name)
 		}
-		if !info.IsDir() {
-			return "", fmt.Errorf("credential path must contain real directories, not symlinks")
+		if err := ValidateSecretValue(value); err != nil {
+			return "", fmt.Errorf("load secret %q: %w", name, err)
 		}
-		if dir == filepath.Dir(path) && info.Mode().Perm()&0077 != 0 {
-			return "", fmt.Errorf("credential directory must be owner-only (chmod 700)")
-		}
-		if parent := filepath.Dir(dir); parent == dir {
-			break
-		}
+		return value, nil
+	}
+	if !filepath.IsAbs(settings.File) {
+		return "", fmt.Errorf("secret %q: credential path must be absolute", name)
+	}
+	value, err := readSecretFile(settings.File)
+	if err != nil {
+		return "", fmt.Errorf("load secret %q: %w", name, err)
+	}
+	return value, nil
+}
+
+func readSecretFile(path string) (string, error) {
+	if err := validateSecretDirectory(filepath.Dir(path)); err != nil {
+		return "", err
 	}
 	info, err := os.Lstat(path)
 	if err != nil {
@@ -113,6 +108,26 @@ func readSecretFile(path string) (string, error) {
 		return "", err
 	}
 	return value, nil
+}
+
+func validateSecretDirectory(directory string) error {
+	// Reject symlinks in the credential path, not just its final component.
+	for dir := directory; ; dir = filepath.Dir(dir) {
+		info, err := os.Lstat(dir)
+		if err != nil {
+			return fmt.Errorf("inspect credential directory: %w", err)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("credential path must contain real directories, not symlinks")
+		}
+		if dir == directory && info.Mode().Perm()&0077 != 0 {
+			return fmt.Errorf("credential directory must be owner-only (chmod 700)")
+		}
+		if parent := filepath.Dir(dir); parent == dir {
+			break
+		}
+	}
+	return nil
 }
 
 // ValidateSecretValue applies the same credential constraints to file and keyring sources.
