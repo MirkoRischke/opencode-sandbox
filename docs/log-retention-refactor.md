@@ -62,7 +62,8 @@ increases function count; the cognitive total decreases even including helpers.
   ignore expiration, ignore count, delete active segments, reverse age ordering,
   reverse timestamp tie ordering, and prune unmanaged directories.
 
-The baseline and current snapshots remain in ignored `.quality/`. Run
+Snapshots were saved in ignored `.quality/`, which holds the latest local
+comparison and may be replaced by subsequent baselines. Run
 `mise run quality compare` to inspect them; use `mise run quality baseline`
 when intentionally starting a new comparison. The tooling reports numeric
 changes automatically. For a readability comparison, ask an agent to apply
