@@ -76,7 +76,6 @@ fi`); err != nil {
 }
 
 func (s *Sandbox) refreshAWS(ctx context.Context, settings *AWSOptions) (time.Time, error) {
-
 	started := time.Now()
 	logger := s.log().With("component", "aws", "role", settings.RoleARN, "region", settings.Region)
 	logger.Info("Assuming AWS role")

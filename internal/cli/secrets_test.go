@@ -25,44 +25,80 @@ func executeSecret(t *testing.T, deps secretDependencies, input string, args ...
 	return output.String(), err
 }
 
-func TestSecretSetAndDelete(t *testing.T) {
+func TestSecretSetStoresCredentialWithoutPrintingValue(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
+		name             string
 		flags            []string
 		service, account string
 	}{
-		{service: "opencode-sandbox", account: "github"},
-		{flags: []string{"--service", "company", "--account", "work"}, service: "company", account: "work"},
+		{name: "defaults", service: "opencode-sandbox", account: "github"},
+		{name: "custom entry", flags: []string{"--service", "company", "--account", "work"}, service: "company", account: "work"},
 	} {
-		stored := ""
-		deps := secretDependencies{
-			read: func(*cobra.Command) (string, error) { return "SENSITIVE_VALUE", nil },
-			set: func(service, account, value string) error {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			stored := ""
+			deps := secretDependencies{
+				read: func(*cobra.Command) (string, error) { return "SENSITIVE_VALUE", nil },
+				set: func(service, account, value string) error {
+					require.Equal(t, tc.service, service)
+					require.Equal(t, tc.account, account)
+					stored = value
+					return nil
+				},
+			}
+
+			output, err := executeSecret(t, deps, "", append([]string{"set", "github"}, tc.flags...)...)
+
+			require.NoError(t, err)
+			require.Equal(t, "SENSITIVE_VALUE", stored)
+			require.NotContains(t, output, stored)
+			require.Contains(t, output, "Recreate existing VMs")
+		})
+	}
+}
+
+func TestSecretRemoveRequiresExplicitConfirmation(t *testing.T) {
+	t.Parallel()
+	for _, answer := range []string{"no\n", "\n", "", "yes"} {
+		t.Run(answer, func(t *testing.T) {
+			t.Parallel()
+			deps := secretDependencies{delete: func(string, string) error { t.Fatal("must not delete without confirmation"); return nil }}
+
+			output, err := executeSecret(t, deps, answer, "remove", "github")
+
+			require.ErrorContains(t, err, "not confirmed")
+			require.Contains(t, output, "shared across projects")
+		})
+	}
+}
+
+func TestSecretRemoveDeletesOnlyTheConfirmedEntry(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name             string
+		flags            []string
+		service, account string
+	}{
+		{name: "defaults", service: "opencode-sandbox", account: "github"},
+		{name: "custom entry", flags: []string{"--service", "company", "--account", "work"}, service: "company", account: "work"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			deleted := false
+			deps := secretDependencies{delete: func(service, account string) error {
 				require.Equal(t, tc.service, service)
 				require.Equal(t, tc.account, account)
-				stored = value
+				deleted = true
 				return nil
-			},
-			delete: func(service, account string) error {
-				require.Equal(t, tc.service, service)
-				require.Equal(t, tc.account, account)
-				stored = ""
-				return nil
-			},
-		}
-		output, err := executeSecret(t, deps, "", append([]string{"set", "github"}, tc.flags...)...)
-		require.NoError(t, err)
-		require.Equal(t, "SENSITIVE_VALUE", stored)
-		require.NotContains(t, output, stored)
-		require.Contains(t, output, "Recreate existing VMs")
-		output, err = executeSecret(t, deps, "no\n", append([]string{"remove", "github"}, tc.flags...)...)
-		require.ErrorContains(t, err, "not confirmed")
-		require.Equal(t, "SENSITIVE_VALUE", stored)
-		require.Contains(t, output, "shared across projects")
-		output, err = executeSecret(t, deps, "yes\n", append([]string{"rm", "github"}, tc.flags...)...)
-		require.NoError(t, err)
-		require.Empty(t, stored)
-		require.Contains(t, output, "Existing VMs retain")
+			}}
+
+			output, err := executeSecret(t, deps, "yes\n", append([]string{"rm", "github"}, tc.flags...)...)
+
+			require.NoError(t, err)
+			require.True(t, deleted)
+			require.Contains(t, output, "Existing VMs retain")
+		})
 	}
 }
 
@@ -119,6 +155,10 @@ func TestSecretSetRejectsInvalidInput(t *testing.T) {
 		_, err := executeSecret(t, deps, "", "set", "github")
 		require.Error(t, err)
 	}
+}
+
+func TestSecretSetRequiresInteractiveTerminal(t *testing.T) {
+	t.Parallel()
 	deps := secretDependencies{
 		read: readSecretInput,
 	}
@@ -136,6 +176,10 @@ func TestSecretCommandArguments(t *testing.T) {
 		_, err := executeCommand(args...)
 		require.Error(t, err)
 	}
+}
+
+func TestSecretCommandHelp(t *testing.T) {
+	t.Parallel()
 	for _, args := range [][]string{{"secret", "--help"}, {"secret", "set", "--help"}, {"secret", "remove", "--help"}, {"secret", "rm", "--help"}, {"secret", "list", "--help"}, {"secret", "ls", "--help"}} {
 		_, err := executeCommand(args...)
 		require.NoError(t, err)
@@ -155,6 +199,10 @@ func TestSecretListOnlyListsMetadata(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "\"context7\"\n\"github\"\n\"unsafe\\x1b[2J\"\n", output)
 	}
+}
+
+func TestSecretListReportsEmptyKeyring(t *testing.T) {
+	t.Parallel()
 	deps := secretDependencies{list: func(service string) ([]string, error) {
 		require.Equal(t, "opencode-sandbox", service)
 		return nil, nil

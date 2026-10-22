@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	launcherconfig "opencode-sandbox/internal/config"
@@ -53,27 +54,16 @@ func TestWorkspaceApprovalShowsCredentialAccessWithoutTerminalEscapes(t *testing
 //nolint:paralleltest // Replaces process-wide os.Stdin to exercise the real approval entry point; concurrent stdin users would observe the test pipe.
 func TestApproveWorkspaceConfigRejectsPipedInput(t *testing.T) {
 	reader, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := reader.Close(); err != nil {
-			t.Error(err)
-		}
-	}()
-	defer func() {
-		if err := writer.Close(); err != nil {
-			t.Error(err)
-		}
-	}()
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, reader.Close()) })
+	t.Cleanup(func() { assert.NoError(t, writer.Close()) })
 	original := os.Stdin
 	os.Stdin = reader
 	defer func() { os.Stdin = original }()
-	if _, err := writer.WriteString("yes\n"); err != nil {
-		t.Fatal(err)
-	}
+	_, err = writer.WriteString("yes\n")
+	require.NoError(t, err)
+
 	err = approveWorkspaceConfig("/repo/.opencode-sandbox.toml", nil, launcherconfig.DefaultSettings())
-	if err == nil || !strings.Contains(err.Error(), "launch interactively") {
-		t.Fatalf("expected non-interactive refusal, got %v", err)
-	}
+
+	require.ErrorContains(t, err, "launch interactively")
 }

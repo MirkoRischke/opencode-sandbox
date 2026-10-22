@@ -169,7 +169,6 @@ func (d *networkDiagnostics) run(collect func() error) {
 }
 
 func (d *networkDiagnostics) poll(collect func() error) {
-
 	if err := collect(); err != nil {
 		if d.logger != nil && d.collectionFailure == "" {
 			d.logger.Warn("Network diagnostics collection failed", "error", err)
