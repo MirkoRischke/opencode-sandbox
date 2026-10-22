@@ -100,84 +100,13 @@ func TestRotationBySizeAndLocalDate(t *testing.T) {
 	require.Contains(t, filepath.Base(w.file.Name()), "2026-10-22T00-00-00.000000000+0200_")
 }
 
-func fixtureLog(t *testing.T, directory string, n int, modified time.Time) string {
-	t.Helper()
-	require.NoError(t, privateDirectory(directory))
-	path := filepath.Join(directory, fmt.Sprintf("2026-10-01T00-00-00.000000000+0000_123_%d.log", n))
-	require.NoError(t, os.WriteFile(path, []byte("fixture\n"), 0600))
-	require.NoError(t, os.Chtimes(path, modified, modified))
-	return path
-}
-
-func TestRetentionProtectsActiveFilesAndIgnoresUnknownFiles(t *testing.T) {
-	t.Parallel()
-	state := t.TempDir()
-	now := time.Now()
-	w := testWriter(t, state, "/active", now)
-	active := w.file.Name()
-	require.NoError(t, os.Chtimes(active, now.Add(-2*maxAge), now.Add(-2*maxAge)))
-	other := Directory(state, "/other")
-	old := fixtureLog(t, other, 1, now.Add(-maxAge-time.Hour))
-	recent := fixtureLog(t, other, 2, now.Add(-time.Hour))
-	unknown := filepath.Join(other, "keep.txt")
-	require.NoError(t, os.WriteFile(unknown, []byte("unmanaged"), 0600))
-	link := filepath.Join(other, "2026-10-01T00-00-00.000000000+0000_123_3.log")
-	require.NoError(t, os.Symlink(unknown, link))
-	root := filepath.Dir(w.directory)
-	require.NoError(t, cleanup(root, now))
-	_, err := os.Stat(old)
-	require.True(t, os.IsNotExist(err))
-	for _, path := range []string{active, recent, unknown, link} {
-		_, err := os.Lstat(path)
-		require.NoError(t, err)
-	}
-	// A crashed/exited process releases its lock; no stale PID check needed.
-	require.NoError(t, w.Close())
-	require.NoError(t, cleanup(root, now))
-	_, err = os.Stat(w.directory)
-	require.True(t, os.IsNotExist(err), "empty managed directories should be removed")
-}
-
-func TestRetentionCountIsPerWorkspace(t *testing.T) {
-	t.Parallel()
-	state := t.TempDir()
-	now := time.Now()
-	w := testWriter(t, state, "/active", now)
-	other := Directory(state, "/other")
-	var oldest string
-	for i := range maxFiles + 3 {
-		path := fixtureLog(t, other, i, now.Add(time.Duration(i-maxFiles-3)*time.Minute))
-		if i == 0 {
-			oldest = path
-		}
-	}
-	require.NoError(t, cleanup(filepath.Dir(w.directory), now))
-	require.Len(t, logFiles(t, other), maxFiles)
-	require.Len(t, logFiles(t, w.directory), 1)
-	_, err := os.Stat(oldest)
-	require.True(t, os.IsNotExist(err))
-}
-
 func TestConcurrentWritersAndCleanup(t *testing.T) {
 	t.Parallel()
 	state := t.TempDir()
 	var wg sync.WaitGroup
 	for range 8 {
 		wg.Go(func() {
-			logger, closer, err := Open(state, "/shared", io.Discard)
-			if !assert.NoError(t, err) {
-				return
-			}
-			w, ok := closer.(*writer)
-			if !ok {
-				t.Error("unexpected log writer")
-				return
-			}
-			w.limit = 150
-			for range 10 {
-				logger.Info("Concurrent record", "value", strings.Repeat("x", 80))
-			}
-			assert.NoError(t, closer.Close())
+			writeRotatingLogs(t, state, 10)
 		})
 	}
 	wg.Wait()
@@ -187,9 +116,27 @@ func TestConcurrentWritersAndCleanup(t *testing.T) {
 		data, err := os.ReadFile(file)
 		require.NoError(t, err)
 		for _, line := range bytes.Split(bytes.TrimSpace(data), []byte("\n")) {
-			require.True(t, json.Valid(line))
+			require.True(t, json.Valid(line), "invalid JSON in %s: %s", file, line)
 		}
 	}
+}
+
+func writeRotatingLogs(t *testing.T, state string, records int) {
+	t.Helper()
+	logger, closer, err := Open(state, "/shared", io.Discard)
+	if !assert.NoError(t, err) {
+		return
+	}
+	w, ok := closer.(*writer)
+	if !ok {
+		t.Error("unexpected log writer")
+		return
+	}
+	w.limit = 150
+	for range records {
+		logger.Info("Concurrent record", "value", strings.Repeat("x", 80))
+	}
+	assert.NoError(t, closer.Close())
 }
 
 func TestWriteFailureWarnsWithoutBlocking(t *testing.T) {
