@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"syscall"
 	"time"
@@ -50,10 +51,6 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 	}
 	settings.AWS = awsSettings
 	logger.Info("Effective configuration", "settings", settings)
-	var awsOptions *sandbox.AWSOptions
-	if awsSettings.Role != "" {
-		awsOptions = &sandbox.AWSOptions{RoleARN: awsSettings.Role}
-	}
 	secrets, err := sandbox.LoadSecrets(settings)
 	if err != nil {
 		return err
@@ -63,35 +60,9 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 		return err
 	}
 	defer func() { err = errors.Join(err, s.Shutdown()) }()
-	if awsOptions != nil {
-		// Resolve the host environment only here; sandbox lifecycle code receives
-		// an explicitly configured client and region.
-		loadCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
-		defer cancel()
-		loadOptions := []func(*awsconfig.LoadOptions) error{awsconfig.WithDefaultRegion("eu-west-1")}
-		if awsSettings.Profile != "" {
-			loadOptions = append(loadOptions, awsconfig.WithSharedConfigProfile(awsSettings.Profile))
-		}
-		cfg, err := awsconfig.LoadDefaultConfig(loadCtx, loadOptions...)
-		if err != nil {
-			logger.Error("Load host AWS configuration failed", "error", err)
-			return fmt.Errorf("load host AWS profile failed (details suppressed)")
-		}
-		// Preserve the SDK's provider/cache behavior, recording only metadata.
-		// This distinguishes aws login/SSO from overriding environment keys.
-		provider := cfg.Credentials
-		cfg.Credentials = aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
-			credentials, err := provider.Retrieve(ctx)
-			if err != nil {
-				logger.Error("Retrieve host AWS credentials failed", "error", err)
-			} else {
-				logger.Info("Host AWS credentials retrieved", "source", credentials.Source, "can_expire", credentials.CanExpire, "expires_at", credentials.Expires)
-			}
-			return credentials, err
-		})
-		awsOptions.Region = cfg.Region
-		awsOptions.Client = sts.NewFromConfig(cfg)
-		logger.Info("Host AWS configuration loaded", "profile", awsSettings.Profile, "region", cfg.Region)
+	awsOptions, err := loadHostAWS(ctx, awsSettings, logger)
+	if err != nil {
+		return err
 	}
 	stopAWS, err := s.StartAWS(ctx, awsOptions)
 	if err != nil {
@@ -102,6 +73,42 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 		return err
 	}
 	return s.Open(ctx)
+}
+
+// Host credential discovery belongs to the CLI; VM lifecycle code receives a client.
+func loadHostAWS(ctx context.Context, settings launcherconfig.AWSSettings, logger *slog.Logger) (*sandbox.AWSOptions, error) {
+	if settings.Role == "" {
+		return nil, nil
+	}
+
+	// Resolve the host environment only here; sandbox lifecycle code receives
+	// an explicitly configured client and region.
+	loadCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	loadOptions := []func(*awsconfig.LoadOptions) error{awsconfig.WithDefaultRegion("eu-west-1")}
+	if settings.Profile != "" {
+		loadOptions = append(loadOptions, awsconfig.WithSharedConfigProfile(settings.Profile))
+	}
+	cfg, err := awsconfig.LoadDefaultConfig(loadCtx, loadOptions...)
+	if err != nil {
+		logger.Error("Load host AWS configuration failed", "error", err)
+		return nil, fmt.Errorf("load host AWS profile failed (details suppressed)")
+	}
+	// Preserve the SDK's provider/cache behavior, recording only metadata.
+	// This distinguishes aws login/SSO from overriding environment keys.
+	provider := cfg.Credentials
+	cfg.Credentials = aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
+		credentials, err := provider.Retrieve(ctx)
+		if err != nil {
+			logger.Error("Retrieve host AWS credentials failed", "error", err)
+		} else {
+			logger.Info("Host AWS credentials retrieved", "source", credentials.Source, "can_expire", credentials.CanExpire, "expires_at", credentials.Expires)
+		}
+		return credentials, err
+	})
+	options := &sandbox.AWSOptions{RoleARN: settings.Role, Region: cfg.Region, Client: sts.NewFromConfig(cfg)}
+	logger.Info("Host AWS configuration loaded", "profile", settings.Profile, "region", cfg.Region)
+	return options, nil
 }
 
 // Validate AWS only after CLI overrides, so a profile-only config can use a CLI role.

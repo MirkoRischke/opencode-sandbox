@@ -14,6 +14,15 @@ import (
 )
 
 func newSnapshotCommand() *cobra.Command {
+	command := &cobra.Command{
+		Use: "snapshot", Short: "Manage prepared workspace disk baselines",
+		Args: cobra.NoArgs, RunE: requireSubcommand,
+	}
+	command.AddCommand(newSnapshotListCommand(), newSnapshotCreateCommand(), newSnapshotRemoveCommand())
+	return command
+}
+
+func newSnapshotRemoveCommand() *cobra.Command {
 	var all bool
 	remove := &cobra.Command{
 		Use: "remove", Short: "Delete workspace snapshots without removing VMs",
@@ -35,11 +44,11 @@ func newSnapshotCommand() *cobra.Command {
 		},
 	}
 	remove.Flags().BoolVar(&all, "all", false, "Delete managed snapshots for all workspaces without confirmation")
-	command := &cobra.Command{
-		Use: "snapshot", Short: "Manage prepared workspace disk baselines",
-		Args: cobra.NoArgs, RunE: requireSubcommand,
-	}
-	command.AddCommand(newSnapshotListCommand(), &cobra.Command{
+	return remove
+}
+
+func newSnapshotCreateCommand() *cobra.Command {
+	return &cobra.Command{
 		Use: "create", Short: "Prepare a fresh VM and replace this directory's baseline",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) (err error) {
@@ -77,6 +86,5 @@ func newSnapshotCommand() *cobra.Command {
 			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Workspace snapshot created:", reference)
 			return err
 		},
-	}, remove)
-	return command
+	}
 }

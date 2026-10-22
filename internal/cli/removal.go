@@ -13,46 +13,58 @@ import (
 // reportRemovals prints progress immediately and summarizes successes even when
 // removal fails partway through. Output failures must not hide removal errors.
 func reportRemovals(out io.Writer, kind string, remove func(sandbox.RemovalObserver) error) error {
-	var count, unknown int
-	var total uint64
-	var outputErr error
-	err := remove(func(name string, size *uint64) {
-		count++
-		detail := ""
-		if kind == "snapshot" {
-			if size == nil {
-				unknown++
-				detail = " (size unknown)"
-			} else {
-				total += *size
-				detail = " (" + humanize.IBytes(*size) + ")"
-			}
-		}
-		if outputErr == nil {
-			_, outputErr = fmt.Fprintf(out, "Deleted %s %s%s\n", kind, name, detail)
-		}
-	})
-	if outputErr != nil {
-		return errors.Join(err, outputErr)
+	report := removalReport{out: out, kind: kind}
+	err := remove(report.observe)
+	if report.outputErr != nil {
+		return errors.Join(err, report.outputErr)
 	}
-	if count == 0 && err == nil {
-		_, outputErr = fmt.Fprintln(out, "Nothing to delete.")
+	if report.count == 0 && err == nil {
+		_, outputErr := fmt.Fprintln(out, "Nothing to delete.")
 		return outputErr
 	}
-	plural := kind
-	if count != 1 {
+	_, outputErr := fmt.Fprintln(out, report.summary())
+	return errors.Join(err, outputErr)
+}
+
+type removalReport struct {
+	out            io.Writer
+	kind           string
+	count, unknown int
+	total          uint64
+	outputErr      error
+}
+
+func (r *removalReport) observe(name string, size *uint64) {
+	r.count++
+	detail := ""
+	if r.kind == "snapshot" {
+		if size == nil {
+			r.unknown++
+			detail = " (size unknown)"
+		} else {
+			r.total += *size
+			detail = " (" + humanize.IBytes(*size) + ")"
+		}
+	}
+	if r.outputErr == nil {
+		_, r.outputErr = fmt.Fprintf(r.out, "Deleted %s %s%s\n", r.kind, name, detail)
+	}
+}
+
+func (r *removalReport) summary() string {
+	plural := r.kind
+	if r.count != 1 {
 		plural += "s"
 	}
-	summary := fmt.Sprintf("Deleted %d %s", count, plural)
-	if kind == "snapshot" && count > 0 {
-		size := humanize.IBytes(total)
-		if unknown == count {
-			size = "unknown"
-		} else if unknown > 0 {
-			size += fmt.Sprintf(" + %d unknown", unknown)
-		}
-		summary += " · total reported size: " + size
+	summary := fmt.Sprintf("Deleted %d %s", r.count, plural)
+	if r.kind != "snapshot" || r.count == 0 {
+		return summary
 	}
-	_, outputErr = fmt.Fprintln(out, summary)
-	return errors.Join(err, outputErr)
+	size := humanize.IBytes(r.total)
+	if r.unknown == r.count {
+		size = "unknown"
+	} else if r.unknown > 0 {
+		size += fmt.Sprintf(" + %d unknown", r.unknown)
+	}
+	return summary + " · total reported size: " + size
 }

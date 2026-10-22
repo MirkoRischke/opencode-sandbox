@@ -82,22 +82,8 @@ func gitMounts(root, guestRoot string, metadata gitMetadata) []Mount {
 // Resolve never searches parents for a workspace or for Git metadata. A present
 // but invalid .git marker is an error, not a non-Git fallback.
 func Resolve(ctx context.Context, directory string) (Workspace, error) {
-	root, err := filepath.Abs(directory)
+	root, err := canonicalRoot(directory)
 	if err != nil {
-		return nil, fmt.Errorf("resolve workspace: %w", err)
-	}
-	root, err = filepath.EvalSymlinks(root)
-	if err != nil {
-		return nil, fmt.Errorf("resolve workspace: %w", err)
-	}
-	info, err := os.Stat(root)
-	if err != nil {
-		return nil, fmt.Errorf("resolve workspace: %w", err)
-	}
-	if !info.IsDir() {
-		return nil, fmt.Errorf("workspace %q is not a directory", root)
-	}
-	if err := validateRoot(root, info); err != nil {
 		return nil, err
 	}
 	b := base{root: root}
@@ -126,6 +112,28 @@ func Resolve(ctx context.Context, directory string) (Workspace, error) {
 		return GitWorktree{base: b, metadata: metadata}, nil
 	}
 	return GitRepository{base: b, metadata: metadata}, nil
+}
+
+func canonicalRoot(directory string) (string, error) {
+	root, err := filepath.Abs(directory)
+	if err != nil {
+		return "", fmt.Errorf("resolve workspace: %w", err)
+	}
+	root, err = filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", fmt.Errorf("resolve workspace: %w", err)
+	}
+	info, err := os.Stat(root)
+	if err != nil {
+		return "", fmt.Errorf("resolve workspace: %w", err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("workspace %q is not a directory", root)
+	}
+	if err := validateRoot(root, info); err != nil {
+		return "", err
+	}
+	return root, nil
 }
 
 func gitPath(ctx context.Context, root, option string) (string, error) {
