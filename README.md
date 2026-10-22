@@ -149,9 +149,16 @@ complete -o default -F __start_opencode-sandbox ocs
 ```sh
 mise run fmt  # Format Go code
 mise run lint
+mise run quality baseline # Save local complexity metrics before a refactor
+mise run quality compare  # Show current hotspots and changes from that baseline
 mise run test:unit    # Fast internal tests; no VMs or external services
 mise run test:image   # Build + offline image smoke tests; Docker only, no VMs
 mise run test:prepare # Build/import images once; repeat after image changes
 mise run test        # VM/integration tests using the prepared images
 mise run test:live   # Opt-in OpenAI smoke test; uses host credentials
 ```
+
+Quality reports are advisory and saved under `.quality/` (ignored by Git).
+They require Python 3 and the pinned golangci-lint; compare with the same tool
+version and configuration. See [the readability review rubric](docs/quality-review.md)
+for reviewing implementation and tests alongside the metrics.

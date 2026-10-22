@@ -12,6 +12,11 @@ run = ["golangci-lint run --build-tags live ./...", "hadolint Dockerfile"]
 description = "Format Go code"
 run = "golangci-lint fmt ./..."
 
+[tasks.quality]
+description = "Report local complexity; pass baseline or compare to measure a refactor"
+usage = 'arg "[action]" default="report" { choices "report" "baseline" "compare" }'
+run = 'python3 scripts/quality.py "${usage_action?}"'
+
 [tasks.cli]
 description = "Build the worktree launcher"
 run = "go build -o bin/opencode-sandbox ./cmd/opencode-sandbox"

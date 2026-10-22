@@ -1,0 +1,22 @@
+version: "2"
+run:
+  build-tags: [live]
+  timeout: 5m
+linters:
+  default: none
+  enable: [gocognit, gocyclo, funlen]
+  settings:
+    gocognit:
+      min-complexity: -1
+    gocyclo:
+      min-complexity: -1
+    funlen:
+      lines: 60
+      statements: -1
+      ignore-comments: true
+  exclusions:
+    presets: []
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  uniq-by-line: false

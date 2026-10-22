@@ -1,1 +1,3 @@
 /bin/
+/.quality/
+__pycache__/
