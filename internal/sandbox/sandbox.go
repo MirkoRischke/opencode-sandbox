@@ -173,42 +173,59 @@ func (s *Sandbox) Exec(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 			inputDone <- err
 		}()
 	}
+	return receiveCommand(ctx, h.Recv, stdout, stderr, inputDone)
+}
+
+// Drain output before reporting the exit status. Input completion is checked
+// only after the guest stream finishes; caller-owned handles stay in Exec.
+func receiveCommand(ctx context.Context, recv func(context.Context) (*m.ExecEvent, error), stdout, stderr io.Writer, inputDone <-chan error) error {
 	exitCode := -1
 	for {
-		event, err := h.Recv(ctx)
+		event, err := recv(ctx)
 		if err != nil {
 			return err
 		}
 		switch event.Kind {
 		case m.ExecEventStdout:
-			if stdout != nil {
-				if _, err := stdout.Write(event.Data); err != nil {
-					return err
-				}
-			}
+			err = writeCommandOutput(stdout, event.Data)
 		case m.ExecEventStderr:
-			if stderr != nil {
-				if _, err := stderr.Write(event.Data); err != nil {
-					return err
-				}
-			}
+			err = writeCommandOutput(stderr, event.Data)
 		case m.ExecEventExited:
 			exitCode = event.ExitCode
 		case m.ExecEventFailed, m.ExecEventStdinError:
 			return fmt.Errorf("guest command failed (details suppressed)")
 		case m.ExecEventDone:
-			if inputDone != nil {
-				select {
-				case err := <-inputDone:
-					if err != nil {
-						return fmt.Errorf("write guest stdin failed")
-					}
-				case <-ctx.Done():
-					return ctx.Err()
-				}
+			if err := waitCommandInput(ctx, inputDone); err != nil {
+				return err
 			}
 			return checkExit(exitCode)
 		}
+		if err != nil {
+			return err
+		}
+	}
+}
+
+func writeCommandOutput(writer io.Writer, data []byte) error {
+	if writer == nil {
+		return nil
+	}
+	_, err := writer.Write(data)
+	return err
+}
+
+func waitCommandInput(ctx context.Context, done <-chan error) error {
+	if done == nil {
+		return nil
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			return fmt.Errorf("write guest stdin failed")
+		}
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

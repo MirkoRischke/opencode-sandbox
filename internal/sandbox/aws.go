@@ -56,39 +56,8 @@ fi`); err != nil {
 	if settings.Region == "" || strings.ContainsAny(settings.Region, "\r\n\x00") {
 		return nil, fmt.Errorf("host AWS region is invalid")
 	}
-	refresh := func(ctx context.Context) (time.Time, error) {
-		started := time.Now()
-		logger := s.log().With("component", "aws", "role", settings.RoleARN, "region", settings.Region)
-		logger.Info("Assuming AWS role")
-		refreshCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
-		defer cancel()
-		result, err := settings.Client.AssumeRole(refreshCtx, &sts.AssumeRoleInput{
-			RoleArn: aws.String(settings.RoleARN), RoleSessionName: aws.String(s.Name),
-			DurationSeconds: aws.Int32(3600),
-		})
-		if err != nil {
-			logger.Error("Assume AWS role failed", "error", err, "duration_ms", time.Since(started).Milliseconds())
-			return time.Time{}, fmt.Errorf("assume AWS role failed; check host authentication and role permissions (details suppressed)")
-		}
-		if result.Credentials == nil || result.Credentials.Expiration == nil || !result.Credentials.Expiration.After(time.Now()) {
-			return time.Time{}, fmt.Errorf("AWS returned missing or expired role credentials")
-		}
-		credentials := result.Credentials
-		values := []string{aws.ToString(credentials.AccessKeyId), aws.ToString(credentials.SecretAccessKey), aws.ToString(credentials.SessionToken)}
-		for _, value := range values {
-			if value == "" || strings.ContainsAny(value, "\r\n\x00") {
-				return time.Time{}, fmt.Errorf("AWS returned invalid role credentials")
-			}
-		}
-		payload := fmt.Sprintf("[default]\naws_access_key_id = %s\naws_secret_access_key = %s\naws_session_token = %s\n", values[0], values[1], values[2])
-		if err := s.writeAWSFiles(refreshCtx, payload, settings.Region); err != nil {
-			logger.Error("Write guest AWS credentials failed", "error", err)
-			return time.Time{}, fmt.Errorf("write guest AWS credentials failed; check for unmanaged ~/.aws files (details suppressed)")
-		}
-		logger.Info("AWS credentials refreshed", "expires_at", *credentials.Expiration, "duration_ms", time.Since(started).Milliseconds())
-		return *credentials.Expiration, nil
-	}
-	expires, err := refresh(initialCtx)
+
+	expires, err := s.refreshAWS(initialCtx, settings)
 	if err != nil {
 		return nil, err
 	}
@@ -96,42 +65,91 @@ fi`); err != nil {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		for {
-			delay := max(time.Until(expires.Add(-5*time.Minute)), time.Second)
-			s.log().Info("AWS credential refresh scheduled", "component", "aws", "refresh_at", time.Now().Add(delay), "expires_at", expires)
-			timer := time.NewTimer(delay)
-			select {
-			case <-refreshCtx.Done():
-				timer.Stop()
-				return
-			case <-timer.C:
-			}
-			for {
-				updated, err := refresh(refreshCtx)
-				if refreshCtx.Err() != nil {
-					return
-				}
-				if err == nil {
-					expires = updated
-					break
-				}
-				fmt.Fprintln(os.Stderr, "AWS credential refresh failed; retrying in 30s. Existing credentials expire at", expires.UTC().Format(time.RFC3339))
-				s.log().Warn("AWS credential refresh will retry", "component", "aws", "error", err, "retry_in_seconds", 30, "expires_at", expires)
-				timer := time.NewTimer(30 * time.Second)
-				select {
-				case <-refreshCtx.Done():
-					timer.Stop()
-					return
-				case <-timer.C:
-				}
-			}
-		}
+		s.runAWSRefresh(refreshCtx, settings, expires)
 	}()
+
 	return func() {
 		cancel()
 		<-done
 		s.log().Info("AWS credential refresh stopped", "component", "aws")
 	}, nil
+}
+
+func (s *Sandbox) refreshAWS(ctx context.Context, settings *AWSOptions) (time.Time, error) {
+
+	started := time.Now()
+	logger := s.log().With("component", "aws", "role", settings.RoleARN, "region", settings.Region)
+	logger.Info("Assuming AWS role")
+	refreshCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	result, err := settings.Client.AssumeRole(refreshCtx, &sts.AssumeRoleInput{
+		RoleArn: aws.String(settings.RoleARN), RoleSessionName: aws.String(s.Name),
+		DurationSeconds: aws.Int32(3600),
+	})
+	if err != nil {
+		logger.Error("Assume AWS role failed", "error", err, "duration_ms", time.Since(started).Milliseconds())
+		return time.Time{}, fmt.Errorf("assume AWS role failed; check host authentication and role permissions (details suppressed)")
+	}
+	if result.Credentials == nil || result.Credentials.Expiration == nil || !result.Credentials.Expiration.After(time.Now()) {
+		return time.Time{}, fmt.Errorf("AWS returned missing or expired role credentials")
+	}
+	credentials := result.Credentials
+	values := []string{aws.ToString(credentials.AccessKeyId), aws.ToString(credentials.SecretAccessKey), aws.ToString(credentials.SessionToken)}
+	for _, value := range values {
+		if value == "" || strings.ContainsAny(value, "\r\n\x00") {
+			return time.Time{}, fmt.Errorf("AWS returned invalid role credentials")
+		}
+	}
+	payload := fmt.Sprintf("[default]\naws_access_key_id = %s\naws_secret_access_key = %s\naws_session_token = %s\n", values[0], values[1], values[2])
+	if err := s.writeAWSFiles(refreshCtx, payload, settings.Region); err != nil {
+		logger.Error("Write guest AWS credentials failed", "error", err)
+		return time.Time{}, fmt.Errorf("write guest AWS credentials failed; check for unmanaged ~/.aws files (details suppressed)")
+	}
+	logger.Info("AWS credentials refreshed", "expires_at", *credentials.Expiration, "duration_ms", time.Since(started).Milliseconds())
+	return *credentials.Expiration, nil
+}
+
+func (s *Sandbox) runAWSRefresh(ctx context.Context, settings *AWSOptions, expires time.Time) {
+	for {
+		delay := max(time.Until(expires.Add(-5*time.Minute)), time.Second)
+		s.log().Info("AWS credential refresh scheduled", "component", "aws", "refresh_at", time.Now().Add(delay), "expires_at", expires)
+		if !waitAWSRefresh(ctx, delay) {
+			return
+		}
+		updated, ok := s.retryAWSRefresh(ctx, settings, expires)
+		if !ok {
+			return
+		}
+		expires = updated
+	}
+}
+
+func (s *Sandbox) retryAWSRefresh(ctx context.Context, settings *AWSOptions, expires time.Time) (time.Time, bool) {
+	for {
+		updated, err := s.refreshAWS(ctx, settings)
+		if ctx.Err() != nil {
+			return time.Time{}, false
+		}
+		if err == nil {
+			return updated, true
+		}
+		fmt.Fprintln(os.Stderr, "AWS credential refresh failed; retrying in 30s. Existing credentials expire at", expires.UTC().Format(time.RFC3339))
+		s.log().Warn("AWS credential refresh will retry", "component", "aws", "error", err, "retry_in_seconds", 30, "expires_at", expires)
+		if !waitAWSRefresh(ctx, 30*time.Second) {
+			return time.Time{}, false
+		}
+	}
+}
+
+func waitAWSRefresh(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }
 
 func (s *Sandbox) writeAWSFiles(ctx context.Context, credentials, region string) error {
