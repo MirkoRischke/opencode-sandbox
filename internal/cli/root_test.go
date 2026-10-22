@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestManagementCommandsRejectExtraArguments(t *testing.T) {
@@ -21,16 +23,13 @@ func TestManagementCommandsRejectExtraArguments(t *testing.T) {
 		for _, extra := range extras {
 			t.Run(command+"/"+extra, func(t *testing.T) {
 				_, err := executeCommand(command, extra)
-				if err == nil {
-					t.Fatal("expected management argument error")
-				}
+				require.Error(t, err)
 			})
 		}
 	}
 	for _, command := range []string{"remove", "rm"} {
-		if _, err := executeCommand(command, "--all", "extra"); err == nil {
-			t.Fatal("expected argument error with --all")
-		}
+		_, err := executeCommand(command, "--all", "extra")
+		require.Error(t, err)
 	}
 }
 
@@ -42,19 +41,16 @@ func TestRemoveAllFlag(t *testing.T) {
 		if all {
 			args = append(args, "--all")
 		}
-		if err := cmd.ParseFlags(args); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, cmd.ParseFlags(args))
 		got, err := cmd.Flags().GetBool("all")
-		if err != nil || got != all {
-			t.Fatalf("expected all=%t, got %t: %v", all, got, err)
-		}
+		require.NoError(t, err)
+		require.Equal(t, all, got)
 	}
 	for _, command := range []string{"remove", "rm"} {
 		output, err := executeCommand(command, "--help")
-		if err != nil || !strings.Contains(output, "--all") || !strings.Contains(output, "this directory's VM") {
-			t.Fatalf("expected current-worktree help and --all flag, got %v\n%s", err, output)
-		}
+		require.NoError(t, err)
+		require.Contains(t, output, "--all")
+		require.Contains(t, output, "this directory's VM")
 	}
 }
 
@@ -62,9 +58,8 @@ func TestConfigCommandRejectsInvalidArguments(t *testing.T) {
 	t.Parallel()
 	for _, args := range [][]string{{"config"}, {"config", "show"}, {"config", "default", "extra"}} {
 		t.Run(strings.Join(args, "/"), func(t *testing.T) {
-			if _, err := executeCommand(args...); err == nil {
-				t.Fatal("expected config argument error")
-			}
+			_, err := executeCommand(args...)
+			require.Error(t, err)
 		})
 	}
 }
@@ -73,9 +68,8 @@ func TestSnapshotCommandRejectsInvalidArguments(t *testing.T) {
 	t.Parallel()
 	for _, args := range [][]string{{"snapshot"}, {"snapshot", "unknown"}, {"snapshot", "create", "extra"}, {"snapshot", "remove", "extra"}, {"snapshot", "remove", "--all", "extra"}, {"snapshot", "list", "extra"}} {
 		t.Run(strings.Join(args, "/"), func(t *testing.T) {
-			if _, err := executeCommand(args...); err == nil {
-				t.Fatal("expected snapshot argument error")
-			}
+			_, err := executeCommand(args...)
+			require.Error(t, err)
 		})
 	}
 }
@@ -85,34 +79,28 @@ func TestSnapshotRemoveAllFlag(t *testing.T) {
 	for _, all := range []bool{false, true} {
 		cmd := newSnapshotCommand()
 		remove, _, err := cmd.Find([]string{"remove"})
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		args := []string{}
 		if all {
 			args = append(args, "--all")
 		}
-		if err := remove.ParseFlags(args); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, remove.ParseFlags(args))
 		got, err := remove.Flags().GetBool("all")
-		if err != nil || got != all {
-			t.Fatalf("expected all=%t, got %t: %v", all, got, err)
-		}
+		require.NoError(t, err)
+		require.Equal(t, all, got)
 	}
 	output, err := executeCommand("snapshot", "remove", "--help")
-	if err != nil || !strings.Contains(output, "--all") || !strings.Contains(output, "without confirmation") {
-		t.Fatalf("expected documented --all flag, got %v\n%s", err, output)
-	}
+	require.NoError(t, err)
+	require.Contains(t, output, "--all")
+	require.Contains(t, output, "without confirmation")
 }
 
 func TestDiagnosticsCommandRejectsInvalidArguments(t *testing.T) {
 	t.Parallel()
 	for _, args := range [][]string{{"diagnostics"}, {"diagnostics", "unknown"}, {"diagnostics", "network", "extra"}, {"diagnostics", "logs", "extra"}} {
 		t.Run(strings.Join(args, "/"), func(t *testing.T) {
-			if _, err := executeCommand(args...); err == nil {
-				t.Fatal("expected diagnostics argument error")
-			}
+			_, err := executeCommand(args...)
+			require.Error(t, err)
 		})
 	}
 }
@@ -127,31 +115,28 @@ func executeCommand(args ...string) (string, error) {
 	return output.String(), err
 }
 
-func TestCommandHelp(t *testing.T) {
+func TestLaunchHelpDocumentsAWSFlags(t *testing.T) {
 	t.Parallel()
-	for _, args := range [][]string{
-		{"--help"}, {"list", "--help"}, {"remove", "--help"},
-		{"config", "--help"}, {"config", "default", "--help"},
-		{"diagnostics", "--help"}, {"diagnostics", "network", "--help"},
-		{"diagnostics", "logs", "--help"},
-		{"snapshot", "--help"}, {"snapshot", "create", "--help"}, {"snapshot", "remove", "--help"},
-		{"snapshot", "list", "--help"},
-		{"completion", "--help"},
+	output, err := executeCommand("--help")
+	require.NoError(t, err)
+	require.Contains(t, output, "Usage:")
+	require.Contains(t, output, "--aws-role")
+	require.Contains(t, output, "--aws-profile")
+}
+
+func TestSubcommandHelpDoesNotInheritLaunchFlags(t *testing.T) {
+	t.Parallel()
+	for _, command := range []string{
+		"list", "remove", "config", "config default", "diagnostics", "diagnostics network", "diagnostics logs",
+		"snapshot", "snapshot create", "snapshot remove", "snapshot list", "completion",
 	} {
-		t.Run(strings.Join(args, "/"), func(t *testing.T) {
-			output, err := executeCommand(args...)
-			if err != nil || !strings.Contains(output, "Usage:") {
-				t.Fatalf("expected command help, got %v\n%s", err, output)
-			}
-			if len(args) == 1 {
-				for _, flag := range []string{"--aws-role", "--aws-profile"} {
-					if !strings.Contains(output, flag) {
-						t.Errorf("root help missing %s", flag)
-					}
-				}
-			} else if strings.Contains(output, "--aws-role") {
-				t.Error("launch flags must not be inherited by subcommands")
-			}
+		t.Run(command, func(t *testing.T) {
+			t.Parallel()
+			output, err := executeCommand(append(strings.Fields(command), "--help")...)
+			require.NoError(t, err)
+			require.Contains(t, output, "Usage:")
+			require.NotContains(t, output, "--aws-role")
+			require.NotContains(t, output, "--aws-profile")
 		})
 	}
 }
@@ -164,9 +149,8 @@ func TestManagementAliases(t *testing.T) {
 	} {
 		t.Run(alias, func(t *testing.T) {
 			output, err := executeCommand(append(strings.Fields(alias), "--help")...)
-			if err != nil || !strings.Contains(output, "opencode-sandbox "+name+" [flags]") {
-				t.Fatalf("expected help for %s, got %v\n%s", name, err, output)
-			}
+			require.NoError(t, err)
+			require.Contains(t, output, "opencode-sandbox "+name+" [flags]")
 		})
 	}
 }
@@ -176,12 +160,8 @@ func TestLaunchRejectsInvalidArguments(t *testing.T) {
 	for _, args := range [][]string{{"unknown"}, {"--unknown"}, {"--config"}} {
 		t.Run(strings.Join(args, "/"), func(t *testing.T) {
 			output, err := executeCommand(args...)
-			if err == nil {
-				t.Fatal("expected launch argument error")
-			}
-			if output != "" {
-				t.Fatalf("errors should be returned for main to print once, got %q", output)
-			}
+			require.Error(t, err)
+			require.Empty(t, output, "errors are returned for main to print once")
 		})
 	}
 }
@@ -190,31 +170,16 @@ func TestCompletionScriptsWithoutLoadingHostState(t *testing.T) {
 	t.Parallel()
 	if os.Getenv("OPENCODE_SANDBOX_COMPLETION_TEST") != "1" {
 		dir := t.TempDir()
-		if err := os.Mkdir(filepath.Join(dir, "opencode-sandbox"), 0700); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(dir, "opencode-sandbox", "config.toml"), []byte("invalid TOML ["), 0600); err != nil {
-			t.Fatal(err)
-		}
-		executable, err := os.Executable()
-		if err != nil {
-			t.Fatal(err)
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		command := exec.CommandContext(ctx, executable, "-test.run=^TestCompletionScriptsWithoutLoadingHostState$")
-		command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir, "HERDR_ENV=1", "HERDR_AGENT=", "OPENCODE_SANDBOX_COMPLETION_TEST=1")
-		if output, err := command.CombinedOutput(); err != nil {
-			t.Fatalf("completion failed: %v\n%s", err, output)
-		}
+		require.NoError(t, os.Mkdir(filepath.Join(dir, "opencode-sandbox"), 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "opencode-sandbox", "config.toml"), []byte("invalid TOML ["), 0600))
+		runIsolatedCommandTest(t, t.Name(), "XDG_CONFIG_HOME="+dir, "HERDR_ENV=1", "HERDR_AGENT=", "OPENCODE_SANDBOX_COMPLETION_TEST=1")
 		return
 	}
 	for _, shell := range []string{"bash", "zsh", "fish", "powershell"} {
 		t.Run(shell, func(t *testing.T) {
 			output, err := executeCommand("completion", shell)
-			if err != nil || !strings.Contains(output, "opencode-sandbox") {
-				t.Fatalf("expected %s completion script, got %v\n%s", shell, err, output)
-			}
+			require.NoError(t, err)
+			require.Contains(t, output, "opencode-sandbox")
 		})
 	}
 }
@@ -230,13 +195,9 @@ func TestCompletionSuggestions(t *testing.T) {
 	} {
 		t.Run(tc.prefix, func(t *testing.T) {
 			output, err := executeCommand("__complete", tc.prefix)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			for _, want := range tc.want {
-				if !strings.Contains(output, want+"\t") {
-					t.Errorf("completion missing %s:\n%s", want, output)
-				}
+				require.Contains(t, output, want+"	")
 			}
 		})
 	}
@@ -245,46 +206,34 @@ func TestCompletionSuggestions(t *testing.T) {
 func TestIdentifyHerdrAgent(t *testing.T) {
 	t.Parallel()
 	if os.Getenv("OPENCODE_SANDBOX_HERDR_TEST") == "1" {
-		if err := identifyHerdrAgent(); err != nil {
-			t.Fatal(err)
-		}
-		// Exercise the same interface Herdr uses, not just os.Getenv.
+		require.NoError(t, identifyHerdrAgent())
+		// Herdr reads the initial process environment, including after re-exec.
 		environ, err := os.ReadFile("/proc/self/environ")
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		want := []byte("HERDR_AGENT=" + os.Getenv("OPENCODE_SANDBOX_EXPECT_AGENT"))
-		for _, entry := range bytes.Split(environ, []byte{0}) {
-			if bytes.Equal(entry, want) {
-				return
-			}
-		}
-		t.Fatalf("initial process environment missing %q", want)
+		require.Contains(t, bytes.Split(environ, []byte{0}), want)
 		return
 	}
-
-	for _, tc := range []struct {
-		name, herdr, agent, want string
-	}{
+	for _, tc := range []struct{ name, herdr, agent, want string }{
 		{name: "inside Herdr", herdr: "1", want: "opencode"},
 		{name: "outside Herdr"},
 		{name: "explicit hint", herdr: "1", agent: "custom", want: "custom"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			executable, err := os.Executable()
-			if err != nil {
-				t.Fatal(err)
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			command := exec.CommandContext(ctx, executable, "-test.run=^TestIdentifyHerdrAgent$")
-			command.Env = append(os.Environ(),
-				"HERDR_ENV="+tc.herdr, "HERDR_AGENT="+tc.agent,
+			runIsolatedCommandTest(t, "TestIdentifyHerdrAgent", "HERDR_ENV="+tc.herdr, "HERDR_AGENT="+tc.agent,
 				"OPENCODE_SANDBOX_HERDR_TEST=1", "OPENCODE_SANDBOX_EXPECT_AGENT="+tc.want)
-			output, err := command.CombinedOutput()
-			if err != nil {
-				t.Fatalf("agent identification failed: %v\n%s", err, output)
-			}
 		})
 	}
+}
+
+func runIsolatedCommandTest(t *testing.T, name string, env ...string) {
+	t.Helper()
+	executable, err := os.Executable()
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, executable, "-test.run=^"+name+"$")
+	command.Env = append(os.Environ(), env...)
+	output, err := command.CombinedOutput()
+	require.NoError(t, err, "isolated test %s: %s", name, output)
 }

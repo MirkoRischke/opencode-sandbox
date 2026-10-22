@@ -6,33 +6,48 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	launcherconfig "opencode-sandbox/internal/config"
 )
 
-func TestConfirmWorkspaceConfig(t *testing.T) {
+func TestConfirmWorkspaceConfigAcceptsExplicitApproval(t *testing.T) {
 	t.Parallel()
-	for _, answer := range []string{"y\n", "yes\n", "YES\n", "n\n", "\n", "", "yes"} {
+	for _, answer := range []string{"y\n", "yes\n", "YES\n"} {
 		t.Run(answer, func(t *testing.T) {
-			var output bytes.Buffer
-			settings := launcherconfig.DefaultSettings()
-			settings.Secrets = map[string]launcherconfig.SecretSettings{"github": {
-				File: "creds/token", Env: "GH_TOKEN", AllowedHosts: []string{"api.github.com"}, Headers: []string{"authorization"},
-			}}
-			err := confirmWorkspaceConfig(strings.NewReader(answer), &output, "/repo/.opencode-sandbox.toml", []byte("# override\n\x1b[2J\n"), settings)
-			approved := answer == "y\n" || answer == "yes\n" || answer == "YES\n"
-			if (err == nil) != approved {
-				t.Fatalf("answer %q: unexpected result %v", answer, err)
-			}
-			for _, want := range []string{"# override", "api.github.com", "creds/token", "host credential access", "\\x1b"} {
-				if !strings.Contains(output.String(), want) {
-					t.Errorf("prompt missing %q", want)
-				}
-			}
-			if strings.ContainsRune(output.String(), '\x1b') {
-				t.Fatal("unescaped terminal control character")
-			}
+			t.Parallel()
+			err := confirmWorkspaceConfig(strings.NewReader(answer), &bytes.Buffer{}, "/repo/.opencode-sandbox.toml", nil, launcherconfig.DefaultSettings())
+			require.NoError(t, err)
 		})
 	}
+}
+
+func TestConfirmWorkspaceConfigRejectsMissingApproval(t *testing.T) {
+	t.Parallel()
+	for _, answer := range []string{"n\n", "\n", "", "yes"} {
+		t.Run(answer, func(t *testing.T) {
+			t.Parallel()
+			err := confirmWorkspaceConfig(strings.NewReader(answer), &bytes.Buffer{}, "/repo/.opencode-sandbox.toml", nil, launcherconfig.DefaultSettings())
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestWorkspaceApprovalShowsCredentialAccessWithoutTerminalEscapes(t *testing.T) {
+	t.Parallel()
+	settings := launcherconfig.DefaultSettings()
+	settings.Secrets = map[string]launcherconfig.SecretSettings{"github": {
+		File: "creds/token", Env: "GH_TOKEN", AllowedHosts: []string{"api.github.com"}, Headers: []string{"authorization"},
+	}}
+	var output bytes.Buffer
+	err := confirmWorkspaceConfig(strings.NewReader("yes\n"), &output, "/repo/.opencode-sandbox.toml", []byte("# override\n\x1b[2J\n"), settings)
+	require.NoError(t, err)
+	require.Contains(t, output.String(), "# override")
+	require.Contains(t, output.String(), "api.github.com")
+	require.Contains(t, output.String(), "creds/token")
+	require.Contains(t, output.String(), "host credential access")
+	require.Contains(t, output.String(), "\\x1b")
+	require.NotContains(t, output.String(), "\x1b")
 }
 
 //nolint:paralleltest // Replaces process-wide os.Stdin to exercise the real approval entry point; concurrent stdin users would observe the test pipe.
