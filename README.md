@@ -149,14 +149,19 @@ complete -o default -F __start_opencode-sandbox ocs
 ```sh
 mise run fmt  # Format Go code
 mise run lint
+mise run verify      # Lint + prepare changed images + full standard test suite
 mise run quality baseline # Save local complexity metrics before a refactor
 mise run quality compare  # Show current hotspots and changes from that baseline
 mise run test:unit    # Fast internal tests; no VMs or external services
 mise run test:image   # Build + offline image smoke tests; Docker only, no VMs
-mise run test:prepare # Build/import images once; repeat after image changes
-mise run test        # VM/integration tests using the prepared images
+mise run test:prepare # Prepare images only when image inputs change
+mise run test        # Prepare changed images, then run the full test suite
 mise run test:live   # Opt-in OpenAI smoke test; uses host credentials
 ```
+
+Image preparation tracks both Dockerfiles and the base `.dockerignore`.
+Unchanged builds and imports are skipped; tests always run. After deleting
+Docker or Microsandbox images, run `mise run --force test:prepare` to prepare them again.
 
 Quality reports are advisory and saved under `.quality/` (ignored by Git).
 They require Python 3 and the pinned golangci-lint; compare with the same tool
