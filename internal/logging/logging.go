@@ -10,8 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -170,86 +168,6 @@ func (w *writer) rotate(now time.Time) error {
 	w.file, w.day, w.size = file, now.Format("2006-01-02"), 0
 	if err := cleanup(root, now); err != nil {
 		w.warn(err)
-	}
-	return nil
-}
-
-type segment struct {
-	path     string
-	modified time.Time
-}
-
-// cleanup is called with the root cleanup lock held. Unknown files, symlinks,
-// and active segments are never removed. Limits are best-effort with active writers.
-func cleanup(root string, now time.Time) error {
-	dirs, err := os.ReadDir(root)
-	if err != nil {
-		return err
-	}
-	for _, dir := range dirs {
-		if !dir.IsDir() || !managedDirectory.MatchString(dir.Name()) {
-			continue
-		}
-		directory := filepath.Join(root, dir.Name())
-		entries, err := os.ReadDir(directory)
-		if err != nil {
-			return err
-		}
-		var files []segment
-		for _, entry := range entries {
-			if !managedFile.MatchString(entry.Name()) || entry.Type()&os.ModeSymlink != 0 {
-				continue
-			}
-			info, err := entry.Info()
-			if err != nil {
-				return err
-			}
-			if info.Mode().IsRegular() {
-				files = append(files, segment{filepath.Join(directory, entry.Name()), info.ModTime()})
-			}
-		}
-		sort.Slice(files, func(i, j int) bool {
-			if files[i].modified.Equal(files[j].modified) {
-				return strings.Compare(files[i].path, files[j].path) < 0
-			}
-			return files[i].modified.Before(files[j].modified)
-		})
-		remaining := len(files)
-		for _, f := range files {
-			if remaining <= maxFiles && !f.modified.Before(now.Add(-maxAge)) {
-				continue
-			}
-			file, err := os.OpenFile(f.path, os.O_RDWR|syscall.O_NOFOLLOW, 0)
-			if err != nil {
-				return err
-			}
-			lockErr := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
-			if lockErr == nil {
-				err = os.Remove(f.path)
-				if err == nil {
-					remaining--
-				}
-			}
-			closeErr := file.Close()
-			if err != nil {
-				return err
-			}
-			if closeErr != nil {
-				return closeErr
-			}
-			if lockErr != nil && lockErr != syscall.EWOULDBLOCK && lockErr != syscall.EAGAIN {
-				return lockErr
-			}
-		}
-		entries, err = os.ReadDir(directory)
-		if err != nil {
-			return err
-		}
-		if len(entries) == 0 {
-			if err := os.Remove(directory); err != nil {
-				return err
-			}
-		}
 	}
 	return nil
 }
