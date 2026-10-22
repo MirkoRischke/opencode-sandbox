@@ -15,7 +15,7 @@ import (
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
-func TestDockerBuildComposeAndPersistence(t *testing.T) {
+func TestDockerUsesOwnedStorageAndDoesNotForwardPorts(t *testing.T) {
 	t.Parallel()
 	s := startSandbox(t)
 	execInSandbox(t, s, "docker", "buildx", "version")
@@ -32,14 +32,87 @@ func TestDockerBuildComposeAndPersistence(t *testing.T) {
 	require.NotNil(t, config.Network.Ports)
 	require.Empty(t, config.Network.Ports, "container ports must not be forwarded to the host")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+}
+
+func TestDockerPullsFromAllowedRegistries(t *testing.T) {
+	t.Parallel()
+	s := startSandbox(t)
+	for _, image := range []string{"busybox:1.37.0", "public.ecr.aws/docker/library/busybox:1.37.0"} {
+		pullDockerImage(t, s, image)
+	}
+}
+
+func TestDockerBuildsAndRunsComposeServices(t *testing.T) {
+	t.Parallel()
+	s := startSandbox(t)
+	dir := buildDockerFixture(t, s)
+
+	require.Equal(t, "docker-ok", execInSandbox(t, s, "docker", "run", "--rm", "sandbox-docker-test:local"))
+	dockerCompose(t, s, dir, "up", "-d", "server")
+	require.Contains(t, dockerCompose(t, s, dir, "run", "--rm", "client"), "docker-ok")
+	require.Equal(t, "docker-ok", execInSandbox(t, s, "curl", "--fail", "--retry", "5", "--retry-connrefused", "--silent", "http://127.0.0.1:18080"))
+}
+
+func TestDockerContainersCannotBypassNetworkAllowlist(t *testing.T) {
+	t.Parallel()
+	s := startSandbox(t)
+	pullDockerImage(t, s, "busybox:1.37.0")
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+	defer cancel()
+
+	err := s.Exec(ctx, nil, nil, nil, "docker", "run", "--rm", "busybox:1.37.0", "wget", "-T", "5", "-O-", "http://example.com")
+
+	require.Error(t, err, "nested containers must not bypass the VM's HTTPS-only allowlist")
+	require.NoError(t, ctx.Err(), "the guest command must fail before its SDK deadline")
+}
+
+func TestEnsureDockerLeavesHealthyDaemonAndLogsUntouched(t *testing.T) {
+	t.Parallel()
+	s := startSandbox(t)
+	pid := execInSandbox(t, s, "cat", "/var/run/docker.pid")
+	execInSandbox(t, s, "sh", "-c", "echo log-marker >> /var/log/opencode-sandbox/dockerd.log")
+
+	require.NoError(t, s.EnsureDocker(t.Context()))
+
+	require.Equal(t, pid, execInSandbox(t, s, "cat", "/var/run/docker.pid"))
+	require.Contains(t, execInSandbox(t, s, "cat", "/var/log/opencode-sandbox/dockerd.log"), "log-marker")
+}
+
+func TestDockerImagesContainersAndVolumesPersistAcrossRestart(t *testing.T) {
+	t.Parallel()
+	s := startSandbox(t)
+	dir := buildDockerFixture(t, s)
+	dockerCompose(t, s, dir, "up", "-d", "server")
+	dockerCompose(t, s, dir, "exec", "-T", "server", "sh", "-c", "echo persisted > /data/proof")
+	execInSandbox(t, s, "docker", "create", "--name", "retained", "sandbox-docker-test:local")
+	execInSandbox(t, s, "sh", "-c", "echo log-marker >> /var/log/opencode-sandbox/dockerd.log")
+	dockerCompose(t, s, dir, "down")
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+
+	require.NoError(t, s.Stop(ctx))
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, testSettings(t))
+	require.NoError(t, err)
+	defer func() { require.NoError(t, resumed.Close()) }()
+
+	require.Equal(t, "docker-ok", execInSandbox(t, resumed, "docker", "run", "--rm", "sandbox-docker-test:local"))
+	require.Equal(t, "docker-ok", execInSandbox(t, resumed, "docker", "start", "--attach", "retained"))
+	require.Equal(t, "persisted\n", execInSandbox(t, resumed, "docker", "run", "--rm", "-v", "sandbox-test_data:/data", "sandbox-docker-test:local", "cat", "/data/proof"))
+	require.Contains(t, execInSandbox(t, resumed, "cat", "/var/log/opencode-sandbox/dockerd.log"), "log-marker")
+}
+
+func pullDockerImage(t *testing.T, s *sandbox.Sandbox, image string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 	var output bytes.Buffer
-	// Both pulls must work through the example's exact-host HTTPS policy and
-	// intercepted TLS, without credentials or insecure-registry exceptions.
-	for _, image := range []string{"busybox:1.37.0", "public.ecr.aws/docker/library/busybox:1.37.0"} {
-		require.NoError(t, s.Exec(ctx, nil, &output, &output, "docker", "pull", image), "%s", output.String())
-	}
+	err := s.Exec(ctx, nil, &output, &output, "docker", "pull", image)
+	require.NoError(t, err, "pull %s through the HTTPS allowlist: %s", image, output.String())
+}
+
+func buildDockerFixture(t *testing.T, s *sandbox.Sandbox) string {
+	t.Helper()
+	pullDockerImage(t, s, "busybox:1.37.0")
 	dir := filepath.Join(s.Worktree, "docker-test")
 	require.NoError(t, os.Mkdir(dir, 0700))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte(`FROM busybox:1.37.0
@@ -60,32 +133,18 @@ CMD ["cat", "/www/index.html"]
 volumes:
   data:
 `), 0600))
-	output.Reset()
-	require.NoError(t, s.Exec(ctx, nil, &output, &output, "docker", "buildx", "build", "--load", "-t", "sandbox-docker-test:local", dir), "%s", output.String())
-	require.Equal(t, "docker-ok", execInSandbox(t, s, "docker", "run", "--rm", "sandbox-docker-test:local"))
-	output.Reset()
-	err := s.Exec(ctx, nil, &output, &output, "docker", "run", "--rm", "sandbox-docker-test:local", "wget", "-T", "5", "-O-", "http://example.com")
-	require.Error(t, err, "nested containers must not bypass the VM's HTTPS-only allowlist")
-	compose := []string{"docker", "compose", "-p", "sandbox-test", "-f", filepath.Join(dir, "compose.yaml")}
-	execInSandbox(t, s, append(append([]string{}, compose...), "up", "-d", "server")...)
-	require.Contains(t, execInSandbox(t, s, append(append([]string{}, compose...), "run", "--rm", "client")...), "docker-ok")
-	require.Equal(t, "docker-ok", execInSandbox(t, s, "curl", "--fail", "--retry", "5", "--retry-connrefused", "--silent", "http://127.0.0.1:18080"))
-	execInSandbox(t, s, append(append([]string{}, compose...), "exec", "-T", "server", "sh", "-c", "echo persisted > /data/proof")...)
-	// EnsureDocker must leave a healthy daemon (and its log) untouched.
-	pid := execInSandbox(t, s, "cat", "/var/run/docker.pid")
-	require.NoError(t, s.EnsureDocker(ctx))
-	require.Equal(t, pid, execInSandbox(t, s, "cat", "/var/run/docker.pid"))
-	execInSandbox(t, s, "sh", "-c", "echo log-marker >> /var/log/opencode-sandbox/dockerd.log")
-	execInSandbox(t, s, "docker", "create", "--name", "retained", "sandbox-docker-test:local")
-	execInSandbox(t, s, append(append([]string{}, compose...), "down")...)
-	require.NoError(t, s.Stop(ctx))
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, testSettings(t))
-	require.NoError(t, err)
-	defer func() { require.NoError(t, resumed.Close()) }()
-	require.Equal(t, "docker-ok", execInSandbox(t, resumed, "docker", "run", "--rm", "sandbox-docker-test:local"))
-	require.Equal(t, "docker-ok", execInSandbox(t, resumed, "docker", "start", "--attach", "retained"))
-	require.Equal(t, "persisted\n", execInSandbox(t, resumed, "docker", "run", "--rm", "-v", "sandbox-test_data:/data", "sandbox-docker-test:local", "cat", "/data/proof"))
-	require.Contains(t, execInSandbox(t, resumed, "cat", "/var/log/opencode-sandbox/dockerd.log"), "log-marker")
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+	var output bytes.Buffer
+	err := s.Exec(ctx, nil, &output, &output, "docker", "buildx", "build", "--load", "-t", "sandbox-docker-test:local", dir)
+	require.NoError(t, err, "build Docker fixture: %s", output.String())
+	return dir
+}
+
+func dockerCompose(t *testing.T, s *sandbox.Sandbox, dir string, args ...string) string {
+	t.Helper()
+	command := []string{"docker", "compose", "-p", "sandbox-test", "-f", filepath.Join(dir, "compose.yaml")}
+	return execInSandbox(t, s, append(command, args...)...)
 }
 
 func TestDockerStartupWithoutDockerd(t *testing.T) {
