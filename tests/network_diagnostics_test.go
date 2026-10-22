@@ -3,11 +3,7 @@ package sandbox_test
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -20,81 +16,82 @@ import (
 
 func TestNetworkDiagnosticsPreservesWorktreeHistoryAcrossVMRecreation(t *testing.T) {
 	t.Parallel()
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
 	var captured bytes.Buffer
-	state := t.TempDir()
+	state, root := t.TempDir(), newWorktree(t)
 	diagnostics := sandbox.DiagnosticsOptions{StateDir: state, Output: &captured}
-	root := newWorktree(t)
 	settings := launcherconfig.DefaultSettings()
 	settings.Network.Diagnostics = true
-	var current *sandbox.Sandbox
-	t.Cleanup(func() {
-		if current != nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			assert.NoError(t, current.Remove(ctx))
-		}
-	})
-	type overview struct {
-		Worktree string `json:"worktree"`
-		Targets  []struct {
-			Hostname     string `json:"hostname"`
-			Observations uint64 `json:"observations"`
-		} `json:"denied_targets"`
-	}
-	var previous uint64
-	for iteration := range 2 {
-		if iteration == 1 {
-			settings.Network.AllowedHosts = []string{"github.com"}
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		s, err := sandbox.Prepare(ctx, root, nil, settings, diagnostics)
-		cancel()
-		require.NoError(t, err)
-		current = s
-		if iteration == 1 {
-			execInSandbox(t, s, "curl", "--noproxy", "*", "--fail", "--silent", "--show-error", "--max-time", "15", "https://github.com")
-			requireNetworkBlocked(t, s, "http://169.254.169.254")
-		}
-		requireNetworkBlocked(t, s, "https://example.org")
-		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-		err = s.Stop(ctx)
-		cancel()
-		require.NoError(t, err)
-		require.NotContains(t, captured.String(), "warning:", "diagnostics should collect and save without warnings")
+	first := prepareSandboxWithSettings(t, root, settings, diagnostics)
+	requireNetworkBlocked(t, first, "https://example.org")
+	require.NoError(t, first.Stop(ctx))
+	_, before := readSavedDiagnostics(t, root, state)
+	require.Equal(t, root, before.Worktree)
+	previous := before.observations("example.org")
+	require.Positive(t, previous)
+	require.NoError(t, first.Remove(ctx))
 
-		identity := sha256.Sum256([]byte(s.Worktree))
-		path := filepath.Join(state, "opencode-sandbox", "diagnostics", fmt.Sprintf("%x", identity[:16]), "network.json")
-		data, err := os.ReadFile(path)
-		require.NoError(t, err)
-		var stored overview
-		require.NoError(t, json.Unmarshal(data, &stored))
-		require.Equal(t, s.Worktree, stored.Worktree)
-		var count uint64
-		for _, target := range stored.Targets {
-			if target.Hostname == "example.org" {
-				count += target.Observations
-			}
-		}
-		require.Greater(t, count, previous, "new VM's denials should merge with the previous VM's history")
-		previous = count
-		require.NoError(t, s.Close())
+	settings.Network.AllowedHosts = []string{"github.com"}
+	recreated := prepareSandboxWithSettings(t, root, settings, diagnostics)
+	execInSandbox(t, recreated, "curl", "--noproxy", "*", "--fail", "--silent", "--show-error", "--max-time", "15", "https://github.com")
+	requireNetworkBlocked(t, recreated, "http://169.254.169.254")
+	requireNetworkBlocked(t, recreated, "https://example.org")
+	require.NoError(t, recreated.Stop(ctx))
 
-		// Resume the same VM without making requests. Old raw logs must not be
-		// counted again, and deleting the VM must preserve the overview.
-		ctx, cancel = context.WithTimeout(context.Background(), time.Minute)
-		resumed, err := sandbox.Prepare(ctx, root, nil, settings, diagnostics)
-		cancel()
-		require.NoError(t, err)
-		current = resumed
-		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-		err = resumed.Remove(ctx)
-		cancel()
-		require.NoError(t, err)
-		current = nil
-		after, err := os.ReadFile(path)
-		require.NoError(t, err)
-		require.Equal(t, string(data), string(after), "resuming must not replay historical raw logs")
+	_, after := readSavedDiagnostics(t, root, state)
+	require.Equal(t, root, after.Worktree)
+	require.Greater(t, after.observations("example.org"), previous, "new denials must merge with the previous VM's history")
+	require.NotContains(t, captured.String(), "warning:")
+}
+
+func TestNetworkDiagnosticsDoesNotReplayLogsWhenResumingOrDeletingVM(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+	state, root := t.TempDir(), newWorktree(t)
+	settings := launcherconfig.DefaultSettings()
+	settings.Network.Diagnostics = true
+	diagnostics := sandbox.DiagnosticsOptions{StateDir: state}
+	original := prepareSandboxWithSettings(t, root, settings, diagnostics)
+	requireNetworkBlocked(t, original, "https://example.org")
+	require.NoError(t, original.Stop(ctx))
+	before, overview := readSavedDiagnostics(t, root, state)
+	require.Positive(t, overview.observations("example.org"))
+	require.NoError(t, original.Close())
+
+	resumed := prepareSandboxWithSettings(t, root, settings, diagnostics)
+	require.NoError(t, resumed.Remove(ctx))
+
+	after, _ := readSavedDiagnostics(t, root, state)
+	require.Equal(t, string(before), string(after), "resuming must not replay historical raw logs; removal must preserve the saved overview")
+}
+
+type diagnosticOverview struct {
+	Worktree string `json:"worktree"`
+	Targets  []struct {
+		Hostname     string `json:"hostname"`
+		Observations uint64 `json:"observations"`
+	} `json:"denied_targets"`
+}
+
+func (o diagnosticOverview) observations(host string) uint64 {
+	var count uint64
+	for _, target := range o.Targets {
+		if target.Hostname == host {
+			count += target.Observations
+		}
 	}
+	return count
+}
+
+func readSavedDiagnostics(t *testing.T, root, state string) ([]byte, diagnosticOverview) {
+	t.Helper()
+	var output bytes.Buffer
+	require.NoError(t, sandbox.WriteNetworkDiagnostics(t.Context(), root, state, &output))
+	var stored diagnosticOverview
+	require.NoError(t, json.Unmarshal(output.Bytes(), &stored))
+	return output.Bytes(), stored
 }
 
 func TestSnapshotRestoreBlocksHTTPSWithoutDenialDiagnostics(t *testing.T) {

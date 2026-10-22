@@ -40,26 +40,30 @@ func prepareSandbox(t *testing.T, worktree string) *sandbox.Sandbox {
 	return prepareSandboxWithSettings(t, worktree, testSettings(t))
 }
 
-func prepareSandboxWithSettings(t *testing.T, worktree string, settings launcherconfig.Settings) *sandbox.Sandbox {
+func prepareSandboxWithSettings(t *testing.T, worktree string, settings launcherconfig.Settings, diagnostics ...sandbox.DiagnosticsOptions) *sandbox.Sandbox {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	s, err := sandbox.Prepare(ctx, worktree, nil, settings)
+	s, err := sandbox.Prepare(ctx, worktree, nil, settings, diagnostics...)
 	require.NoError(t, err)
+	registerSandboxCleanup(t, s)
+	return s
+}
+
+// Destroy through a fresh handle: a test may close, stop, or recreate its VM.
+func registerSandboxCleanup(t *testing.T, s *sandbox.Sandbox) {
+	t.Helper()
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		// A test may deliberately close/shut down its original SDK connection.
-		// Destroy through a fresh management handle instead of that connection.
 		handle, err := m.GetSandbox(ctx, s.Name)
-		if assert.NoError(t, err) {
+		if !m.IsKind(err, m.ErrSandboxNotFound) && assert.NoError(t, err) {
 			assert.NoError(t, handle.Destroy(ctx))
 		}
 		if err := s.Close(); !m.IsKind(err, m.ErrInvalidHandle) {
 			assert.NoError(t, err)
 		}
 	})
-	return s
 }
 
 func startSandbox(t *testing.T) *sandbox.Sandbox {
