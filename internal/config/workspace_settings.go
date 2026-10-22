@@ -83,24 +83,9 @@ type trustStore struct {
 func trustWorkspaceSettings(stateDir, root string, data []byte, approve func() error) error {
 	dir := filepath.Join(stateDir, "opencode-sandbox")
 	path := filepath.Join(dir, "trust.json")
-	store := trustStore{Version: 1, Workspaces: map[string]trustRecord{}}
-	stored, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("read workspace trust: %w", err)
-	}
-	if err == nil {
-		store = trustStore{}
-		decoder := json.NewDecoder(bytes.NewReader(stored))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&store); err != nil {
-			return fmt.Errorf("decode workspace trust: %w", err)
-		}
-		if err := decoder.Decode(new(any)); err != io.EOF {
-			return fmt.Errorf("invalid trailing data in workspace trust")
-		}
-		if store.Version != 1 || store.Workspaces == nil {
-			return fmt.Errorf("invalid workspace trust store %s", path)
-		}
+	store, err := loadTrustStore(path)
+	if err != nil {
+		return err
 	}
 	hash := fmt.Sprintf("%x", sha256.Sum256(data))
 	if store.Workspaces[root].ConfigSHA256 == hash {
@@ -134,4 +119,28 @@ func trustWorkspaceSettings(stateDir, root string, data []byte, approve func() e
 		return closeErr
 	}
 	return os.Rename(tmp.Name(), path)
+}
+
+func loadTrustStore(path string) (trustStore, error) {
+	store := trustStore{Version: 1, Workspaces: map[string]trustRecord{}}
+	stored, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return store, nil
+	}
+	if err != nil {
+		return store, fmt.Errorf("read workspace trust: %w", err)
+	}
+	store = trustStore{}
+	decoder := json.NewDecoder(bytes.NewReader(stored))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&store); err != nil {
+		return store, fmt.Errorf("decode workspace trust: %w", err)
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return store, fmt.Errorf("invalid trailing data in workspace trust")
+	}
+	if store.Version != 1 || store.Workspaces == nil {
+		return store, fmt.Errorf("invalid workspace trust store %s", path)
+	}
+	return store, nil
 }

@@ -33,20 +33,29 @@ func resolveFileSource(source, origin string) (string, error) {
 
 func validateFiles(files []FileSettings) error {
 	for i, mount := range files {
-		if mount.Mode != "" && mount.Mode != "mount" && mount.Mode != "copy" {
-			return fmt.Errorf("files[%d].mode: %q must be mount or copy", i, mount.Mode)
-		}
-		if mount.Source == "" || strings.ContainsRune(mount.Source, '\x00') || !filepath.IsAbs(mount.Source) {
-			return fmt.Errorf("files[%d].source: %q must resolve to an absolute host path", i, mount.Source)
-		}
-		if !path.IsAbs(mount.Target) || strings.ContainsRune(mount.Target, '\x00') || path.Clean(mount.Target) != mount.Target || mount.Target == "/" {
-			return fmt.Errorf("files[%d].target: %q must be a clean absolute guest path other than /", i, mount.Target)
+		if err := mount.validate(i); err != nil {
+			return err
 		}
 		for j := range i {
 			if MountTargetsOverlap(mount.Target, files[j].Target) {
 				return fmt.Errorf("files[%d].target %q overlaps files[%d].target %q", i, mount.Target, j, files[j].Target)
 			}
 		}
+	}
+	return nil
+}
+
+func (f FileSettings) validate(i int) error {
+	switch f.Mode {
+	case "", "mount", "copy":
+	default:
+		return fmt.Errorf("files[%d].mode: %q must be mount or copy", i, f.Mode)
+	}
+	if f.Source == "" || strings.ContainsRune(f.Source, '\x00') || !filepath.IsAbs(f.Source) {
+		return fmt.Errorf("files[%d].source: %q must resolve to an absolute host path", i, f.Source)
+	}
+	if !path.IsAbs(f.Target) || strings.ContainsRune(f.Target, '\x00') || path.Clean(f.Target) != f.Target || f.Target == "/" {
+		return fmt.Errorf("files[%d].target: %q must be a clean absolute guest path other than /", i, f.Target)
 	}
 	return nil
 }

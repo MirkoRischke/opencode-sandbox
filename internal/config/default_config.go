@@ -34,12 +34,13 @@ func WriteDefaultConfig(w io.Writer) error {
 	return err
 }
 
+type configField struct {
+	name, path, description string
+	value                   reflect.Value
+}
+
 func writeConfigTable(out *bytes.Buffer, value reflect.Value, path string, commented bool) error {
 	typ := value.Type()
-	prefix := ""
-	if commented {
-		prefix = "# "
-	}
 	for i := 0; i < value.NumField(); i++ {
 		field := typ.Field(i)
 		name := strings.Split(field.Tag.Get("toml"), ",")[0]
@@ -54,45 +55,54 @@ func writeConfigTable(out *bytes.Buffer, value reflect.Value, path string, comme
 		if path != "" {
 			fieldPath = path + "." + name
 		}
-		fieldValue := value.Field(i)
-		if fieldValue.Kind() == reflect.Slice && fieldValue.Type().Elem().Kind() == reflect.Struct {
-			example, ok := configExamples[fieldValue.Type().Elem()]
-			if !ok {
-				return fmt.Errorf("config section %s requires an example", fieldPath)
-			}
-			fmt.Fprintf(out, "# %s\n%s%s = []\n\n# Remove the empty list above to enable this example.\n# [[%s]]\n", description, prefix, name, fieldPath)
-			if err := writeConfigTable(out, reflect.ValueOf(example), fieldPath, true); err != nil {
-				return err
-			}
-			continue
-		}
-		switch fieldValue.Kind() {
-		case reflect.Pointer:
-			fmt.Fprintf(out, "# %s\n# %s = {}\n", description, name)
-		case reflect.Struct:
-			fmt.Fprintf(out, "\n# %s\n%s[%s]\n", description, prefix, fieldPath)
-			if err := writeConfigTable(out, fieldValue, fieldPath, commented); err != nil {
-				return err
-			}
-		case reflect.Map:
-			example, ok := configExamples[fieldValue.Type().Elem()]
-			if !ok {
-				return fmt.Errorf("config section %s requires an example", fieldPath)
-			}
-			fmt.Fprintf(out, "\n# %s\n# [%s.example]\n", description, fieldPath)
-			if err := writeConfigTable(out, reflect.ValueOf(example), fieldPath+".example", true); err != nil {
-				return err
-			}
-		default:
-			fmt.Fprintf(out, "# %s\n", description)
-			var encoded bytes.Buffer
-			if err := toml.NewEncoder(&encoded).Encode(map[string]any{name: fieldValue.Interface()}); err != nil {
-				return err
-			}
-			for _, line := range strings.Split(strings.TrimSuffix(encoded.String(), "\n"), "\n") {
-				fmt.Fprintf(out, "%s%s\n", prefix, line)
-			}
+		entry := configField{name: name, path: fieldPath, description: description, value: value.Field(i)}
+		if err := entry.write(out, commented); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func (f configField) write(out *bytes.Buffer, commented bool) error {
+	prefix := ""
+	if commented {
+		prefix = "# "
+	}
+	if f.value.Kind() == reflect.Slice && f.value.Type().Elem().Kind() == reflect.Struct {
+		return f.writeExample(out, prefix)
+	}
+	switch f.value.Kind() {
+	case reflect.Pointer:
+		fmt.Fprintf(out, "# %s\n# %s = {}\n", f.description, f.name)
+	case reflect.Struct:
+		fmt.Fprintf(out, "\n# %s\n%s[%s]\n", f.description, prefix, f.path)
+		return writeConfigTable(out, f.value, f.path, commented)
+	case reflect.Map:
+		return f.writeExample(out, prefix)
+	default:
+		fmt.Fprintf(out, "# %s\n", f.description)
+		var encoded bytes.Buffer
+		if err := toml.NewEncoder(&encoded).Encode(map[string]any{f.name: f.value.Interface()}); err != nil {
+			return err
+		}
+		for _, line := range strings.Split(strings.TrimSuffix(encoded.String(), "\n"), "\n") {
+			fmt.Fprintf(out, "%s%s\n", prefix, line)
+		}
+	}
+	return nil
+}
+
+func (f configField) writeExample(out *bytes.Buffer, prefix string) error {
+	example, ok := configExamples[f.value.Type().Elem()]
+	if !ok {
+		return fmt.Errorf("config section %s requires an example", f.path)
+	}
+	path := f.path
+	if f.value.Kind() == reflect.Slice {
+		fmt.Fprintf(out, "# %s\n%s%s = []\n\n# Remove the empty list above to enable this example.\n# [[%s]]\n", f.description, prefix, f.name, path)
+	} else {
+		path += ".example"
+		fmt.Fprintf(out, "\n# %s\n# [%s]\n", f.description, path)
+	}
+	return writeConfigTable(out, reflect.ValueOf(example), path, true)
 }

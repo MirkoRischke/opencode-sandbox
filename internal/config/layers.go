@@ -28,23 +28,11 @@ func mergeSettings(settings Settings, data []byte, origin string) (Settings, err
 	if _, err := toml.Decode(string(data), &overlay); err != nil {
 		return settings, err
 	}
-	// Resolve only paths supplied by this layer, preserving inherited origins.
-	for name, secret := range partial.Secrets {
-		if secret.File != "" && !filepath.IsAbs(secret.File) {
-			secret.File = filepath.Join(origin, secret.File)
-		}
-		partial.Secrets[name] = secret
+	if err := resolveLayerPaths(&partial, metadata, origin); err != nil {
+		return settings, err
 	}
 	delete(overlay, "secrets")
 	if metadata.IsDefined("files") {
-		for i := range partial.Files {
-			source, err := resolveFileSource(partial.Files[i].Source, origin)
-			if err != nil {
-				return settings, fmt.Errorf("files[%d].source: %w", i, err)
-			}
-			partial.Files[i].Source = source
-		}
-		// Decode array tables through TOML, not koanf's weakly typed map decoder.
 		delete(overlay, "files")
 	}
 	k := koanf.New(".")
@@ -60,19 +48,47 @@ func mergeSettings(settings Settings, data []byte, origin string) (Settings, err
 	if err := k.UnmarshalWithConf("", &merged, koanf.UnmarshalConf{Tag: "toml"}); err != nil {
 		return settings, err
 	}
-	merged.Secrets = nil
-	if settings.Secrets != nil || partial.Secrets != nil {
-		merged.Secrets = make(map[string]SecretSettings)
-		for name, secret := range settings.Secrets {
-			merged.Secrets[name] = secret
-		}
-		for name, secret := range partial.Secrets {
-			merged.Secrets[name] = secret
-		}
-	}
+	merged.Secrets = mergeSecretEntries(settings.Secrets, partial.Secrets)
 	merged.Files = settings.Files
 	if metadata.IsDefined("files") {
 		merged.Files = partial.Files
 	}
 	return merged, merged.Validate()
+}
+
+// Resolve only paths supplied by this layer, preserving inherited origins.
+func resolveLayerPaths(partial *Settings, metadata toml.MetaData, origin string) error {
+	for name, secret := range partial.Secrets {
+		if secret.File != "" && !filepath.IsAbs(secret.File) {
+			secret.File = filepath.Join(origin, secret.File)
+		}
+		partial.Secrets[name] = secret
+	}
+	if !metadata.IsDefined("files") {
+		return nil
+	}
+	// Decode array tables through TOML, not koanf's weakly typed map decoder.
+	for i := range partial.Files {
+		source, err := resolveFileSource(partial.Files[i].Source, origin)
+		if err != nil {
+			return fmt.Errorf("files[%d].source: %w", i, err)
+		}
+		partial.Files[i].Source = source
+	}
+	return nil
+}
+
+// Named secrets replace whole entries; omitted fields never leak from inheritance.
+func mergeSecretEntries(inherited, overlay map[string]SecretSettings) map[string]SecretSettings {
+	if inherited == nil && overlay == nil {
+		return nil
+	}
+	merged := make(map[string]SecretSettings, len(inherited)+len(overlay))
+	for name, secret := range inherited {
+		merged[name] = secret
+	}
+	for name, secret := range overlay {
+		merged[name] = secret
+	}
+	return merged
 }

@@ -41,37 +41,52 @@ var headerPattern = regexp.MustCompile("^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 func ValidateSecrets(secrets map[string]SecretSettings) error {
 	envs := map[string]bool{}
 	for name, secret := range secrets {
-		if (secret.File != "") == (secret.Keyring != nil) {
-			return fmt.Errorf("secret %q requires exactly one source: file or keyring", name)
-		}
-		if !envPattern.MatchString(secret.Env) {
-			return fmt.Errorf("secret %q requires a valid environment variable name", name)
-		}
-		if secret.Keyring != nil {
-			service, account := secret.Keyring.Reference(name)
-			for _, value := range []string{service, account} {
-				if strings.TrimSpace(value) == "" || strings.ContainsAny(value, "\r\n\x00") {
-					return fmt.Errorf("secret %q: keyring service/account must be non-empty and contain no newlines or NUL bytes", name)
-				}
-			}
+		if err := validateSecretSource(name, secret); err != nil {
+			return err
 		}
 		if envs[secret.Env] {
 			return fmt.Errorf("duplicate secret environment variable %q", secret.Env)
 		}
 		envs[secret.Env] = true
-		if len(secret.AllowedHosts) == 0 || len(secret.Headers) == 0 {
-			return fmt.Errorf("secret %q requires non-empty allowed_hosts and headers", name)
+		if err := validateSecretDestinations(name, secret); err != nil {
+			return err
 		}
-		for _, host := range secret.AllowedHosts {
-			hostname := strings.TrimPrefix(host, "*.")
-			if len(hostname) > 253 || !hostnamePattern.MatchString(hostname) {
-				return fmt.Errorf("secret %q: allowed_hosts: %q must be a DNS hostname or *.prefixed wildcard", name, host)
-			}
+	}
+	return nil
+}
+
+func validateSecretSource(name string, secret SecretSettings) error {
+	if (secret.File != "") == (secret.Keyring != nil) {
+		return fmt.Errorf("secret %q requires exactly one source: file or keyring", name)
+	}
+	if !envPattern.MatchString(secret.Env) {
+		return fmt.Errorf("secret %q requires a valid environment variable name", name)
+	}
+	if secret.Keyring == nil {
+		return nil
+	}
+	service, account := secret.Keyring.Reference(name)
+	for _, value := range []string{service, account} {
+		if strings.TrimSpace(value) == "" || strings.ContainsAny(value, "\r\n\x00") {
+			return fmt.Errorf("secret %q: keyring service/account must be non-empty and contain no newlines or NUL bytes", name)
 		}
-		for _, header := range secret.Headers {
-			if !headerPattern.MatchString(header) {
-				return fmt.Errorf("secret %q has an invalid header name", name)
-			}
+	}
+	return nil
+}
+
+func validateSecretDestinations(name string, secret SecretSettings) error {
+	if len(secret.AllowedHosts) == 0 || len(secret.Headers) == 0 {
+		return fmt.Errorf("secret %q requires non-empty allowed_hosts and headers", name)
+	}
+	for _, host := range secret.AllowedHosts {
+		hostname := strings.TrimPrefix(host, "*.")
+		if len(hostname) > 253 || !hostnamePattern.MatchString(hostname) {
+			return fmt.Errorf("secret %q: allowed_hosts: %q must be a DNS hostname or *.prefixed wildcard", name, host)
+		}
+	}
+	for _, header := range secret.Headers {
+		if !headerPattern.MatchString(header) {
+			return fmt.Errorf("secret %q has an invalid header name", name)
 		}
 	}
 	return nil

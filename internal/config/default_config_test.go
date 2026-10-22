@@ -5,6 +5,7 @@ import (
 	"errors"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -109,36 +110,37 @@ func TestEveryConfigFieldHasDocumentation(t *testing.T) {
 	t.Parallel()
 	var out bytes.Buffer
 	require.NoError(t, WriteDefaultConfig(&out))
-	var check func(reflect.Type)
-	check = func(typ reflect.Type) {
-		for i := 0; i < typ.NumField(); i++ {
-			field := typ.Field(i)
-			name := strings.Split(field.Tag.Get("toml"), ",")[0]
-			if name == "-" {
-				continue
+	requireDocumentedFields(t, out.String(), reflect.TypeFor[Settings]())
+}
+
+func requireDocumentedFields(t *testing.T, output string, typ reflect.Type) {
+	t.Helper()
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		name := strings.Split(field.Tag.Get("toml"), ",")[0]
+		if name == "-" {
+			continue
+		}
+		require.NotEmpty(t, name, "%s.%s needs a TOML name", typ.Name(), field.Name)
+		description := strings.TrimSpace(field.Tag.Get("description"))
+		require.NotEmpty(t, description, "%s.%s needs a description", typ.Name(), field.Name)
+		require.Contains(t, output, "# "+description)
+		switch field.Type.Kind() {
+		case reflect.Struct:
+			requireDocumentedFields(t, output, field.Type)
+		case reflect.Map:
+			require.Contains(t, configExamples, field.Type.Elem(), "%s needs an example", name)
+			requireDocumentedFields(t, output, field.Type.Elem())
+		case reflect.Slice:
+			require.Contains(t, output, name+" =", "%s must be included", name)
+			if field.Type.Elem().Kind() == reflect.Struct {
+				require.Contains(t, configExamples, field.Type.Elem())
+				requireDocumentedFields(t, output, field.Type.Elem())
 			}
-			require.NotEmpty(t, name, "%s.%s needs a TOML name", typ.Name(), field.Name)
-			description := strings.TrimSpace(field.Tag.Get("description"))
-			require.NotEmpty(t, description, "%s.%s needs a description", typ.Name(), field.Name)
-			require.Contains(t, out.String(), "# "+description)
-			switch field.Type.Kind() {
-			case reflect.Struct:
-				check(field.Type)
-			case reflect.Map:
-				require.Contains(t, configExamples, field.Type.Elem(), "%s needs an example", name)
-				check(field.Type.Elem())
-			case reflect.Slice:
-				require.Contains(t, out.String(), name+" =", "%s must be included", name)
-				if field.Type.Elem().Kind() == reflect.Struct {
-					require.Contains(t, configExamples, field.Type.Elem())
-					check(field.Type.Elem())
-				}
-			default:
-				require.Contains(t, out.String(), name+" =", "%s must be included", name)
-			}
+		default:
+			require.Contains(t, output, name+" =", "%s must be included", name)
 		}
 	}
-	check(reflect.TypeFor[Settings]())
 }
 
 func TestDefaultConfigSecretExampleIsValid(t *testing.T) {
@@ -170,23 +172,16 @@ func TestDefaultConfigFileExampleIsValid(t *testing.T) {
 	t.Parallel()
 	var out bytes.Buffer
 	require.NoError(t, WriteDefaultConfig(&out))
-	lines := strings.Split(out.String(), "\n")
-	inMount := false
-	for i, line := range lines {
-		if line == "files = []" {
-			lines[i] = ""
+	lines := strings.Split(strings.Replace(out.String(), "files = []\n", "", 1), "\n")
+	start := slices.Index(lines, "# [[files]]")
+	require.NotEqual(t, -1, start, "file mapping example must be present")
+	for i, line := range lines[start:] {
+		if strings.HasPrefix(line, "[") {
+			break
 		}
-		if line == "# [[files]]" {
-			inMount = true
-		}
-		if inMount {
-			if strings.HasPrefix(line, "[") {
-				break
-			}
-			if content, ok := strings.CutPrefix(line, "# "); ok &&
-				(strings.HasPrefix(content, "[[") || strings.Contains(content, " = ")) {
-				lines[i] = content
-			}
+		content := strings.TrimPrefix(line, "# ")
+		if strings.HasPrefix(content, "[[") || strings.Contains(content, " = ") {
+			lines[start+i] = content
 		}
 	}
 	settings, err := mergeSettings(DefaultSettings(), []byte(strings.Join(lines, "\n")), t.TempDir())
