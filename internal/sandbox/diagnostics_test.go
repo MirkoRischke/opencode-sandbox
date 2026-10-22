@@ -257,34 +257,35 @@ func TestNetworkDiagnosticsCollectsOnEveryPoll(t *testing.T) {
 
 func TestNetworkDiagnosticsDefersWarningsUntilShutdown(t *testing.T) {
 	t.Parallel()
-	for _, failure := range []string{"collection", "save"} {
-		t.Run(failure, func(t *testing.T) {
+	for _, scenario := range []struct {
+		name         string
+		collectError error
+		blockSave    bool
+	}{
+		{name: "collection", collectError: errors.New("simulated log-stream failure")},
+		{name: "save", blockSave: true},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			t.Parallel()
 			var captured bytes.Buffer
 			d, err := loadDiagnostics("/project", time.Now(), DiagnosticsOptions{StateDir: t.TempDir(), Output: &captured})
 			require.NoError(t, err)
-			if failure == "save" {
-				// An existing regular file cannot be used as the overview directory.
+			if scenario.blockSave {
+				// A regular file cannot be used as the overview directory.
 				d.path = filepath.Join(t.TempDir(), "not-a-directory", "network.json")
 				require.NoError(t, os.WriteFile(filepath.Dir(d.path), []byte("occupied"), 0600))
 			}
-			// Drive a background polling failure, then end collection without
-			// returning terminal ownership to the caller via finish yet.
-			calls := 0
 			d.run(func() error {
-				calls++
-				if calls == 1 {
-					d.once.Do(func() { close(d.stop) })
-				}
-				if failure == "collection" {
-					return errors.New("simulated log-stream failure")
-				}
-				return nil
+				d.once.Do(func() { close(d.stop) })
+				return scenario.collectError
 			})
 			require.Empty(t, captured.String(), "background failures must not write into the attached TUI")
+
 			d.finish()
+
 			messages := captured.String()
 			require.Contains(t, messages, "warning:")
-			require.Contains(t, messages, failure)
+			require.Contains(t, messages, scenario.name)
 			d.finish()
 			require.Equal(t, messages, captured.String(), "Stop followed by Close must report each warning only once")
 		})

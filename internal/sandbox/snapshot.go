@@ -92,17 +92,8 @@ func CreateSnapshot(ctx context.Context, directory string, secrets []Secret, set
 // CreateWorkspaceSnapshot captures a baseline for an already resolved workspace.
 func CreateWorkspaceSnapshot(ctx context.Context, w workspace.Workspace, secrets []Secret, settings config.Settings, diagnostics ...DiagnosticsOptions) (reference string, err error) {
 	logging.FromContext(ctx).Info("Preparing workspace snapshot")
-	if err := settings.Validate(); err != nil {
-		return "", err
-	}
-	if err := settings.ValidateFileSources(); err != nil {
-		return "", err
-	}
-	diagnosticOptions, err := resolveDiagnostics(settings.Network.Diagnostics, diagnostics)
+	diagnosticOptions, err := validatePreparation(w, settings, diagnostics)
 	if err != nil {
-		return "", err
-	}
-	if err := validateMounts(w, settings); err != nil {
 		return "", err
 	}
 	repo := snapshotIdentity(w.Root())
@@ -132,19 +123,16 @@ func CreateWorkspaceSnapshot(ctx context.Context, w workspace.Workspace, secrets
 		defer cancel()
 		err = errors.Join(err, prep.Remove(cleanup))
 	}()
-	if strings.TrimSpace(settings.Snapshot.Command) != "" {
-		if err := prep.Exec(ctx, nil, os.Stdout, os.Stderr, "bash", "-eu", "-c", settings.Snapshot.Command); err != nil {
-			return "", fmt.Errorf("snapshot preparation: %w", err)
-		}
+	if err := prep.quiesceSnapshot(ctx, settings.Snapshot.Command); err != nil {
+		return "", err
 	}
-	if err := prep.Exec(ctx, nil, os.Stdout, os.Stderr, "bash", "-eu", "-c", stopDockerForSnapshot); err != nil {
-		return "", fmt.Errorf("quiesce snapshot: %w", err)
-	}
-	if err := prep.Stop(ctx); err != nil {
-		return "", fmt.Errorf("stop preparation VM: %w", err)
-	}
+	return repo.publish(ctx, prep.Name, generation)
+}
+
+// Publication selects the captured generation before pruning the previous head.
+func (repo workspaceSnapshot) publish(ctx context.Context, preparation, generation string) (string, error) {
 	snapshot, err := m.Snapshot.Create(ctx, m.SnapshotCreateOptions{
-		Name: generation, Group: repo.group, FromSandbox: prep.Name, Labels: repo.labels(),
+		Name: generation, Group: repo.group, FromSandbox: preparation, Labels: repo.labels(),
 	})
 	if err != nil {
 		return "", fmt.Errorf("capture workspace snapshot: %w", err)
@@ -157,6 +145,21 @@ func CreateWorkspaceSnapshot(ctx context.Context, w workspace.Workspace, secrets
 		return snapshot.Reference(), fmt.Errorf("new snapshot is current, but previous snapshot cleanup failed: %w", err)
 	}
 	return snapshot.Reference(), nil
+}
+
+func (s *Sandbox) quiesceSnapshot(ctx context.Context, command string) error {
+	if strings.TrimSpace(command) != "" {
+		if err := s.Exec(ctx, nil, os.Stdout, os.Stderr, "bash", "-eu", "-c", command); err != nil {
+			return fmt.Errorf("snapshot preparation: %w", err)
+		}
+	}
+	if err := s.Exec(ctx, nil, os.Stdout, os.Stderr, "bash", "-eu", "-c", stopDockerForSnapshot); err != nil {
+		return fmt.Errorf("quiesce snapshot: %w", err)
+	}
+	if err := s.Stop(ctx); err != nil {
+		return fmt.Errorf("stop preparation VM: %w", err)
+	}
+	return nil
 }
 
 // The caller has validated settings, resolved paths and configured the runtime.
@@ -177,12 +180,7 @@ func createPreparationVM(ctx context.Context, w workspace.Workspace, name string
 	if settings.Network.Diagnostics {
 		prep.diagnostics = startNetworkDiagnostics(ctx, vm, w.Root(), started, diagnostics)
 	}
-	if err := prep.copyFiles(ctx, settings); err != nil {
-		cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		return nil, errors.Join(err, prep.Remove(cleanup))
-	}
-	if err := prep.configureEnvironment(ctx, settings); err != nil {
+	if err := prep.configureGuest(ctx, settings); err != nil {
 		cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		return nil, errors.Join(err, prep.Remove(cleanup))
@@ -224,16 +222,12 @@ func RemoveAllSnapshots(ctx context.Context, observers ...RemovalObserver) error
 	}
 	repositories := map[string]workspaceSnapshot{}
 	for _, member := range members {
-		group := member.Group()
-		if group == nil || !strings.HasPrefix(*group, "oc-workspace-") || member.Scope() != m.SnapshotScopeDisk {
-			continue
-		}
-		artifact, err := member.Open(ctx)
+		repo, managed, err := readSnapshotWorkspace(ctx, member)
 		if err != nil {
-			return fmt.Errorf("read snapshot %s: %w", member.Reference(), err)
+			return err
 		}
-		if repo, ok := managedSnapshotWorkspace(*group, artifact.Labels()); ok {
-			repositories[*group] = repo
+		if managed {
+			repositories[repo.group] = repo
 		}
 	}
 	groups := make([]string, 0, len(repositories))
@@ -253,12 +247,26 @@ func RemoveAllSnapshots(ctx context.Context, observers ...RemovalObserver) error
 	return errors.Join(errs...)
 }
 
+// Use the same ownership checks for discovery and bulk deletion.
+func readSnapshotWorkspace(ctx context.Context, member *m.SnapshotHandle) (workspaceSnapshot, bool, error) {
+	group := member.Group()
+	if group == nil || !strings.HasPrefix(*group, "oc-workspace-") || member.Scope() != m.SnapshotScopeDisk {
+		return workspaceSnapshot{}, false, nil
+	}
+	artifact, err := member.Open(ctx)
+	if err != nil {
+		return workspaceSnapshot{}, false, fmt.Errorf("read snapshot %s: %w", member.Reference(), err)
+	}
+	repo, managed := managedSnapshotWorkspace(*group, artifact.Labels())
+	return repo, managed, nil
+}
+
 func managedSnapshotWorkspace(group string, labels map[string]string) (workspaceSnapshot, bool) {
 	_, managed := labels["opencode-sandbox"]
 	if !strings.HasPrefix(group, "oc-workspace-") || !managed || labels["kind"] != "workspace-baseline" || labels["workspace-id"] == "" {
 		return workspaceSnapshot{}, false
 	}
-	return workspaceSnapshot{id: labels["workspace-id"], name: labels["workspace-name"], group: group}, true
+	return workspaceSnapshot{id: labels["workspace-id"], name: labels["workspace-name"], root: labels["workspace-path"], group: group}, true
 }
 
 func (r workspaceSnapshot) removeLocked(ctx context.Context, observers ...RemovalObserver) error {

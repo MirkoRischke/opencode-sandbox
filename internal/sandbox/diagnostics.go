@@ -153,33 +153,36 @@ func (d *networkDiagnostics) run(collect func() error) {
 	defer close(d.done)
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
-	poll := func() {
-		if err := collect(); err != nil {
-			if d.logger != nil && d.collectionFailure == "" {
-				d.logger.Warn("Network diagnostics collection failed", "error", err)
-			}
-			d.collectionFailure = diagnosticErrorKind(err)
-		} else {
-			d.collectionFailure = ""
-		}
-		if err := d.save(); err != nil && d.saveFailure == "" {
-			if d.logger != nil {
-				d.logger.Warn("Network diagnostics save failed", "error", err)
-			}
-			d.saveFailure = diagnosticErrorKind(err)
-		}
-	}
+
 	for {
 		// Snapshot streams terminate at EOF. Polling permits periodic saves and
 		// a final drain after VM stop without cancelling a live follower.
-		poll()
+		d.poll(collect)
 		select {
 		case <-d.stop:
 			// Stop may have happened during the previous snapshot.
-			poll()
+			d.poll(collect)
 			return
 		case <-ticker.C:
 		}
+	}
+}
+
+func (d *networkDiagnostics) poll(collect func() error) {
+
+	if err := collect(); err != nil {
+		if d.logger != nil && d.collectionFailure == "" {
+			d.logger.Warn("Network diagnostics collection failed", "error", err)
+		}
+		d.collectionFailure = diagnosticErrorKind(err)
+	} else {
+		d.collectionFailure = ""
+	}
+	if err := d.save(); err != nil && d.saveFailure == "" {
+		if d.logger != nil {
+			d.logger.Warn("Network diagnostics save failed", "error", err)
+		}
+		d.saveFailure = diagnosticErrorKind(err)
 	}
 }
 
@@ -344,24 +347,7 @@ func parseNetworkDenial(entry m.LogEntry) (deniedTarget, bool) {
 		return target, false
 	}
 	for _, match := range diagnosticField.FindAllStringSubmatch(text, -1) {
-		value := strings.TrimSuffix(strings.TrimPrefix(match[2], "Some("), ")")
-		value = strings.Trim(value, `"`)
-		switch match[1] {
-		case "domain", "sni":
-			value = strings.ToLower(strings.TrimSuffix(value, "."))
-			if len(value) <= 253 && hostnameForDiagnostics(value) {
-				target.Hostname = value
-			}
-		case "dst":
-			if host, port, err := net.SplitHostPort(value); err == nil && net.ParseIP(host) != nil {
-				n, err := strconv.ParseUint(port, 10, 16)
-				if err == nil {
-					target.IP, target.Port = host, uint16(n)
-				}
-			} else if net.ParseIP(value) != nil {
-				target.IP = value
-			}
-		}
+		target.parseField(match[1], match[2])
 	}
 	if target.Hostname != "" {
 		// IP rotation must not split a hostname's cumulative history.
@@ -374,14 +360,29 @@ func parseNetworkDenial(entry m.LogEntry) (deniedTarget, bool) {
 	return target, true
 }
 
-func hostnameForDiagnostics(host string) bool {
-	if host == "" || host == "none" {
-		return false
-	}
-	for _, r := range host {
-		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' && r != '.' && r != '_' {
-			return false
+func (target *deniedTarget) parseField(field, raw string) {
+	value := strings.TrimSuffix(strings.TrimPrefix(raw, "Some("), ")")
+	value = strings.Trim(value, `"`)
+	switch field {
+	case "domain", "sni":
+		value = strings.ToLower(strings.TrimSuffix(value, "."))
+		if len(value) <= 253 && hostnameForDiagnostics(value) {
+			target.Hostname = value
+		}
+	case "dst":
+		if host, port, err := net.SplitHostPort(value); err == nil && net.ParseIP(host) != nil {
+			n, err := strconv.ParseUint(port, 10, 16)
+			if err == nil {
+				target.IP, target.Port = host, uint16(n)
+			}
+		} else if net.ParseIP(value) != nil {
+			target.IP = value
 		}
 	}
-	return true
+}
+
+var diagnosticHostname = regexp.MustCompile(`^[a-z0-9._-]+$`)
+
+func hostnameForDiagnostics(host string) bool {
+	return host != "none" && diagnosticHostname.MatchString(host)
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	m "github.com/superradcompany/microsandbox/sdk/go"
@@ -48,36 +47,40 @@ func ListSnapshots(ctx context.Context, directory string) (SnapshotListing, erro
 	if err != nil {
 		return listing, fmt.Errorf("list workspace snapshots: %w", err)
 	}
+	repositories, err := collectSnapshots(ctx, members, listing.Current)
+	if err != nil {
+		return listing, err
+	}
+	listing.sortWorkspaces(repositories)
+	return listing, nil
+}
+
+func collectSnapshots(ctx context.Context, members []*m.SnapshotHandle, current *SnapshotWorkspace) (map[string]*SnapshotWorkspace, error) {
 	repositories := map[string]*SnapshotWorkspace{}
-	if listing.Current != nil {
-		repositories[listing.Current.ID] = listing.Current
+	if current != nil {
+		repositories[current.ID] = current
 	}
 	heads := map[string]string{}
 	for _, member := range members {
-		group := member.Group()
-		if group == nil || !strings.HasPrefix(*group, "oc-workspace-") || member.Scope() != m.SnapshotScopeDisk {
-			continue
-		}
-		artifact, err := member.Open(ctx)
+		repo, managed, err := readSnapshotWorkspace(ctx, member)
 		if err != nil {
-			return listing, fmt.Errorf("read snapshot %s: %w", member.Reference(), err)
+			return nil, err
 		}
-		labels := artifact.Labels()
-		if _, managed := labels["opencode-sandbox"]; !managed || labels["kind"] != "workspace-baseline" || labels["workspace-id"] == "" {
+		if !managed {
 			continue
 		}
-		headID, known := heads[*group]
+		headID, known := heads[repo.group]
 		if !known {
-			head, err := m.Snapshot.Get(ctx, *group)
+			head, err := m.Snapshot.Get(ctx, repo.group)
 			if err != nil {
-				return listing, fmt.Errorf("find baseline for %s: %w", *group, err)
+				return nil, fmt.Errorf("find baseline for %s: %w", repo.group, err)
 			}
 			headID = head.ID()
-			heads[*group] = headID
+			heads[repo.group] = headID
 		}
-		r := repositories[labels["workspace-id"]]
+		r := repositories[repo.id]
 		if r == nil {
-			r = &SnapshotWorkspace{ID: labels["workspace-id"], Name: labels["workspace-name"], Path: labels["workspace-path"]}
+			r = &SnapshotWorkspace{ID: repo.id, Name: repo.name, Path: repo.root}
 			repositories[r.ID] = r
 		}
 		r.Snapshots = append(r.Snapshots, SnapshotInfo{
@@ -85,6 +88,10 @@ func ListSnapshots(ctx context.Context, directory string) (SnapshotListing, erro
 			SizeBytes: member.SizeBytes(), Baseline: member.ID() == headID,
 		})
 	}
+	return repositories, nil
+}
+
+func (listing *SnapshotListing) sortWorkspaces(repositories map[string]*SnapshotWorkspace) {
 	for _, r := range repositories {
 		sort.Slice(r.Snapshots, func(i, j int) bool {
 			a, b := r.Snapshots[i], r.Snapshots[j]
@@ -104,5 +111,4 @@ func ListSnapshots(ctx context.Context, directory string) (SnapshotListing, erro
 		}
 		return a.Path < b.Path
 	})
-	return listing, nil
 }

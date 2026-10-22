@@ -44,17 +44,8 @@ func Prepare(ctx context.Context, directory string, secrets []Secret, settings l
 
 // PrepareWorkspace creates or resumes one VM for an already resolved workspace.
 func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secret, settings launcherconfig.Settings, diagnostics ...DiagnosticsOptions) (*Sandbox, error) {
-	if err := settings.Validate(); err != nil {
-		return nil, err
-	}
-	if err := settings.ValidateFileSources(); err != nil {
-		return nil, err
-	}
-	diagnosticOptions, err := resolveDiagnostics(settings.Network.Diagnostics, diagnostics)
+	diagnosticOptions, err := validatePreparation(w, settings, diagnostics)
 	if err != nil {
-		return nil, err
-	}
-	if err := validateMounts(w, settings); err != nil {
 		return nil, err
 	}
 	if err := configureRuntime(); err != nil {
@@ -74,12 +65,7 @@ func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secr
 		s.diagnostics = startNetworkDiagnostics(ctx, s.vm, w.Root(), started, diagnosticOptions)
 	}
 	if created {
-		if err := s.copyFiles(ctx, settings); err != nil {
-			cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			return nil, errors.Join(err, s.Remove(cleanup))
-		}
-		if err := s.configureEnvironment(ctx, settings); err != nil {
+		if err := s.configureGuest(ctx, settings); err != nil {
 			cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			return nil, errors.Join(err, s.Remove(cleanup))
@@ -90,6 +76,31 @@ func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secr
 	}
 	s.log().Info("VM ready", "duration_ms", time.Since(started).Milliseconds())
 	return s, nil
+}
+
+// Validate all host inputs before allocating runtime resources.
+func validatePreparation(w workspace.Workspace, settings launcherconfig.Settings, diagnostics []DiagnosticsOptions) (DiagnosticsOptions, error) {
+	if err := settings.Validate(); err != nil {
+		return DiagnosticsOptions{}, err
+	}
+	if err := settings.ValidateFileSources(); err != nil {
+		return DiagnosticsOptions{}, err
+	}
+	diagnosticOptions, err := resolveDiagnostics(settings.Network.Diagnostics, diagnostics)
+	if err != nil {
+		return DiagnosticsOptions{}, err
+	}
+	if err := validateMounts(w, settings); err != nil {
+		return DiagnosticsOptions{}, err
+	}
+	return diagnosticOptions, nil
+}
+
+func (s *Sandbox) configureGuest(ctx context.Context, settings launcherconfig.Settings) error {
+	if err := s.copyFiles(ctx, settings); err != nil {
+		return err
+	}
+	return s.configureEnvironment(ctx, settings)
 }
 
 func sandboxOptions(w workspace.Workspace, guestRoot string, settings launcherconfig.Settings) []m.SandboxOption {
