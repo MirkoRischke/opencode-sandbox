@@ -58,6 +58,24 @@ mise run install # Install the launcher to ~/.local/bin
 mise run load    # Build and import the sandbox image
 ```
 
+### Upgrading Microsandbox
+
+Upgrade the SDK and runtime together from this repository:
+
+```sh
+mise run upgrade-microsandbox       # Resolve the latest stable runtime version
+mise run upgrade-microsandbox 0.7.9 # Or select an exact version
+# Dotfiles default to ../dotfiles; override with --dotfiles /path/to/dotfiles
+```
+
+The task updates the SDK dependency and local runtime pin, runs `mise run verify`
+with that runtime, installs the launcher, then updates the Microsandbox pin in
+`home/private_dot_config/mise/config.toml.tmpl` in your dotfiles repository.
+Review both repositories and apply your Mise configuration through Chezmoi to
+select the matching runtime globally. The global pin must be an exact version,
+not `latest`, to prevent unattended upgrades from breaking SDK compatibility.
+Failures leave changes for inspection; the task does not commit or roll back.
+
 ## Usage
 
 ```sh

@@ -33,6 +33,14 @@ mkdir -p "$HOME/.local/bin"
 install -m755 bin/opencode-sandbox "$HOME/.local/bin/opencode-sandbox"
 '''
 
+[tasks.upgrade-microsandbox]
+description = "Upgrade the Microsandbox SDK/runtime pair and dotfiles pin"
+usage = '''
+arg "[version]" default="latest"
+flag "--dotfiles <path>" default="../dotfiles"
+'''
+run = 'go run ./scripts/upgrade-microsandbox --dotfiles "${usage_dotfiles?}" "${usage_version?}"'
+
 [tasks.build]
 description = "Build the sandbox image"
 sources = ["Dockerfile", ".dockerignore"]
