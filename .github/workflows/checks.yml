@@ -15,15 +15,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
-      # Use Go from go.mod via setup-go; never install the VM runtime in CI.
-      MISE_ENABLE_TOOLS: golangci-lint,hadolint
+      # Use the local toolchain versions; never install the VM runtime in CI.
+      MISE_ENABLE_TOOLS: go,golangci-lint,hadolint
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
       - uses: jdx/mise-action@v5
         with:
           cache_key_prefix: mise-v0-${{ env.MISE_ENABLE_TOOLS }}

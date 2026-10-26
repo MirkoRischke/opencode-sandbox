@@ -4,8 +4,8 @@
     "config:recommended",
     "customManagers:dockerfileVersions"
   ],
-  "enabledManagers": ["dockerfile", "custom.regex", "gomod"],
-  "includePaths": ["Dockerfile", "go.mod", "go.sum"],
+  "enabledManagers": ["dockerfile", "custom.regex", "gomod", "mise", "github-actions"],
+  "includePaths": ["Dockerfile", "go.mod", "go.sum", "mise.toml", ".github/workflows/**"],
   "packageRules": [
     {
       "matchManagers": ["gomod"],
@@ -17,6 +17,11 @@
       "matchPackageNames": [
         "github.com/superradcompany/microsandbox/sdk/go"
       ],
+      "enabled": false
+    },
+    {
+      "matchManagers": ["mise"],
+      "matchDepNames": ["microsandbox"],
       "enabled": false
     }
   ],
