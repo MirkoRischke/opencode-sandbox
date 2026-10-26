@@ -59,6 +59,7 @@ func TestWriteNetworkDiagnostics(t *testing.T) {
 		var output bytes.Buffer
 		err := WriteNetworkDiagnostics(context.Background(), subdir, state, &output)
 		require.ErrorContains(t, err, "no saved network diagnostics")
+		require.ErrorIs(t, err, os.ErrNotExist)
 		require.Empty(t, output.String())
 		_, err = os.Stat(path)
 		require.True(t, os.IsNotExist(err))
@@ -67,6 +68,7 @@ func TestWriteNetworkDiagnostics(t *testing.T) {
 		var output bytes.Buffer
 		err := WriteNetworkDiagnostics(context.Background(), t.TempDir(), state, &output)
 		require.ErrorContains(t, err, "no saved network diagnostics")
+		require.ErrorIs(t, err, os.ErrNotExist)
 		require.Empty(t, output.String())
 	})
 }
@@ -289,6 +291,15 @@ func TestNetworkDiagnosticsDefersWarningsUntilShutdown(t *testing.T) {
 			messages := captured.String()
 			require.Contains(t, messages, "level=WARN")
 			require.Contains(t, messages, scenario.name)
+			if scenario.collectError != nil {
+				require.ErrorIs(t, d.collectionFailure, scenario.collectError)
+				require.Contains(t, messages, scenario.collectError.Error())
+			}
+			if scenario.blockSave {
+				var cause *os.PathError
+				require.ErrorAs(t, d.saveFailure, &cause)
+				require.Contains(t, messages, cause.Error())
+			}
 			d.finish()
 			require.Equal(t, messages, captured.String(), "Stop followed by Close must report each warning only once")
 		})
@@ -313,13 +324,6 @@ func TestNetworkDiagnosticsClearsCollectionFailureAfterRecovery(t *testing.T) {
 	d.finish()
 	require.Equal(t, 2, calls)
 	require.Empty(t, captured.String(), "a successful final collection supersedes an earlier timeout")
-}
-
-func TestDiagnosticErrorKindDoesNotExposeRuntimeDetails(t *testing.T) {
-	t.Parallel()
-	require.Equal(t, "timeout", diagnosticErrorKind(context.DeadlineExceeded))
-	require.Equal(t, "permission denied", diagnosticErrorKind(os.ErrPermission))
-	require.Equal(t, "unknown error", diagnosticErrorKind(errors.New("guest-controlled sensitive details")))
 }
 
 func TestPreparingDiagnosticsRequiresExplicitHostState(t *testing.T) {

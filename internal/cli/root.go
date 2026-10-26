@@ -91,8 +91,7 @@ func configureConsoleLogging(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	applyConsoleLevel(ctx, settings.ConsoleLevel)
-	return nil
+	return applyConsoleLevel(ctx, settings.ConsoleLevel)
 }
 
 func requireSubcommand(cmd *cobra.Command, _ []string) error {

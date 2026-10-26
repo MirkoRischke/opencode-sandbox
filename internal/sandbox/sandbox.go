@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strconv"
 	"time"
 
 	launcherconfig "opencode-sandbox/internal/config"
@@ -176,11 +177,7 @@ func (s *Sandbox) Exec(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 		inputDone = make(chan error, 1)
 		go func() {
 			_, err := io.Copy(sink, stdin)
-			closeErr := sink.Close()
-			if err == nil {
-				err = closeErr
-			}
-			inputDone <- err
+			inputDone <- errors.Join(err, sink.Close())
 		}()
 	}
 	return receiveCommand(ctx, h.Recv, stdout, stderr, inputDone)
@@ -190,10 +187,11 @@ func (s *Sandbox) Exec(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 // only after the guest stream finishes; caller-owned handles stay in Exec.
 func receiveCommand(ctx context.Context, recv func(context.Context) (*m.ExecEvent, error), stdout, stderr io.Writer, inputDone <-chan error) error {
 	exitCode := -1
+	var inputErr error
 	for {
 		event, err := recv(ctx)
 		if err != nil {
-			return err
+			return errors.Join(inputErr, err)
 		}
 		switch event.Kind {
 		case m.ExecEventStdout:
@@ -202,18 +200,38 @@ func receiveCommand(ctx context.Context, recv func(context.Context) (*m.ExecEven
 			err = writeCommandOutput(stderr, event.Data)
 		case m.ExecEventExited:
 			exitCode = event.ExitCode
-		case m.ExecEventFailed, m.ExecEventStdinError:
-			return fmt.Errorf("guest command failed (details suppressed)")
+		case m.ExecEventFailed:
+			return errors.Join(inputErr, commandFailure("start guest command", event.Failure))
+		case m.ExecEventStdinError:
+			// Stdin errors are non-terminal: drain output and retain the failure
+			// even if the guest subsequently exits successfully.
+			inputErr = errors.Join(inputErr, commandFailure("write guest stdin", event.Failure))
 		case m.ExecEventDone:
-			if err := waitCommandInput(ctx, inputDone); err != nil {
-				return err
-			}
-			return checkExit(exitCode)
+			return errors.Join(inputErr, waitCommandInput(ctx, inputDone), checkExit(exitCode))
 		}
 		if err != nil {
-			return err
+			return errors.Join(inputErr, err)
 		}
 	}
+}
+
+// The SDK failure payload is not an error. Keep its structured fields available
+// through errors.As while adding operation context to its diagnostic message.
+type guestExecFailure struct{ m.ExecFailure }
+
+func (e *guestExecFailure) Error() string {
+	message := fmt.Sprintf("%s (kind=%q, path=%q, errno_name=%q)", e.Message, e.Kind, e.Path, e.ErrnoName)
+	if e.Errno != nil {
+		message += " errno=" + strconv.Itoa(*e.Errno)
+	}
+	return message
+}
+
+func commandFailure(operation string, failure *m.ExecFailure) error {
+	if failure == nil {
+		return fmt.Errorf("%s failed (runtime supplied no failure details)", operation)
+	}
+	return fmt.Errorf("%s: %w", operation, &guestExecFailure{ExecFailure: *failure})
 }
 
 func writeCommandOutput(writer io.Writer, data []byte) error {
@@ -231,7 +249,7 @@ func waitCommandInput(ctx context.Context, done <-chan error) error {
 	select {
 	case err := <-done:
 		if err != nil {
-			return fmt.Errorf("write guest stdin failed")
+			return fmt.Errorf("write guest stdin: %w", err)
 		}
 		return nil
 	case <-ctx.Done():
@@ -250,7 +268,7 @@ func (s *Sandbox) Open(ctx context.Context) error {
 	// Keep the terminal attached until the guest shell exits, not just OpenCode.
 	code, err := s.vm.AttachWith(ctx, "bash", []string{"-c", "opencode; exec bash -i"},
 		m.WithAttachCwd(s.Worktree), m.WithAttachEnv(terminalEnv))
-	s.log().Info("Guest terminal detached", "exit_code", code, "error", err)
+	s.log().Info("Guest terminal detached", "exit_code", code, "success", err == nil)
 	if err != nil {
 		return err
 	}
@@ -259,7 +277,7 @@ func (s *Sandbox) Open(ctx context.Context) error {
 
 func (s *Sandbox) Remove(ctx context.Context) (err error) {
 	s.log().Info("Removing VM")
-	defer func() { s.log().Info("VM removal finished", "error", err) }()
+	defer func() { s.log().Info("VM removal finished", "success", err == nil) }()
 	defer func() { err = errors.Join(err, s.Close()) }()
 	if s.diagnostics != nil {
 		if err := s.Stop(ctx); err != nil {
@@ -279,7 +297,7 @@ func (s *Sandbox) Stop(ctx context.Context) error {
 	s.log().Info("Stopping VM")
 	err := s.vm.Stop(ctx)
 	s.diagnostics.finish()
-	s.log().Info("VM stop finished", "error", err)
+	s.log().Info("VM stop finished", "success", err == nil)
 	return err
 }
 
@@ -297,7 +315,13 @@ func (s *Sandbox) Shutdown() error {
 
 func checkExit(code int) error {
 	if code != 0 {
-		return fmt.Errorf("guest command exited with code %d", code)
+		return &guestExitError{code: code}
 	}
 	return nil
+}
+
+type guestExitError struct{ code int }
+
+func (e *guestExitError) Error() string {
+	return fmt.Sprintf("guest command exited with code %d", e.code)
 }

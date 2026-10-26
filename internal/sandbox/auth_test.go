@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -40,6 +41,14 @@ func TestOpenAICredentialSelectionRejectsAmbiguousOrInvalidExports(t *testing.T)
 			require.ErrorContains(t, err, tc.message)
 			require.NotContains(t, err.Error(), "FAKE_TOKEN")
 			require.Nil(t, payload)
+			switch tc.name {
+			case "invalid JSON":
+				var cause *json.SyntaxError
+				require.ErrorAs(t, err, &cause)
+			case "invalid entry":
+				var cause *json.UnmarshalTypeError
+				require.ErrorAs(t, err, &cause)
+			}
 		})
 	}
 }

@@ -137,6 +137,9 @@ func loadTrustStore(path string) (trustStore, error) {
 		return store, fmt.Errorf("decode workspace trust: %w", err)
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
+		if err != nil {
+			return store, fmt.Errorf("invalid trailing data in workspace trust: %w", err)
+		}
 		return store, fmt.Errorf("invalid trailing data in workspace trust")
 	}
 	if store.Version != 1 || store.Workspaces == nil {

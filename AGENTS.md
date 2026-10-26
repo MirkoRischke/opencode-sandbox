@@ -8,6 +8,7 @@ outdated by your changes. Exceptions:
 # Implementation
 
 - Handle each error once: either return it (optionally wrapped with context), or log it where handled. Never log and propagate the same error.
+- Preserve underlying errors when adding context: wrap with `%w` so callers retain `errors.Is`/`errors.As` and diagnostics retain the cause.
 
 - Do not consider migration scenarios; recreation of sandboxes/VMs is acceptable.
 

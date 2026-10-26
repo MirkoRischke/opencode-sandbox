@@ -45,7 +45,9 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 	if err != nil {
 		return err
 	}
-	applyConsoleLevel(ctx, settings.Logging.ConsoleLevel)
+	if err := applyConsoleLevel(ctx, settings.Logging.ConsoleLevel); err != nil {
+		return err
+	}
 	awsSettings, err := resolveAWSSettings(settings.AWS, awsRole, awsProfile)
 	if err != nil {
 		return err
@@ -92,7 +94,7 @@ func loadHostAWS(ctx context.Context, settings launcherconfig.AWSSettings, logge
 	}
 	cfg, err := awsconfig.LoadDefaultConfig(loadCtx, loadOptions...)
 	if err != nil {
-		return nil, fmt.Errorf("load host AWS profile failed (details suppressed)")
+		return nil, fmt.Errorf("load host AWS profile: %w", err)
 	}
 	// Preserve the SDK's provider/cache behavior, recording only metadata.
 	// This distinguishes aws login/SSO from overriding environment keys.

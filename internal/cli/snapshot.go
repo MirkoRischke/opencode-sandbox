@@ -72,7 +72,9 @@ func newSnapshotCreateCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			applyConsoleLevel(ctx, settings.Logging.ConsoleLevel)
+			if err := applyConsoleLevel(ctx, settings.Logging.ConsoleLevel); err != nil {
+				return err
+			}
 			paths.Logger.Info("Effective configuration", "settings", settings)
 			secrets, err := sandbox.LoadSecrets(settings)
 			if err != nil {

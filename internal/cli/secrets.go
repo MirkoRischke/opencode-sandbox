@@ -84,7 +84,7 @@ func (deps secretDependencies) store(cmd *cobra.Command, entry keyringEntry) err
 		return err
 	}
 	if err := deps.set(entry.service, entry.account, value); err != nil {
-		return fmt.Errorf("store secret %q: keyring operation failed; check availability, unlock state, and provider size limits (details suppressed)", entry.name)
+		return fmt.Errorf("store secret %q: keyring operation failed; check availability, unlock state, and provider size limits: %w", entry.name, err)
 	}
 	_, err = fmt.Fprintln(cmd.OutOrStdout(), "Secret stored. Recreate existing VMs to use the new value.")
 	return err
@@ -105,7 +105,7 @@ func (deps secretDependencies) remove(cmd *cobra.Command, entry keyringEntry) er
 		_, err = fmt.Fprintln(cmd.OutOrStdout(), "Keyring entry already absent.")
 		return err
 	} else if err != nil {
-		return fmt.Errorf("delete secret %q: keyring operation failed; check that the keyring is available and unlocked (details suppressed)", entry.name)
+		return fmt.Errorf("delete secret %q: keyring operation failed; check that the keyring is available and unlocked: %w", entry.name, err)
 	}
 	_, err = fmt.Fprintln(cmd.OutOrStdout(), "Keyring entry deleted. Existing VMs retain their stored credentials; revoke upstream for immediate revocation.")
 	return err
@@ -117,7 +117,7 @@ func (deps secretDependencies) listAccounts(cmd *cobra.Command, service string) 
 	}
 	accounts, err := deps.list(service)
 	if err != nil {
-		return fmt.Errorf("list keyring entries: keyring operation failed; check that the keyring is available and unlocked (details suppressed)")
+		return fmt.Errorf("list keyring entries: keyring operation failed; check that the keyring is available and unlocked: %w", err)
 	}
 	if len(accounts) == 0 {
 		_, err = fmt.Fprintln(cmd.OutOrStdout(), "No keyring entries found.")
@@ -151,11 +151,10 @@ func readSecretInput(cmd *cobra.Command) (string, error) {
 		return "", err
 	}
 	value, err := term.ReadPassword(int(input.Fd()))
-	if _, writeErr := fmt.Fprintln(cmd.ErrOrStderr()); writeErr != nil {
-		return "", writeErr
-	}
+	_, writeErr := fmt.Fprintln(cmd.ErrOrStderr())
+	err = errors.Join(err, writeErr)
 	if err != nil {
-		return "", fmt.Errorf("read secret input failed (details suppressed)")
+		return "", fmt.Errorf("read secret input: %w", err)
 	}
 	return string(value), nil
 }

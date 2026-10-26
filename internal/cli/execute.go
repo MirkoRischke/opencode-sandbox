@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 
@@ -46,11 +47,13 @@ func Execute(ctx context.Context, command *cobra.Command) int {
 	return 0
 }
 
-func applyConsoleLevel(ctx context.Context, level string) {
+func applyConsoleLevel(ctx context.Context, level string) error {
 	if e, ok := ctx.Value(executionKey{}).(*execution); ok && !e.override {
 		var parsed slog.Level
-		if err := parsed.UnmarshalText([]byte(level)); err == nil {
-			e.level.Set(parsed)
+		if err := parsed.UnmarshalText([]byte(level)); err != nil {
+			return fmt.Errorf("parse console log level %q: %w", level, err)
 		}
+		e.level.Set(parsed)
 	}
+	return nil
 }

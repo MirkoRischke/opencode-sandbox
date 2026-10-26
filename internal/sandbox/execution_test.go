@@ -73,15 +73,75 @@ func TestGuestExecutionPropagatesOutputFailures(t *testing.T) {
 	}
 }
 
-func TestGuestExecutionSuppressesInputFailureDetails(t *testing.T) {
+func TestGuestExecutionPreservesInputFailure(t *testing.T) {
 	t.Parallel()
 	input := make(chan error, 1)
-	input <- errors.New("FAKE_TOKEN")
+	failure := errors.New("input pipe closed")
+	input <- failure
 	events := commandEvents(m.ExecEvent{Kind: m.ExecEventExited}, m.ExecEvent{Kind: m.ExecEventDone})
 
 	err := receiveCommand(t.Context(), events, nil, nil, input)
 
-	require.EqualError(t, err, "write guest stdin failed")
+	require.ErrorIs(t, err, failure)
+	require.ErrorContains(t, err, "write guest stdin: input pipe closed")
+}
+
+func TestGuestExecutionRetainsStructuredFailures(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		kind m.ExecEventKind
+	}{{"start", m.ExecEventFailed}, {"stdin", m.ExecEventStdinError}} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			errno := 2
+			failure := m.ExecFailure{Kind: "io", Errno: &errno, ErrnoName: "ENOENT", Message: "executable unavailable", Path: "/bin/missing"}
+			var output bytes.Buffer
+			events := commandEvents(
+				m.ExecEvent{Kind: tc.kind, Failure: &failure},
+				m.ExecEvent{Kind: m.ExecEventStdout, Data: []byte("last output")},
+				m.ExecEvent{Kind: m.ExecEventExited},
+				m.ExecEvent{Kind: m.ExecEventDone},
+			)
+
+			err := receiveCommand(t.Context(), events, &output, nil, nil)
+
+			var detail *guestExecFailure
+			require.ErrorAs(t, err, &detail)
+			require.Equal(t, failure, detail.ExecFailure)
+			for _, message := range []string{failure.Message, failure.Kind, failure.Path, failure.ErrnoName, "errno=2"} {
+				require.ErrorContains(t, err, message)
+			}
+			if tc.kind == m.ExecEventStdinError {
+				require.ErrorContains(t, err, "write guest stdin")
+				require.Equal(t, "last output", output.String(), "stdin failure does not terminate the stream")
+			} else {
+				require.ErrorContains(t, err, "start guest command")
+			}
+		})
+	}
+}
+
+func TestGuestExecutionHandlesFailureWithoutDetails(t *testing.T) {
+	t.Parallel()
+	events := commandEvents(m.ExecEvent{Kind: m.ExecEventFailed})
+	err := receiveCommand(t.Context(), events, nil, nil, nil)
+	require.ErrorContains(t, err, "start guest command failed")
+}
+
+func TestGuestExecutionRetainsInputAndExitFailures(t *testing.T) {
+	t.Parallel()
+	failure := errors.New("input pipe failed")
+	input := make(chan error, 1)
+	input <- failure
+	events := commandEvents(m.ExecEvent{Kind: m.ExecEventExited, ExitCode: 7}, m.ExecEvent{Kind: m.ExecEventDone})
+
+	err := receiveCommand(t.Context(), events, nil, nil, input)
+
+	require.ErrorIs(t, err, failure)
+	var exit *guestExitError
+	require.ErrorAs(t, err, &exit)
+	require.Equal(t, 7, exit.code)
 }
 
 func TestGuestExecutionCancelsWhileWaitingForInput(t *testing.T) {

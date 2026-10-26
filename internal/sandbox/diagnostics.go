@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -54,8 +53,8 @@ type networkDiagnostics struct {
 	done              chan struct{}
 	once              sync.Once
 	reportOnce        sync.Once
-	collectionFailure string
-	saveFailure       string
+	collectionFailure error
+	saveFailure       error
 	logger            *slog.Logger
 }
 
@@ -86,7 +85,7 @@ func WriteNetworkDiagnostics(ctx context.Context, directory, stateDir string, w 
 	path := diagnosticsPath(stateDir, root)
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return fmt.Errorf("no saved network diagnostics for %s; enable network.diagnostics and launch the sandbox to collect them", root)
+		return fmt.Errorf("no saved network diagnostics for %s; enable network.diagnostics and launch the sandbox to collect them: %w", root, err)
 	}
 	if err != nil {
 		return fmt.Errorf("read network diagnostics: %w", err)
@@ -128,7 +127,7 @@ func startNetworkDiagnostics(ctx context.Context, vm *m.Sandbox, worktree string
 	logger := logging.FromContext(ctx).With("component", "network_diagnostics")
 	d, err := loadDiagnostics(worktree, since, options)
 	if err != nil {
-		logger.Warn("Network diagnostics unavailable; existing history was not changed", "error", diagnosticErrorKind(err))
+		logger.Warn("Network diagnostics unavailable; existing history was not changed", "error", err)
 		return nil
 	}
 	d.vm = vm
@@ -158,13 +157,9 @@ func (d *networkDiagnostics) run(collect func() error) {
 }
 
 func (d *networkDiagnostics) poll(collect func() error) {
-	if err := collect(); err != nil {
-		d.collectionFailure = diagnosticErrorKind(err)
-	} else {
-		d.collectionFailure = ""
-	}
-	if err := d.save(); err != nil && d.saveFailure == "" {
-		d.saveFailure = diagnosticErrorKind(err)
+	d.collectionFailure = collect()
+	if err := d.save(); err != nil && d.saveFailure == nil {
+		d.saveFailure = err
 	}
 }
 
@@ -205,37 +200,13 @@ func (d *networkDiagnostics) finish() {
 		if d.logger == nil {
 			return
 		}
-		if d.collectionFailure != "" {
+		if d.collectionFailure != nil {
 			d.logger.Warn("Network diagnostics incomplete: collection failed", "error", d.collectionFailure, "summary", d.path)
 		}
-		if d.saveFailure != "" {
+		if d.saveFailure != nil {
 			d.logger.Warn("Network diagnostics incomplete: save failed", "error", d.saveFailure, "summary", d.path)
 		}
 	})
-}
-
-// Report useful error categories without echoing arbitrary runtime diagnostics
-// or guest-controlled strings into the host terminal.
-func diagnosticErrorKind(err error) string {
-	switch {
-	case errors.Is(err, context.DeadlineExceeded):
-		return "timeout"
-	case errors.Is(err, context.Canceled):
-		return "cancelled"
-	case errors.Is(err, os.ErrPermission):
-		return "permission denied"
-	case errors.Is(err, os.ErrNotExist):
-		return "path not found"
-	}
-	var sdkErr *m.Error
-	if errors.As(err, &sdkErr) {
-		return sdkErr.Kind.String()
-	}
-	var pathErr *os.PathError
-	if errors.As(err, &pathErr) {
-		return pathErr.Err.Error()
-	}
-	return "unknown error"
 }
 
 func (d *networkDiagnostics) observe(entry m.LogEntry) {

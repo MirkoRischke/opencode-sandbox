@@ -74,7 +74,7 @@ func TestLoadKeyringSecretsFailsClosed(t *testing.T) {
 		message string
 	}{
 		{err: keyring.ErrNotFound, message: "entry not found"},
-		{err: errors.New("provider failure with SENSITIVE_VALUE"), message: "keyring access failed"},
+		{err: errors.New("keyring provider unavailable"), message: "keyring access failed"},
 		{value: "", message: "one non-empty line"},
 		{value: "SENSITIVE_VALUE\nother", message: "one non-empty line"},
 		{value: "SENSITIVE_VALUE\x00", message: "one non-empty line"},
@@ -86,6 +86,10 @@ func TestLoadKeyringSecretsFailsClosed(t *testing.T) {
 		}
 		secrets, err := loadSecrets(settings, func(string, string) (string, error) { return tc.value, tc.err })
 		require.ErrorContains(t, err, tc.message)
+		if tc.err != nil {
+			require.ErrorIs(t, err, tc.err)
+			require.ErrorContains(t, err, tc.err.Error())
+		}
 		require.NotContains(t, err.Error(), "SENSITIVE_VALUE")
 		require.Nil(t, secrets)
 	}

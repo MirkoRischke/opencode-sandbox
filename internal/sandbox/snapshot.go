@@ -74,7 +74,10 @@ func (r workspaceSnapshot) lockIn(cacheDir string) (func(), error) {
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		_ = f.Close() //nolint:errcheck // Read-only lock handle; preserve the locking error.
-		return nil, fmt.Errorf("another snapshot operation is in progress for %s", r.name)
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, fmt.Errorf("another snapshot operation is in progress for %s: %w", r.name, err)
+		}
+		return nil, fmt.Errorf("lock snapshot operations for %s: %w", r.name, err)
 	}
 	return func() { _ = f.Close() }, nil //nolint:errcheck // Closing releases the lock; no buffered data to flush.
 }

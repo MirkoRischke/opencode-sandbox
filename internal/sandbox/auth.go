@@ -5,26 +5,32 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os/exec"
 )
 
 // ImportOpenAI seeds only the active subscription credential, once per VM.
-// Secrets remain in memory and travel through stdin; diagnostics are suppressed.
+// Secrets remain in memory and travel through stdin; payloads are not printed.
 func (s *Sandbox) ImportOpenAI(ctx context.Context) error {
 	const marker = "/root/.opencode-sandbox-auth-ready"
-	if s.Exec(ctx, nil, nil, nil, "test", "-f", marker) == nil {
+	err := s.Exec(ctx, nil, nil, nil, "test", "-f", marker)
+	if err == nil {
 		return nil
+	}
+	var exit *guestExitError
+	if !errors.As(err, &exit) || exit.code != 1 {
+		return fmt.Errorf("check guest OpenAI credential marker: %w", err)
 	}
 	data, err := exec.CommandContext(ctx, "opencode", "auth", "export", "openai").Output()
 	if err != nil {
-		return errors.New("export host OpenAI credentials failed (output suppressed)")
+		return fmt.Errorf("export host OpenAI credentials: %w", err)
 	}
 	payload, err := selectOpenAICredential(data)
 	if err != nil {
 		return err
 	}
-	if s.Exec(ctx, bytes.NewReader(payload), nil, nil, "opencode", "auth", "import") != nil {
-		return errors.New("import OpenAI credential failed (output suppressed)")
+	if err := s.Exec(ctx, bytes.NewReader(payload), nil, nil, "opencode", "auth", "import"); err != nil {
+		return fmt.Errorf("import OpenAI credential: %w", err)
 	}
 	return s.Exec(ctx, nil, nil, nil, "touch", marker)
 }
@@ -32,8 +38,8 @@ func (s *Sandbox) ImportOpenAI(ctx context.Context) error {
 // Select one active subscription credential, preserving provider-specific fields.
 func selectOpenAICredential(data []byte) ([]byte, error) {
 	var records []json.RawMessage
-	if json.Unmarshal(data, &records) != nil {
-		return nil, errors.New("invalid host credential export")
+	if err := json.Unmarshal(data, &records); err != nil {
+		return nil, fmt.Errorf("invalid host credential export: %w", err)
 	}
 	var selected []json.RawMessage
 	for _, record := range records {
@@ -44,8 +50,8 @@ func selectOpenAICredential(data []byte) ([]byte, error) {
 				Type string `json:"type"`
 			} `json:"value"`
 		}
-		if json.Unmarshal(record, &credential) != nil {
-			return nil, errors.New("invalid credential entry")
+		if err := json.Unmarshal(record, &credential); err != nil {
+			return nil, fmt.Errorf("invalid credential entry: %w", err)
 		}
 		if credential.IntegrationID != "openai" || !credential.Active {
 			continue
@@ -60,7 +66,7 @@ func selectOpenAICredential(data []byte) ([]byte, error) {
 	}
 	payload, err := json.Marshal(selected)
 	if err != nil {
-		return nil, errors.New("encode selected credential failed")
+		return nil, fmt.Errorf("encode selected credential: %w", err)
 	}
 	return payload, nil
 }

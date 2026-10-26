@@ -122,22 +122,30 @@ func TestSecretCommandsRejectInvalidIdentifiersBeforeAccess(t *testing.T) {
 	}
 }
 
-func TestSecretCommandsSuppressProviderErrors(t *testing.T) {
+func TestSecretCommandsPreserveProviderErrorsWithoutPrintingValues(t *testing.T) {
 	t.Parallel()
+	failure := errors.New("keyring provider unavailable")
 	deps := secretDependencies{
 		read:   func(*cobra.Command) (string, error) { return "SENSITIVE_VALUE", nil },
-		set:    func(string, string, string) error { return errors.New("SENSITIVE_VALUE") },
-		delete: func(string, string) error { return errors.New("SENSITIVE_VALUE") },
-		list:   func(string) ([]string, error) { return nil, errors.New("SENSITIVE_VALUE") },
+		set:    func(string, string, string) error { return failure },
+		delete: func(string, string) error { return failure },
+		list:   func(string) ([]string, error) { return nil, failure },
 	}
-	for _, operation := range []string{"set", "remove"} {
-		output, err := executeSecret(t, deps, "yes\n", operation, "github")
-		require.ErrorContains(t, err, "details suppressed")
-		require.NotContains(t, err.Error(), "SENSITIVE_VALUE")
-		require.NotContains(t, output, "SENSITIVE_VALUE")
+	for _, tc := range []struct{ operation, context string }{
+		{"set", `store secret "github"`},
+		{"remove", `delete secret "github"`},
+	} {
+		output, err := executeSecret(t, deps, "yes\n", tc.operation, "github")
+		require.ErrorIs(t, err, failure)
+		require.ErrorContains(t, err, tc.context)
+		require.ErrorContains(t, err, failure.Error())
+		require.NotContains(t, output+err.Error(), "SENSITIVE_VALUE")
+		require.NotContains(t, output, failure.Error(), "command returns rather than logs the error")
 	}
 	output, err := executeSecret(t, deps, "", "list")
-	require.ErrorContains(t, err, "details suppressed")
+	require.ErrorIs(t, err, failure)
+	require.ErrorContains(t, err, "list keyring entries")
+	require.ErrorContains(t, err, failure.Error())
 	require.NotContains(t, output+err.Error(), "SENSITIVE_VALUE")
 	deps.delete = func(string, string) error { return keyring.ErrNotFound }
 	output, err = executeSecret(t, deps, "y\n", "remove", "github")

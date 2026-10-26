@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -73,6 +74,7 @@ func TestSnapshotLockSerializesOnlyTheSameRepository(t *testing.T) { //nolint:pa
 	defer unlock()
 	_, err = repo.lockIn(dir)
 	require.ErrorContains(t, err, "another snapshot operation")
+	require.ErrorIs(t, err, syscall.EWOULDBLOCK)
 	otherUnlock, err := snapshotIdentity("/projects/other/.git").lockIn(dir)
 	require.NoError(t, err)
 	otherUnlock()

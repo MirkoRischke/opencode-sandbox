@@ -22,7 +22,10 @@ type AWSOptions struct {
 
 func (a AWSOptions) Validate() error {
 	role, err := arn.Parse(a.RoleARN)
-	if err != nil || role.Service != "iam" || !strings.HasPrefix(role.Resource, "role/") || len(strings.TrimPrefix(role.Resource, "role/")) == 0 || role.AccountID == "" {
+	if err != nil {
+		return fmt.Errorf("--aws-role must be an IAM role ARN: %w", err)
+	}
+	if role.Service != "iam" || !strings.HasPrefix(role.Resource, "role/") || len(strings.TrimPrefix(role.Resource, "role/")) == 0 || role.AccountID == "" {
 		return fmt.Errorf("--aws-role must be an IAM role ARN")
 	}
 	return nil
@@ -39,7 +42,7 @@ test ! -L /root/.aws
 if [ -f /root/.aws/.opencode-sandbox-managed ]; then
   rm -f /root/.aws/credentials /root/.aws/config /root/.aws/.opencode-sandbox-managed
 fi`); err != nil {
-			return nil, fmt.Errorf("clear launcher-managed AWS credentials failed (details suppressed)")
+			return nil, fmt.Errorf("clear launcher-managed AWS credentials: %w", err)
 		}
 		return func() {}, nil
 	}
@@ -84,7 +87,7 @@ func (s *Sandbox) refreshAWS(ctx context.Context, settings *AWSOptions) (time.Ti
 		DurationSeconds: aws.Int32(3600),
 	})
 	if err != nil {
-		return time.Time{}, fmt.Errorf("assume AWS role failed; check host authentication and role permissions (details suppressed)")
+		return time.Time{}, fmt.Errorf("assume AWS role failed; check host authentication and role permissions: %w", err)
 	}
 	if result.Credentials == nil || result.Credentials.Expiration == nil || !result.Credentials.Expiration.After(time.Now()) {
 		return time.Time{}, fmt.Errorf("AWS returned missing or expired role credentials")
@@ -98,7 +101,7 @@ func (s *Sandbox) refreshAWS(ctx context.Context, settings *AWSOptions) (time.Ti
 	}
 	payload := fmt.Sprintf("[default]\naws_access_key_id = %s\naws_secret_access_key = %s\naws_session_token = %s\n", values[0], values[1], values[2])
 	if err := s.writeAWSFiles(refreshCtx, payload, settings.Region); err != nil {
-		return time.Time{}, fmt.Errorf("write guest AWS credentials failed; check for unmanaged ~/.aws files (details suppressed)")
+		return time.Time{}, fmt.Errorf("write guest AWS credentials failed; check for unmanaged ~/.aws files: %w", err)
 	}
 	logger.Info("AWS credentials refreshed", "expires_at", *credentials.Expiration, "duration_ms", time.Since(started).Milliseconds())
 	return *credentials.Expiration, nil

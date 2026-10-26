@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,7 +60,7 @@ func TestConsoleFlagOverridesConfiguration(t *testing.T) {
 				Use: "probe",
 				RunE: func(cmd *cobra.Command, _ []string) error {
 					// Simulate settings becoming available after startup.
-					applyConsoleLevel(cmd.Context(), "error")
+					require.NoError(t, applyConsoleLevel(cmd.Context(), "error"))
 					logger := logging.FromContext(cmd.Context())
 					logger.Debug("debug event")
 					logger.Info("info event")
@@ -97,10 +98,27 @@ func TestConfiguredConsoleLevelAppliesWithoutFlag(t *testing.T) {
 	var stderr bytes.Buffer
 	e := newExecution(&stderr)
 	ctx := context.WithValue(context.Background(), executionKey{}, e)
-	applyConsoleLevel(ctx, "info")
+	require.NoError(t, applyConsoleLevel(ctx, "info"))
 	e.logger.Info("visible info")
-	applyConsoleLevel(ctx, "error")
+	require.NoError(t, applyConsoleLevel(ctx, "error"))
 	e.logger.Warn("hidden warning")
 	require.Contains(t, stderr.String(), "visible info")
 	require.NotContains(t, stderr.String(), "hidden warning")
+}
+
+func TestInvalidConfiguredConsoleLevelRetainsCause(t *testing.T) {
+	t.Parallel()
+	var stderr bytes.Buffer
+	e := newExecution(&stderr)
+	ctx := context.WithValue(t.Context(), executionKey{}, e)
+
+	err := applyConsoleLevel(ctx, "not-a-level")
+
+	require.ErrorContains(t, err, `parse console log level "not-a-level"`)
+	require.ErrorContains(t, err, "slog:")
+	require.Error(t, errors.Unwrap(err))
+	require.Equal(t, slog.LevelWarn, e.level.Level())
+	require.Empty(t, stderr.String(), "caller handles the returned error")
+	e.override = true
+	require.NoError(t, applyConsoleLevel(ctx, "not-a-level"), "explicit flag overrides config")
 }

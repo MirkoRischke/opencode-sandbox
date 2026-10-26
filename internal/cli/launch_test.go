@@ -1,8 +1,13 @@
 package cli
 
 import (
+	"io"
+	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
 
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/stretchr/testify/require"
 
 	"opencode-sandbox/internal/config"
@@ -49,3 +54,22 @@ func TestResolveAWSSettings(t *testing.T) {
 }
 
 func stringPointer(value string) *string { return &value }
+
+func TestLoadHostAWSPreservesConfigurationFailure(t *testing.T) {
+	// AWS configuration discovery reads process environment; isolate local files
+	// and request an absent profile, before credentials or network are consulted.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config")
+	require.NoError(t, os.WriteFile(path, []byte("[default]\nregion = eu-west-1\n"), 0600))
+	t.Setenv("AWS_CONFIG_FILE", path)                                      //nolint:forbidigo // Test the environment-owning CLI boundary, serially.
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", filepath.Join(dir, "missing")) //nolint:forbidigo // Isolate host credential files; this test runs serially.
+
+	_, err := loadHostAWS(t.Context(), config.AWSSettings{
+		Role: "arn:aws:iam::123456789012:role/Developer", Profile: "broken",
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	require.ErrorContains(t, err, "load host AWS profile")
+	var cause awsconfig.SharedConfigProfileNotExistError
+	require.ErrorAs(t, err, &cause)
+	require.ErrorContains(t, err, "broken")
+}

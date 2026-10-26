@@ -64,10 +64,10 @@ func resolveSecretValue(name string, settings config.SecretSettings, get func(st
 		service, account := settings.Keyring.Reference(name)
 		value, err := get(service, account)
 		if errors.Is(err, keyring.ErrNotFound) {
-			return "", fmt.Errorf("secret %q: keyring entry not found; run 'opencode-sandbox secret set %s'", name, name)
+			return "", fmt.Errorf("secret %q: keyring entry not found; run 'opencode-sandbox secret set %s': %w", name, name, err)
 		}
 		if err != nil {
-			return "", fmt.Errorf("secret %q: keyring access failed; check that the keyring is available and unlocked (details suppressed)", name)
+			return "", fmt.Errorf("secret %q: keyring access failed; check that the keyring is available and unlocked: %w", name, err)
 		}
 		if err := ValidateSecretValue(value); err != nil {
 			return "", fmt.Errorf("load secret %q: %w", name, err)
