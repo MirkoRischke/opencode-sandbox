@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,7 +21,7 @@ func TestVMUsesCustomLocalImage(t *testing.T) {
 	t.Parallel()
 	settings := launcherconfig.DefaultSettings()
 	settings.VM.Image = "opencode-sandbox:test-custom"
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	s, err := sandbox.Prepare(ctx, newWorktree(t), nil, settings)
 	require.NoError(t, err, "prepare test images with 'mise run test:prepare' before running VM tests")
@@ -29,12 +31,21 @@ func TestVMUsesCustomLocalImage(t *testing.T) {
 		assert.NoError(t, s.Remove(ctx))
 	})
 	require.Equal(t, "custom-image", execInSandbox(t, s, "cat", "/opencode-sandbox-image-marker"))
+	output, err := exec.CommandContext(ctx, "docker", "image", "inspect", "--format", "{{.Id}}", settings.VM.Image).Output()
+	require.NoError(t, err)
+	cacheRef := "opencode-sandbox-cache:sha256-" + strings.TrimPrefix(strings.TrimSpace(string(output)), "sha256:")
+	_, err = m.Image.Get(ctx, cacheRef)
+	require.NoError(t, err, "Docker image must be imported under its identity-derived reference")
+	var config m.SandboxConfig
+	require.NoError(t, json.Unmarshal([]byte(storedSandboxConfig(t, s)), &config))
+	require.Equal(t, cacheRef, config.Image)
 }
 
-func TestVMMissingLocalImageFails(t *testing.T) {
+func TestVMMissingImagePullFails(t *testing.T) {
 	t.Parallel()
 	settings := launcherconfig.DefaultSettings()
-	settings.VM.Image = fmt.Sprintf("opencode-sandbox-missing-test:%d", time.Now().UnixNano())
+	// A closed loopback port exercises pull failure without a public registry.
+	settings.VM.Image = fmt.Sprintf("127.0.0.1:1/opencode-sandbox-missing-test:%d", time.Now().UnixNano())
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	s, err := sandbox.Prepare(ctx, newWorktree(t), nil, settings)
@@ -46,6 +57,7 @@ func TestVMMissingLocalImageFails(t *testing.T) {
 		})
 	}
 	require.ErrorContains(t, err, "prepare sandbox")
+	require.ErrorContains(t, err, "docker pull image")
 	require.NoError(t, ctx.Err(), "missing image must fail before the deadline")
 }
 
@@ -65,7 +77,9 @@ func TestVMResourcesFollowConfigAndPersistAcrossResume(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	require.NoError(t, s.Stop(ctx))
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, launcherconfig.DefaultSettings())
+	resumeSettings := launcherconfig.DefaultSettings()
+	resumeSettings.VM.Image = "127.0.0.1:1/must-not-resolve:resume"
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, resumeSettings)
 	require.NoError(t, err)
 	defer func() { require.NoError(t, resumed.Close()) }()
 	require.NoError(t, json.Unmarshal([]byte(storedSandboxConfig(t, resumed)), &config))

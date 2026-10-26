@@ -248,19 +248,36 @@ recreate them to apply changes.
 
 Set `vm.image` in global `config.toml` or workspace `.opencode-sandbox.toml` to select
 your own image. It defaults to `opencode-sandbox:poc` and must not be empty.
-The image must already exist in Microsandbox's local image store. Images are never
-pulled automatically; a missing image fails launch. Docker's image store is separate,
-so building an image with Docker alone is not enough:
+Docker must be available on the host. For fresh VMs and snapshot preparation, the
+launcher uses the image in your local Docker store whenever present; otherwise it
+runs `docker pull`, using your Docker context and registry credentials. Registry
+updates are never checked when the image exists locally; run `docker pull` yourself
+to update it.
+
+For a local image, building it is enough:
 
 ```sh
 docker build -t my-custom-image:tag .
-docker save my-custom-image:tag | msb load
 ```
 
 ```toml
 [vm]
 image = "my-custom-image:tag"
 ```
+
+Registry references work the same way, for example `ghcr.io/you/dev-sandbox:v1`.
+For private registries, authenticate on the host with `docker login` first.
+
+The launcher automatically imports Docker images into Microsandbox and caches
+them under internal references derived from their full Docker image IDs. Unchanged
+images reuse their import; rebuilt tags or explicitly pulled updates get a new
+import. Missing cache entries are imported again. Imports use a temporary Docker
+save archive, deleted afterward, and require temporary disk space for that archive.
+No separate cache index is maintained.
+
+Existing VMs resume from their persistent disks without resolving the image.
+Snapshot restores likewise use the captured image. Recreate the VM and, when used,
+the snapshot baseline to adopt a changed image.
 
 The simplest compatible image extends the supplied image with
 `FROM opencode-sandbox:poc`. Custom images need Bash, Git, mise, and OpenCode on

@@ -41,6 +41,7 @@ func TestRepositorySnapshotWithoutPreparationCommand(t *testing.T) {
 	settings.Files = append(settings.Files, config.FileSettings{Source: skills, Target: "/opt/skills"})
 	settings.Network.AllowedHosts = []string{"example.com"}
 	settings.Network.AdditionalAllowedHosts = nil
+	settings.VM.Image = "127.0.0.1:1/must-not-resolve:snapshot-restore"
 	child := prepareSnapshotChild(t, ctx, worktree, settings)
 	instructions := execInSandbox(t, child, "cat", guestInstructions)
 	require.Contains(t, instructions, `"/opt/instructions.md"`)

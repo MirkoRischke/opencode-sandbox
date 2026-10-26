@@ -45,7 +45,7 @@ type SnapshotSettings struct {
 }
 
 type VMSettings struct {
-	Image         string `toml:"image" description:"VM image already loaded into Microsandbox; images are never pulled automatically."`
+	Image         string `toml:"image" description:"Docker image for fresh VMs. Uses the local Docker image when present; otherwise pulls it. Imported into Microsandbox automatically. Existing VMs and snapshots are unchanged."`
 	CPUs          uint8  `toml:"cpus" description:"Number of virtual CPUs (1-255)."`
 	MemoryMiB     uint32 `toml:"memory_mib" description:"Guest memory in MiB."`
 	RootDiskMiB   uint32 `toml:"root_disk_mib" description:"Persistent guest disk size in MiB; excludes mounted host workspaces."`

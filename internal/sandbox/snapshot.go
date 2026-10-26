@@ -168,7 +168,12 @@ func (s *Sandbox) quiesceSnapshot(ctx context.Context, command string) error {
 // The caller has validated settings, resolved paths and configured the runtime.
 // Preparation always creates a disposable VM, never resumes/restores one.
 func createPreparationVM(ctx context.Context, w workspace.Workspace, name string, secrets []Secret, settings config.Settings, diagnostics DiagnosticsOptions) (*Sandbox, error) {
+	image, err := resolveImage(ctx, settings.VM.Image)
+	if err != nil {
+		return nil, err
+	}
 	opts := sandboxOptions(w, snapshotWorktree, settings)
+	opts = append(opts, m.WithImage(image))
 	for _, secret := range secrets {
 		opts = append(opts, m.WithSecrets(secret.entry))
 	}
@@ -381,6 +386,11 @@ func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, s
 	}
 	if head == nil {
 		logger.Info("Creating workspace VM")
+		image, err := resolveImage(ctx, settings.VM.Image)
+		if err != nil {
+			return nil, false, err
+		}
+		opts = append(opts, m.WithImage(image))
 		for _, secret := range secrets {
 			opts = append(opts, m.WithSecrets(secret.entry))
 		}

@@ -55,7 +55,7 @@ With mise, Docker, and Microsandbox available, run from this repository:
 ```sh
 mise install
 mise run install # Install the launcher to ~/.local/bin
-mise run load    # Build and import the sandbox image
+mise run build   # Build the sandbox image; imported automatically on first use
 ```
 
 ### Upgrading Microsandbox
@@ -99,6 +99,8 @@ opencode-sandbox snapshot remove --all # Delete ALL managed snapshots without co
 Configure network access and secrets in [launcher configuration](docs/config.md).
 New VMs use a built-in development-service allowlist by default. See also
 [GitHub access](docs/github.md) and [AWS credentials](docs/aws.md).
+Custom local Docker images and registry images are supported through
+[`vm.image`](docs/config.md#custom-vm-images); Docker is required on the host.
 
 ### Prepared workspace snapshots
 
