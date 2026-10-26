@@ -80,4 +80,4 @@ run = "go test -count=1 -v -parallel 4 -timeout 10m ./..."
 
 [tasks."test:live"]
 description = "Run the opt-in OpenAI authentication smoke test using host credentials"
-run = "go test -count=1 -v -tags live -run '^TestOpenCodeCanReachOpenAI$' -timeout 1m ./tests"
+run = "go test -count=1 -v -tags live -run '^TestOpenCodeCanReachOpenAI$' -timeout 1m ./tests/vm"

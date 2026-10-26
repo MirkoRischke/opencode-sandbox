@@ -49,7 +49,7 @@ func TestLauncherRejectsUnsafeWorkspaceBeforeLoadingSettings(t *testing.T) {
 	dir := t.TempDir()
 	writeSettingsAt(t, dir, "invalid TOML [")
 	binary := buildLauncher(t)
-	command := exec.CommandContext(ctx, binary)
+	command := exec.CommandContext(ctx, binary, "--console-log-level", "warn")
 	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir)
 	command.Dir = "/"
 
@@ -57,30 +57,6 @@ func TestLauncherRejectsUnsafeWorkspaceBeforeLoadingSettings(t *testing.T) {
 
 	require.Error(t, err)
 	require.Contains(t, string(output), "unsafe workspace directory")
-}
-
-func TestLauncherListsVMsOutsideGitWithoutLoadingSettings(t *testing.T) {
-	t.Parallel()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	dir := t.TempDir()
-	writeSettingsAt(t, dir, "invalid TOML [")
-	binary := buildLauncher(t)
-	for _, name := range []string{"list", "ls"} {
-		t.Run(name, func(t *testing.T) {
-			command := exec.CommandContext(ctx, binary, name)
-			command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir)
-			command.Dir = t.TempDir()
-
-			output, err := command.CombinedOutput()
-
-			require.NoError(t, err, "%s", output)
-			if string(output) != "No managed VMs found.\n" {
-				require.Contains(t, string(output), "NAME")
-				require.Contains(t, string(output), "STATE")
-			}
-		})
-	}
 }
 
 func TestLauncherRejectsMissingMountBeforeStartingVM(t *testing.T) {
@@ -141,7 +117,7 @@ func TestSecretCommandsIgnoreConfiguration(t *testing.T) {
 	writeSettingsAt(t, paths.ConfigDir, "invalid TOML [")
 	for _, operation := range []string{"set", "remove", "rm"} {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		command := exec.CommandContext(ctx, buildLauncher(t), "secret", operation, "github")
+		command := exec.CommandContext(ctx, buildLauncher(t), "--console-log-level", "warn", "secret", operation, "github")
 		command.Dir = root
 		command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+paths.ConfigDir, "XDG_STATE_HOME="+paths.StateDir)
 		command.Stdin = strings.NewReader("no\n")
@@ -169,7 +145,7 @@ func TestSecretSetWorksOutsideWorkspaceWithoutHostPaths(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	command := exec.CommandContext(ctx, buildLauncher(t), "secret", "set", "github")
+	command := exec.CommandContext(ctx, buildLauncher(t), "--console-log-level", "warn", "secret", "set", "github")
 	command.Dir = "/"
 	command.Env = append(os.Environ(), "HOME=", "XDG_CONFIG_HOME=", "XDG_STATE_HOME=")
 	command.Stdin = strings.NewReader("FAKE_TOKEN\n")
@@ -204,7 +180,7 @@ func TestLauncherAcceptsAWSRoleWithoutProfile(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	command := exec.CommandContext(ctx, buildLauncher(t), "--aws-role", "arn:aws:iam::123456789012:role/SandboxReadOnly")
+	command := exec.CommandContext(ctx, buildLauncher(t), "--console-log-level", "warn", "--aws-role", "arn:aws:iam::123456789012:role/SandboxReadOnly")
 	dir := t.TempDir()
 	writeSettingsAt(t, dir, "invalid TOML [")
 	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir)

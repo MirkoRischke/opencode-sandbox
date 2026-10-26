@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -146,30 +145,4 @@ func TestOlderSandboxRequiresRecreationBeforeEnablingGitHub(t *testing.T) {
 
 	require.ErrorContains(t, err, "recreate this VM")
 	require.NotContains(t, storedSandboxConfig(t, s), "github_pat_FAKE")
-}
-
-func TestGitHubTokenLoadsOnlyFromDedicatedCredentialFile(t *testing.T) {
-	t.Parallel()
-	path := githubTokenPath(t)
-	require.NoError(t, os.WriteFile(path, []byte("github_pat_FAKE\n"), 0600))
-
-	secrets, err := sandbox.LoadSecrets(githubSecretSettings(path))
-
-	require.NoError(t, err)
-	require.Len(t, secrets, 1)
-	require.NoError(t, os.Remove(path))
-	_, err = sandbox.LoadSecrets(githubSecretSettings(path))
-	require.Error(t, err)
-	// The real launcher must not fall back to GH_TOKEN when its file is missing.
-	dir := t.TempDir()
-	writeSettingsAt(t, dir, "[secrets.github]\nfile = 'missing-token'\nenv = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	command := exec.CommandContext(ctx, buildLauncher(t))
-	command.Dir = newWorktree(t)
-	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir, "XDG_STATE_HOME="+t.TempDir(), "GH_TOKEN=host-gh-token-must-not-be-used", "HERDR_ENV=")
-	output, err := command.CombinedOutput()
-	require.Error(t, err)
-	require.Contains(t, string(output), "load secret")
-	require.NotContains(t, string(output), "host-gh-token-must-not-be-used")
 }

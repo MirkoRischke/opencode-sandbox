@@ -30,7 +30,7 @@ func TestLauncherDiagnosticsUsesHomeFallbackWithoutLoadingSettings(t *testing.T)
 	require.NoError(t, os.WriteFile(path, data, 0600))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	command := exec.CommandContext(ctx, buildLauncher(t), "diagnostics", "network")
+	command := exec.CommandContext(ctx, buildLauncher(t), "--console-log-level", "warn", "diagnostics", "network")
 	command.Dir = root
 	command.Env = append(os.Environ(), "HOME="+home, "XDG_STATE_HOME=", "XDG_CONFIG_HOME="+config, "HERDR_ENV=")
 	output, err := command.CombinedOutput()
@@ -60,7 +60,7 @@ func TestLauncherLogLocationDoesNotLoadOrCreateState(t *testing.T) {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			command := exec.CommandContext(ctx, buildLauncher(t), "diagnostics", "logs")
+			command := exec.CommandContext(ctx, buildLauncher(t), "--console-log-level", "warn", "diagnostics", "logs")
 			command.Dir = tc.directory
 			command.Env = append(os.Environ(), "HOME="+home, "XDG_STATE_HOME="+tc.xdg, "XDG_CONFIG_HOME="+config, "HERDR_ENV=")
 			output, err := command.CombinedOutput()

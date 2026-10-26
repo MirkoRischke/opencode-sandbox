@@ -13,13 +13,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Tests that isolate command behaviour from logging configuration pass an
+// explicit --console-log-level override to bypass startup logging policy reads.
 var launcherBinary string
 
 var launcherBuild = sync.OnceValue(func() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	build := exec.CommandContext(ctx, "go", "build", "-o", launcherBinary, "./cmd/opencode-sandbox")
-	build.Dir = ".."
+	build.Dir = "../.."
 	output, err := build.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("build launcher: %w: %s", err, output)
