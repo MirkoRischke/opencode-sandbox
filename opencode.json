@@ -9,6 +9,11 @@
   },
   "permissions": [
     {
+      "action": "shell",
+      "resource": "go doc *",
+      "effect": "allow"
+    },
+    {
       "action": "external_directory",
       "resource": "~/.local/state/opencode-sandbox/*",
       "effect": "allow"
