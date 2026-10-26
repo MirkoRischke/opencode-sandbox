@@ -94,6 +94,34 @@ prompt is open. Approval is checked before loading credentials or starting the V
 including when resuming an existing VM. Existing VM policies and credentials still
 require recreation to change, as described below.
 
+## Port mappings
+
+Expose a development server to your host browser with explicit TCP mappings:
+
+```toml
+[[ports]]
+host = 3000
+guest = 8080
+```
+
+Run the application on `0.0.0.0:8080` inside the VM, then open
+`http://127.0.0.1:3000` on the host. HTTP, HTTPS, WebSockets, and hot reload
+work over the TCP forwarding; HTTPS still requires trusting your application's
+certificate. Host listeners bind only to `127.0.0.1`, never your LAN.
+
+No ports are exposed by default. Both fields are required, in the range 1–65535;
+host ports must be unique and available when starting the VM. Multiple mappings
+are supported. Workspace `ports` replaces the entire global list; top-level
+`ports = []` disables inherited mappings. Workspace changes require normal config
+approval. Outbound network restrictions are unchanged.
+
+Mappings last while the VM runs and release their host ports when it stops.
+Recreate the VM after changing mappings (`opencode-sandbox remove`, then launch).
+Snapshot restores apply the current configuration; snapshot preparation does not
+bind host ports. For Docker applications, also publish the container port to the
+VM (for example, `docker run -p 8080:80 ...`). UDP, LAN binding, automatic port
+selection, and coordination between worktrees are not supported.
+
 ## Launch behaviour
 
 The writable workspace is the exact current directory after resolving symlinks.
@@ -412,7 +440,8 @@ without truncation or rotation. There is no automatic daemon restart-on-crash or
 explicit graceful Docker shutdown. Exiting the launcher stops the entire VM.
 The Docker socket is guest-local, never the host's socket; there is no TCP daemon
 listener configured by the supplied image. Compose networks and published
-container ports work inside the VM, with no port forwarding to the host.
+container ports work inside the VM. To reach them from the host, configure
+an explicit [port mapping](#port-mappings) in addition to Docker's port publishing.
 
 The built-in defaults and `docs/config.example.toml` allow public Docker Hub and
 Amazon ECR Public pulls, including Docker Hub's authentication and image-download

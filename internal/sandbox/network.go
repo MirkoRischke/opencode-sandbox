@@ -1,15 +1,23 @@
 package sandbox
 
 import (
+	"strconv"
+
 	"opencode-sandbox/internal/config"
 
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
-func networkPolicy(n config.NetworkSettings) *m.NetworkConfig {
+func networkPolicy(n config.NetworkSettings, ports ...config.PortSettings) *m.NetworkConfig {
 	policy := &m.NetworkConfig{
 		DefaultEgress:  m.PolicyActionDeny,
 		DefaultIngress: m.PolicyActionDeny,
+	}
+	for _, port := range ports {
+		policy.Rules = append(policy.Rules, m.PolicyRule{
+			Action: m.PolicyActionAllow, Direction: m.PolicyDirectionIngress,
+			Destination: "loopback", Protocol: m.PolicyProtocolTCP, Port: strconv.Itoa(int(port.Guest)),
+		})
 	}
 	if n.Unrestricted {
 		policy.Rules = append(policy.Rules, m.Rule.AllowDNS())

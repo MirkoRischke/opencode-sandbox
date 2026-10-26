@@ -172,7 +172,11 @@ func createPreparationVM(ctx context.Context, w workspace.Workspace, name string
 	if err != nil {
 		return nil, err
 	}
-	opts := sandboxOptions(w, snapshotWorktree, settings)
+	// Preparation does not serve applications and must not compete with a
+	// running workspace VM for its host ports. Restore uses current mappings.
+	preparationSettings := settings
+	preparationSettings.Ports = nil
+	opts := sandboxOptions(w, snapshotWorktree, preparationSettings)
 	opts = append(opts, m.WithImage(image))
 	for _, secret := range secrets {
 		opts = append(opts, m.WithSecrets(secret.entry))
@@ -384,6 +388,9 @@ func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, s
 	if err != nil {
 		return nil, false, err
 	}
+	if err := checkPortBindings(portBindings(settings.Ports)); err != nil {
+		return nil, false, err
+	}
 	if head == nil {
 		logger.Info("Creating workspace VM")
 		image, err := resolveImage(ctx, settings.VM.Image)
@@ -406,12 +413,13 @@ func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, s
 }
 
 func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, w workspace.Workspace, secrets []Secret, settings config.Settings) (*m.Sandbox, error) {
-	policy := networkPolicy(settings.Network)
+	policy := networkPolicy(settings.Network, settings.Ports...)
 	// Restore accepts host policy only, not HTTP/TLS creation settings.
 	policy.HTTP = nil
 	restore := m.RestoreConfig{
 		CPUs: &settings.VM.CPUs, MemoryMiB: &settings.VM.MemoryMiB, NetworkPolicy: policy,
 		Volumes: workspaceMounts(w, snapshotWorktree, w.Root()),
+		Ports:   portBindings(settings.Ports),
 	}
 	addReadOnlyMounts(restore.Volumes, settings)
 	if settings.Network.Diagnostics {

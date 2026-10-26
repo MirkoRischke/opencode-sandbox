@@ -13,6 +13,7 @@ import (
 // Settings is the host-side launcher configuration, separate from OpenCode's
 // guest JSON configuration. Add new launcher settings as fields or sections.
 type Settings struct {
+	Ports    []PortSettings            `toml:"ports" description:"TCP mappings from host 127.0.0.1 to guest ports. Empty exposes nothing. Workspace lists replace global lists; recreate the VM after changes."`
 	Files    []FileSettings            `toml:"files" description:"Explicit host file/directory mappings. Default mode mount is read-only; copy seeds writable guest files on creation and snapshot restore. Recreate the VM after changing mappings."`
 	AWS      AWSSettings               `toml:"aws" description:"Optional AWS role credentials for launches. CLI flags override individual fields; host credentials are never stored here."`
 	VM       VMSettings                `toml:"vm" description:"VM resources. Recreate the VM after changing these settings."`
@@ -64,6 +65,7 @@ func DefaultSettings() Settings {
 	return Settings{
 		Logging: LoggingSettings{ConsoleLevel: "warn"},
 		Files:   []FileSettings{},
+		Ports:   []PortSettings{},
 		VM:      VMSettings{Image: "opencode-sandbox:poc", CPUs: 2, MemoryMiB: 2048, RootDiskMiB: 4096, DockerDiskMiB: 10240},
 		Network: NetworkSettings{
 			AllowedHosts: []string{
@@ -140,6 +142,9 @@ func (s Settings) Validate() error {
 		return err
 	}
 	if err := validateFiles(s.Files); err != nil {
+		return err
+	}
+	if err := validatePorts(s.Ports); err != nil {
 		return err
 	}
 	return ValidateSecrets(s.Secrets)

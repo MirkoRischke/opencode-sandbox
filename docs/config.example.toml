@@ -6,6 +6,13 @@
 # VM settings apply on creation. Logging settings apply on each invocation.
 # Missing configuration uses the built-in host allowlist; invalid configuration fails.
 
+# Optional TCP mappings; host listens only on 127.0.0.1. No ports exposed by default.
+# Application must listen on 0.0.0.0 in the VM. Recreate the VM after changes.
+# Workspace lists replace global lists; top-level ports = [] disables inheritance.
+# [[ports]]
+# host = 3000
+# guest = 8080
+
 # Optional host file/directory mappings. Nothing is shared implicitly.
 # Sources must exist. ~/ means the host home; relative paths use this config's directory.
 # Repo file lists replace the global list; top-level files = [] disables inheritance.

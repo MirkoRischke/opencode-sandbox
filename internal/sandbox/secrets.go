@@ -141,6 +141,19 @@ func ValidateSecretValue(value string) error {
 }
 
 func connectWithSecrets(ctx context.Context, name string, secrets []Secret, opts []m.SandboxOption) (*m.Sandbox, error) {
+	handle, err := m.GetSandbox(ctx, name)
+	if err != nil {
+		return nil, fmt.Errorf("find sandbox before connecting: %w", err)
+	}
+	if handle.Status() == m.SandboxStatusStopped {
+		bindings, err := storedPortBindings(handle.ConfigJSON())
+		if err != nil {
+			return nil, err
+		}
+		if err := checkPortBindings(bindings); err != nil {
+			return nil, err
+		}
+	}
 	for _, secret := range secrets {
 		opts = append(opts, m.WithSecrets(secret.entry))
 	}

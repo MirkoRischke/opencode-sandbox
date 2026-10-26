@@ -25,6 +25,7 @@ func TestDefaultConfigRoundTripsToRuntimeDefaults(t *testing.T) {
 	require.NoError(t, settings.Validate())
 	require.Empty(t, settings.Secrets, "examples must not enable credentials")
 	require.Empty(t, settings.Files, "examples must not expose host files")
+	require.Empty(t, settings.Ports, "examples must not expose guest ports")
 	require.Contains(t, out.String(), "additional_allowed_hosts = []")
 	require.Contains(t, out.String(), "diagnostics = false")
 	require.Contains(t, out.String(), "unrestricted = false")
@@ -152,7 +153,7 @@ func TestDefaultConfigSecretExampleIsValid(t *testing.T) {
 		if line == "# keyring = {}" {
 			continue // Alternative to the file source, not an additional source.
 		}
-		if strings.HasPrefix(line, "# [[files]]") || strings.HasPrefix(line, "# source =") || strings.HasPrefix(line, "# target =") || strings.HasPrefix(line, "# mode =") {
+		if strings.HasPrefix(line, "# [[ports]]") || strings.HasPrefix(line, "# host =") || strings.HasPrefix(line, "# guest =") || strings.HasPrefix(line, "# [[files]]") || strings.HasPrefix(line, "# source =") || strings.HasPrefix(line, "# target =") || strings.HasPrefix(line, "# mode =") {
 			continue
 		}
 		if content, ok := strings.CutPrefix(line, "# "); ok &&

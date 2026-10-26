@@ -113,3 +113,20 @@ func TestNetworkDiagnosticsOnlyChangesDenialResponsesNotRules(t *testing.T) {
 	require.NotNil(t, policy.HTTP)
 	require.True(t, policy.HTTP.DenyResponse)
 }
+
+func TestPortMappingsAllowOnlyLoopbackIngressWithoutChangingEgress(t *testing.T) {
+	t.Parallel()
+	for _, unrestricted := range []bool{false, true} {
+		settings := config.DefaultSettings().Network
+		settings.Unrestricted = unrestricted
+		baseline := networkPolicy(settings)
+		policy := networkPolicy(settings, config.PortSettings{Host: 3000, Guest: 8080})
+		require.Equal(t, m.PolicyActionDeny, policy.DefaultIngress)
+		require.Equal(t, baseline.DefaultEgress, policy.DefaultEgress)
+		require.Equal(t, baseline.Rules, policy.Rules[1:])
+		require.Equal(t, m.PolicyRule{
+			Action: m.PolicyActionAllow, Direction: m.PolicyDirectionIngress,
+			Destination: "loopback", Protocol: m.PolicyProtocolTCP, Port: "8080",
+		}, policy.Rules[0])
+	}
+}

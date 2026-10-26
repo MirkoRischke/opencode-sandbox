@@ -22,8 +22,9 @@ retain installed tools and guest files for the next launch.
   temporary credentials to the guest. Unlike proxy secrets, these are readable
   by guest code.
 - **Guest Docker:** build and run images with Docker Engine, Buildx, and Compose.
-  Each VM has its own persistent Docker data disk; container ports stay inside
-  the VM. See [Docker configuration](docs/config.md#docker-inside-the-vm).
+  Each VM has its own persistent Docker data disk. Expose development servers to
+  your host browser using explicit loopback-only [TCP port mappings](docs/config.md#port-mappings).
+  See [Docker configuration](docs/config.md#docker-inside-the-vm).
 - **Prepared workspace snapshots:** warm tools, dependency caches, and Docker images
   once; recreated VMs restore the directory's baseline, with or without Git.
 
