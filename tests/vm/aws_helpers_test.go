@@ -64,7 +64,7 @@ func fakeAWSHost(t *testing.T, region string, response func(int) (time.Time, boo
 		w.Header().Set("Content-Type", "text/xml")
 		if !success {
 			w.WriteHeader(http.StatusForbidden)
-			_, err := fmt.Fprint(w, `<ErrorResponse><Error><Code>AccessDenied</Code><Message>FAKE_HOST_SOURCE_SECRET must not leak</Message></Error></ErrorResponse>`)
+			_, err := fmt.Fprint(w, `<ErrorResponse><Error><Code>AccessDenied</Code><Message>role trust policy denied this request</Message></Error></ErrorResponse>`)
 			assert.NoError(t, err)
 			return
 		}

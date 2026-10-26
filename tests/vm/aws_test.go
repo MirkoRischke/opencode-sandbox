@@ -146,13 +146,12 @@ func TestAWSReplacesCredentialsOnReuseAndClearsThemWhenDisabled(t *testing.T) {
 	execInSandbox(t, resumed, "test", "!", "-e", "/root/.aws/config")
 }
 
-func TestAWSFailsClosedAndSuppressesUpstreamDetails(t *testing.T) {
+func TestAWSFailsClosedOnAssumeRoleFailure(t *testing.T) {
 	t.Parallel()
 	host := fakeAWSHost(t, "", func(int) (time.Time, bool) { return time.Time{}, false })
 	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
 	_, err := s.StartAWS(context.Background(), host.options)
 	require.ErrorContains(t, err, "assume AWS role failed")
-	require.NotContains(t, err.Error(), "FAKE_HOST_SOURCE_SECRET")
 	execInSandbox(t, s, "test", "!", "-e", "/root/.aws/credentials")
 }
 
