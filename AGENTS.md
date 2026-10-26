@@ -7,6 +7,8 @@ outdated by your changes. Exceptions:
 
 # Implementation
 
+- Handle each error once: either return it (optionally wrapped with context), or log it where handled. Never log and propagate the same error.
+
 - Do not consider migration scenarios; recreation of sandboxes/VMs is acceptable.
 
 # CLI conventions
