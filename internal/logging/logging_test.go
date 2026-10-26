@@ -58,7 +58,8 @@ func TestJSONLogsArePrivateAndUnbuffered(t *testing.T) {
 			require.Equal(t, os.FileMode(0600), info.Mode().Perm())
 		}
 	}
-	require.Empty(t, warnings.String())
+	require.Contains(t, warnings.String(), "level=ERROR")
+	require.Contains(t, warnings.String(), "outer: unexpected EOF")
 }
 
 func testWriter(t *testing.T, state, root string, now time.Time) *writer {
@@ -148,7 +149,7 @@ func TestWriteFailureWarnsWithoutBlocking(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(w, nil))
 	logger.Info("lost record")
 	logger.Info("another lost record")
-	require.Equal(t, 1, strings.Count(warnings.String(), "warning:"))
+	require.Equal(t, 1, strings.Count(warnings.String(), "Launcher logging failed"))
 	// Already deliberately closed above, rather than by normal lifecycle.
 	w.closed = true
 }

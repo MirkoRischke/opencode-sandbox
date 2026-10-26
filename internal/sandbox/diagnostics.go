@@ -56,15 +56,13 @@ type networkDiagnostics struct {
 	reportOnce        sync.Once
 	collectionFailure string
 	saveFailure       string
-	output            io.Writer
 	logger            *slog.Logger
 }
 
-// DiagnosticsOptions supplies host-owned state and output explicitly. The CLI
-// resolves its environment; independent callers can use private paths/writers.
+// DiagnosticsOptions supplies host-owned state explicitly. Logging uses the
+// invocation logger from context, independently of diagnostic storage.
 type DiagnosticsOptions struct {
 	StateDir string
-	Output   io.Writer
 }
 
 func resolveDiagnostics(enabled bool, options []DiagnosticsOptions) (DiagnosticsOptions, error) {
@@ -74,11 +72,7 @@ func resolveDiagnostics(enabled bool, options []DiagnosticsOptions) (Diagnostics
 	if len(options) != 1 || options[0].StateDir == "" {
 		return DiagnosticsOptions{}, fmt.Errorf("network diagnostics require an explicit host state directory")
 	}
-	resolved := options[0]
-	if resolved.Output == nil {
-		resolved.Output = io.Discard
-	}
-	return resolved, nil
+	return options[0], nil
 }
 
 // WriteNetworkDiagnostics prints the worktree's saved JSON without starting a VM
@@ -108,11 +102,8 @@ func diagnosticsPath(stateDir, worktree string) string {
 
 func loadDiagnostics(worktree string, since time.Time, options DiagnosticsOptions) (*networkDiagnostics, error) {
 	path := diagnosticsPath(options.StateDir, worktree)
-	if options.Output == nil {
-		options.Output = io.Discard
-	}
 	d := &networkDiagnostics{
-		path: path, since: since, output: options.Output,
+		path: path, since: since,
 		overview: networkOverview{SchemaVersion: 1, Worktree: worktree, DeniedTargets: []deniedTarget{}},
 		stop:     make(chan struct{}), done: make(chan struct{}),
 	}
@@ -137,14 +128,12 @@ func startNetworkDiagnostics(ctx context.Context, vm *m.Sandbox, worktree string
 	logger := logging.FromContext(ctx).With("component", "network_diagnostics")
 	d, err := loadDiagnostics(worktree, since, options)
 	if err != nil {
-		logger.Warn("Network diagnostics unavailable", "error", err)
-		fmt.Fprintln(options.Output, "warning: network diagnostics unavailable; existing history was not changed") //nolint:errcheck // Diagnostic notices are best-effort; never prevent VM use.
+		logger.Warn("Network diagnostics unavailable; existing history was not changed", "error", diagnosticErrorKind(err))
 		return nil
 	}
 	d.vm = vm
 	d.logger = logger
 	logger.Info("Network diagnostics started", "path", d.path)
-	fmt.Fprintln(d.output, "Network diagnostics:", d.path) //nolint:errcheck // Diagnostic notices are best-effort; never prevent VM use.
 	go d.run(d.collect)
 	return d
 }
@@ -170,17 +159,11 @@ func (d *networkDiagnostics) run(collect func() error) {
 
 func (d *networkDiagnostics) poll(collect func() error) {
 	if err := collect(); err != nil {
-		if d.logger != nil && d.collectionFailure == "" {
-			d.logger.Warn("Network diagnostics collection failed", "error", err)
-		}
 		d.collectionFailure = diagnosticErrorKind(err)
 	} else {
 		d.collectionFailure = ""
 	}
 	if err := d.save(); err != nil && d.saveFailure == "" {
-		if d.logger != nil {
-			d.logger.Warn("Network diagnostics save failed", "error", err)
-		}
 		d.saveFailure = diagnosticErrorKind(err)
 	}
 }
@@ -219,11 +202,14 @@ func (d *networkDiagnostics) finish() {
 	// The caller has returned from the attached terminal before Stop/Close.
 	// Never let a collector goroutine write into OpenCode's active TUI.
 	d.reportOnce.Do(func() {
+		if d.logger == nil {
+			return
+		}
 		if d.collectionFailure != "" {
-			fmt.Fprintf(d.output, "warning: network diagnostics incomplete: collection failed (%s); summary: %s\n", d.collectionFailure, d.path) //nolint:errcheck // Warning output must not prevent shutdown.
+			d.logger.Warn("Network diagnostics incomplete: collection failed", "error", d.collectionFailure, "summary", d.path)
 		}
 		if d.saveFailure != "" {
-			fmt.Fprintf(d.output, "warning: network diagnostics incomplete: save failed (%s); summary: %s\n", d.saveFailure, d.path) //nolint:errcheck // Warning output must not prevent shutdown.
+			d.logger.Warn("Network diagnostics incomplete: save failed", "error", d.saveFailure, "summary", d.path)
 		}
 	})
 }

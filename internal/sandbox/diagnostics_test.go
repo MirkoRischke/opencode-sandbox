@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	launcherconfig "opencode-sandbox/internal/config"
+	"opencode-sandbox/internal/logging"
 
 	"github.com/stretchr/testify/require"
 	m "github.com/superradcompany/microsandbox/sdk/go"
@@ -268,8 +270,9 @@ func TestNetworkDiagnosticsDefersWarningsUntilShutdown(t *testing.T) {
 		t.Run(scenario.name, func(t *testing.T) {
 			t.Parallel()
 			var captured bytes.Buffer
-			d, err := loadDiagnostics("/project", time.Now(), DiagnosticsOptions{StateDir: t.TempDir(), Output: &captured})
+			d, err := loadDiagnostics("/project", time.Now(), DiagnosticsOptions{StateDir: t.TempDir()})
 			require.NoError(t, err)
+			d.logger = logging.Console(&captured, slog.LevelWarn)
 			if scenario.blockSave {
 				// A regular file cannot be used as the overview directory.
 				d.path = filepath.Join(t.TempDir(), "not-a-directory", "network.json")
@@ -284,7 +287,7 @@ func TestNetworkDiagnosticsDefersWarningsUntilShutdown(t *testing.T) {
 			d.finish()
 
 			messages := captured.String()
-			require.Contains(t, messages, "warning:")
+			require.Contains(t, messages, "level=WARN")
 			require.Contains(t, messages, scenario.name)
 			d.finish()
 			require.Equal(t, messages, captured.String(), "Stop followed by Close must report each warning only once")
@@ -295,8 +298,9 @@ func TestNetworkDiagnosticsDefersWarningsUntilShutdown(t *testing.T) {
 func TestNetworkDiagnosticsClearsCollectionFailureAfterRecovery(t *testing.T) {
 	t.Parallel()
 	var captured bytes.Buffer
-	d, err := loadDiagnostics("/project", time.Now(), DiagnosticsOptions{StateDir: t.TempDir(), Output: &captured})
+	d, err := loadDiagnostics("/project", time.Now(), DiagnosticsOptions{StateDir: t.TempDir()})
 	require.NoError(t, err)
+	d.logger = logging.Console(&captured, slog.LevelWarn)
 	calls := 0
 	d.run(func() error {
 		calls++

@@ -172,8 +172,7 @@ func createPreparationVM(ctx context.Context, w workspace.Workspace, name string
 	started := time.Now().UTC()
 	vm, err := m.CreateSandbox(ctx, name, opts...)
 	if err != nil {
-		logging.FromContext(ctx).Error("Create preparation VM failed", "vm", name, "error", err)
-		return nil, fmt.Errorf("create preparation VM (runtime details suppressed)")
+		return nil, fmt.Errorf("create preparation VM: %w", err)
 	}
 	prep := &Sandbox{Name: name, Worktree: snapshotWorktree, vm: vm, logger: logging.FromContext(ctx).With("vm", name)}
 	prep.log().Info("Preparation VM created")
@@ -358,8 +357,7 @@ func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, s
 		return vm, false, err
 	}
 	if !m.IsKind(err, m.ErrSandboxNotFound) {
-		logger.Error("Find workspace VM failed", "error", err)
-		return nil, false, fmt.Errorf("find worktree VM (runtime details suppressed)")
+		return nil, false, fmt.Errorf("find worktree VM: %w", err)
 	}
 	repo := snapshotIdentity(w.Root())
 	unlock, err := repo.lock()
@@ -372,8 +370,7 @@ func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, s
 		vm, err := connectWithSecrets(ctx, name, secrets, opts)
 		return vm, false, err
 	} else if !m.IsKind(err, m.ErrSandboxNotFound) {
-		logger.Error("Find workspace VM failed", "error", err)
-		return nil, false, fmt.Errorf("find worktree VM (runtime details suppressed)")
+		return nil, false, fmt.Errorf("find worktree VM: %w", err)
 	}
 	head, err := repo.head(ctx)
 	if err != nil {
@@ -386,8 +383,7 @@ func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, s
 		}
 		vm, err := m.CreateSandbox(ctx, name, opts...)
 		if err != nil {
-			logger.Error("Create workspace VM failed", "error", err)
-			return nil, false, fmt.Errorf("create worktree VM (runtime details suppressed)")
+			return nil, false, fmt.Errorf("create worktree VM: %w", err)
 		}
 		return vm, true, nil
 	}
@@ -410,8 +406,7 @@ func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, w
 	}
 	restored, err := m.RestoreSandbox(ctx, head, name, m.WithRestoreConfig(restore))
 	if err != nil {
-		logging.FromContext(ctx).Error("Restore workspace snapshot failed", "vm", name, "error", err)
-		return nil, fmt.Errorf("restore workspace snapshot (runtime details suppressed)")
+		return nil, fmt.Errorf("restore workspace snapshot: %w", err)
 	}
 	defer restored.Close() //nolint:errcheck // Release the original handle on every path; the restarted handle belongs to the caller.
 	handle, err := configureRestoredWorktree(ctx, restored, name, w.Root(), secrets)
@@ -420,8 +415,7 @@ func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, w
 	}
 	restarted, err := handle.StartDetached(ctx)
 	if err != nil {
-		logging.FromContext(ctx).Error("Start restored VM failed", "vm", name, "error", err)
-		return nil, discardRestoredVM(restored, fmt.Errorf("start configured restored VM (runtime details suppressed)"))
+		return nil, discardRestoredVM(restored, fmt.Errorf("start configured restored VM: %w", err))
 	}
 	return restarted, nil
 }
@@ -450,19 +444,22 @@ func configureRestoredWorktree(ctx context.Context, restored *m.Sandbox, name, r
 	}
 	handle, err := m.GetSandbox(ctx, name)
 	if err != nil {
-		logging.FromContext(ctx).Error("Find restored VM failed", "vm", name, "error", err)
-		return nil, fmt.Errorf("find restored VM (runtime details suppressed)")
+		return nil, fmt.Errorf("find restored VM: %w", err)
 	}
 	plan, err := handle.Modify(ctx, patch)
-	if err != nil || !plan.Applied {
-		logging.FromContext(ctx).Error("Configure restored VM failed", "vm", name, "error", err)
-		return nil, fmt.Errorf("configure restored VM credentials and labels (runtime details suppressed)")
+	if err != nil {
+		return nil, fmt.Errorf("configure restored VM credentials and labels: %w", err)
+	}
+	if !plan.Applied {
+		return nil, fmt.Errorf("configure restored VM credentials and labels: modification not applied")
 	}
 	if len(secrets) == 0 {
 		plan, err = handle.Modify(ctx, m.ModifyOptions{Policy: m.ModificationPolicyNextStart, SecretsRemove: []string{tlsBootstrap}})
-		if err != nil || !plan.Applied {
-			logging.FromContext(ctx).Error("Finalize restored VM TLS failed", "vm", name, "error", err)
-			return nil, fmt.Errorf("finalize restored VM TLS inspection (runtime details suppressed)")
+		if err != nil {
+			return nil, fmt.Errorf("finalize restored VM TLS inspection: %w", err)
+		}
+		if !plan.Applied {
+			return nil, fmt.Errorf("finalize restored VM TLS inspection: modification not applied")
 		}
 	}
 	return handle, nil

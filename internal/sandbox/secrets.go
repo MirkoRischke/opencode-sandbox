@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"opencode-sandbox/internal/config"
-	"opencode-sandbox/internal/logging"
 
 	m "github.com/superradcompany/microsandbox/sdk/go"
 	"github.com/zalando/go-keyring"
@@ -147,8 +146,7 @@ func connectWithSecrets(ctx context.Context, name string, secrets []Secret, opts
 	}
 	vm, err := m.ConnectOrCreateSandbox(ctx, name, opts...)
 	if err != nil {
-		logging.FromContext(ctx).Error("Connect VM failed", "vm", name, "error", err)
-		return nil, fmt.Errorf("connect sandbox (runtime details suppressed)")
+		return nil, fmt.Errorf("connect sandbox: %w", err)
 	}
 	return vm, nil
 }

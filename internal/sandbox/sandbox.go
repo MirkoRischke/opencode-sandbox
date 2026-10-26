@@ -57,7 +57,6 @@ func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secr
 	var created bool
 	s.vm, created, err = connectOrRestore(ctx, s.Name, w, secrets, settings, sandboxOptions(w, w.Root(), settings))
 	if err != nil {
-		s.log().Error("Prepare VM failed", "error", err)
 		return nil, fmt.Errorf("prepare sandbox: %w", err)
 	}
 	s.log().Info("VM connected", "created", created, "duration_ms", time.Since(started).Milliseconds())

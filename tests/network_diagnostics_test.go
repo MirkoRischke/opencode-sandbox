@@ -18,9 +18,8 @@ func TestNetworkDiagnosticsPreservesWorktreeHistoryAcrossVMRecreation(t *testing
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
-	var captured bytes.Buffer
 	state, root := t.TempDir(), newWorktree(t)
-	diagnostics := sandbox.DiagnosticsOptions{StateDir: state, Output: &captured}
+	diagnostics := sandbox.DiagnosticsOptions{StateDir: state}
 	settings := launcherconfig.DefaultSettings()
 	settings.Network.Diagnostics = true
 	first := prepareSandboxWithSettings(t, root, settings, diagnostics)
@@ -42,7 +41,6 @@ func TestNetworkDiagnosticsPreservesWorktreeHistoryAcrossVMRecreation(t *testing
 	_, after := readSavedDiagnostics(t, root, state)
 	require.Equal(t, root, after.Worktree)
 	require.Greater(t, after.observations("example.org"), previous, "new denials must merge with the previous VM's history")
-	require.NotContains(t, captured.String(), "warning:")
 }
 
 func TestNetworkDiagnosticsDoesNotReplayLogsWhenResumingOrDeletingVM(t *testing.T) {

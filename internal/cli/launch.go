@@ -45,6 +45,7 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 	if err != nil {
 		return err
 	}
+	applyConsoleLevel(ctx, settings.Logging.ConsoleLevel)
 	awsSettings, err := resolveAWSSettings(settings.AWS, awsRole, awsProfile)
 	if err != nil {
 		return err
@@ -55,7 +56,7 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 	if err != nil {
 		return err
 	}
-	s, err := sandbox.PrepareWorkspace(ctx, w, secrets, settings, sandbox.DiagnosticsOptions{StateDir: stateDir, Output: os.Stderr})
+	s, err := sandbox.PrepareWorkspace(ctx, w, secrets, settings, sandbox.DiagnosticsOptions{StateDir: stateDir})
 	if err != nil {
 		return err
 	}
@@ -91,7 +92,6 @@ func loadHostAWS(ctx context.Context, settings launcherconfig.AWSSettings, logge
 	}
 	cfg, err := awsconfig.LoadDefaultConfig(loadCtx, loadOptions...)
 	if err != nil {
-		logger.Error("Load host AWS configuration failed", "error", err)
 		return nil, fmt.Errorf("load host AWS profile failed (details suppressed)")
 	}
 	// Preserve the SDK's provider/cache behavior, recording only metadata.
@@ -99,9 +99,7 @@ func loadHostAWS(ctx context.Context, settings launcherconfig.AWSSettings, logge
 	provider := cfg.Credentials
 	cfg.Credentials = aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
 		credentials, err := provider.Retrieve(ctx)
-		if err != nil {
-			logger.Error("Retrieve host AWS credentials failed", "error", err)
-		} else {
+		if err == nil {
 			logger.Info("Host AWS credentials retrieved", "source", credentials.Source, "can_expire", credentials.CanExpire, "expires_at", credentials.Expires)
 		}
 		return credentials, err

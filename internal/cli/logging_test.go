@@ -20,5 +20,5 @@ func TestLoggingSetupFailureIsNonfatal(t *testing.T) {
 	ctx, finish := startLogging(context.Background(), state, "/project", "launch", &warnings)
 	logging.FromContext(ctx).Info("No file available")
 	finish(nil)
-	require.Contains(t, warnings.String(), "warning: launcher logging unavailable")
+	require.Contains(t, warnings.String(), "Launcher logging unavailable")
 }

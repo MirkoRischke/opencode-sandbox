@@ -18,7 +18,21 @@ type Settings struct {
 	VM       VMSettings                `toml:"vm" description:"VM resources. Recreate the VM after changing these settings."`
 	Network  NetworkSettings           `toml:"network" description:"Outbound network access. Recreate the VM after policy changes."`
 	Snapshot SnapshotSettings          `toml:"snapshot" description:"Optional per-directory prepared disk baseline. Created and removed explicitly with the snapshot commands."`
+	Logging  LoggingSettings           `toml:"logging" description:"Host launcher logging. Console output goes to stderr; JSON logfiles retain Info and above."`
 	Secrets  map[string]SecretSettings `toml:"secrets" description:"Optional file- or OS-keyring-backed secrets, substituted by the host proxy. Workspace entries replace same-named global entries completely. Uncomment and adjust the example to enable."`
+}
+
+type LoggingSettings struct {
+	ConsoleLevel string `toml:"console_level" description:"Minimum console severity: debug, info, warn, or error. Overridden by --console-log-level."`
+}
+
+func (s LoggingSettings) Validate() error {
+	switch s.ConsoleLevel {
+	case "debug", "info", "warn", "error":
+		return nil
+	default:
+		return fmt.Errorf("logging.console_level must be debug, info, warn, or error (got %q)", s.ConsoleLevel)
+	}
 }
 
 type AWSSettings struct {
@@ -48,8 +62,9 @@ type NetworkSettings struct {
 // DefaultSettings allows common development services over HTTPS.
 func DefaultSettings() Settings {
 	return Settings{
-		Files: []FileSettings{},
-		VM:    VMSettings{Image: "opencode-sandbox:poc", CPUs: 2, MemoryMiB: 2048, RootDiskMiB: 4096, DockerDiskMiB: 10240},
+		Logging: LoggingSettings{ConsoleLevel: "warn"},
+		Files:   []FileSettings{},
+		VM:      VMSettings{Image: "opencode-sandbox:poc", CPUs: 2, MemoryMiB: 2048, RootDiskMiB: 4096, DockerDiskMiB: 10240},
 		Network: NetworkSettings{
 			AllowedHosts: []string{
 				// OpenAI inference and authentication.
@@ -84,7 +99,7 @@ func (p Paths) loadGlobalSettings() (Settings, error) {
 	p.log("Default configuration", "settings", settings)
 	path := filepath.Join(p.ConfigDir, "opencode-sandbox", "config.toml")
 	data, err := os.ReadFile(path)
-	p.log("Configuration source", "source", "global", "path", path, "present", !os.IsNotExist(err), "raw", string(data), "error", err)
+	p.log("Configuration source", "source", "global", "path", path, "present", !os.IsNotExist(err), "raw", string(data))
 	if os.IsNotExist(err) {
 		return settings, nil
 	}
@@ -100,6 +115,9 @@ func (p Paths) loadGlobalSettings() (Settings, error) {
 
 // Validate rejects invalid launcher settings before runtime preparation.
 func (s Settings) Validate() error {
+	if err := s.Logging.Validate(); err != nil {
+		return err
+	}
 	if strings.ContainsRune(s.Snapshot.Command, '\x00') {
 		return fmt.Errorf("snapshot.command must not contain NUL bytes")
 	}

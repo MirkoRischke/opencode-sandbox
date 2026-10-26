@@ -1,4 +1,4 @@
-// Package logging owns private host-side launcher logs, not guest output.
+// Package logging owns host-side launcher logs, not guest output.
 package logging
 
 import (
@@ -54,35 +54,59 @@ func Directory(stateDir, workspaceRoot string) string {
 // Open starts a locked segment and prunes inactive logs across workspaces.
 // Each JSON record is written immediately; there is no userspace buffer.
 func Open(stateDir, workspaceRoot string, warnings io.Writer) (*slog.Logger, io.Closer, error) {
+	return OpenWithLevel(stateDir, workspaceRoot, warnings, slog.LevelWarn)
+}
+
+// Console constructs a human-readable logger independent of logfile availability.
+func Console(output io.Writer, level slog.Leveler) *slog.Logger {
+	if output == nil {
+		output = io.Discard
+	}
+	return slog.New(slog.NewTextHandler(output, &slog.HandlerOptions{Level: level}))
+}
+
+// OpenWithLevel routes each record independently to the file and console handlers.
+// On file setup failure it still returns a usable console logger and closer.
+func OpenWithLevel(stateDir, workspaceRoot string, warnings io.Writer, level slog.Leveler) (*slog.Logger, io.Closer, error) {
 	if warnings == nil {
 		warnings = io.Discard
 	}
-	w := &writer{directory: Directory(stateDir, workspaceRoot), warnings: warnings, now: time.Now, limit: maxBytes}
+	console := Console(warnings, level)
+	w := &writer{directory: Directory(stateDir, workspaceRoot), warnings: warnings, warningLogger: console, now: time.Now, limit: maxBytes}
 	if err := privateDirectory(filepath.Dir(w.directory)); err != nil {
-		return nil, nil, err
+		return console, noopCloser{}, err
 	}
 	if err := w.rotate(w.now()); err != nil {
-		return nil, nil, err
+		return console, noopCloser{}, err
 	}
-	return slog.New(slog.NewJSONHandler(w, nil)).With("workspace", workspaceRoot, "pid", os.Getpid()), w, nil
+	handler := slog.NewMultiHandler(slog.NewJSONHandler(w, nil), console.Handler())
+	return slog.New(handler).With("workspace", workspaceRoot, "pid", os.Getpid()), w, nil
 }
 
+type noopCloser struct{}
+
+func (noopCloser) Close() error { return nil }
+
 type writer struct {
-	mu        sync.Mutex
-	directory string
-	warnings  io.Writer
-	now       func() time.Time
-	limit     int64
-	file      *os.File
-	day       string
-	size      int64
-	closed    bool
-	warned    bool
+	mu            sync.Mutex
+	directory     string
+	warnings      io.Writer
+	warningLogger *slog.Logger
+	now           func() time.Time
+	limit         int64
+	file          *os.File
+	day           string
+	size          int64
+	closed        bool
+	warned        bool
 }
 
 func (w *writer) warn(err error) {
 	if !w.warned {
-		fmt.Fprintln(w.warnings, "warning: launcher logging failed:", err) //nolint:errcheck // Logging must never prevent launcher use.
+		if w.warningLogger == nil {
+			w.warningLogger = Console(w.warnings, slog.LevelWarn)
+		}
+		w.warningLogger.Warn("Launcher logging failed", "error", err)
 		w.warned = true
 	}
 }
@@ -104,6 +128,7 @@ func (w *writer) Write(p []byte) (int, error) {
 	w.size += int64(n)
 	if err != nil {
 		w.warn(err)
+		return len(p), nil
 	}
 	return n, err
 }
@@ -119,7 +144,7 @@ func (w *writer) Close() error {
 	if err != nil {
 		w.warn(err)
 	}
-	return err
+	return nil
 }
 
 func privateDirectory(path string) error {

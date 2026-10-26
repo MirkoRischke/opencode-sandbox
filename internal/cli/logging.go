@@ -2,8 +2,8 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"runtime/debug"
 	"time"
@@ -14,12 +14,20 @@ import (
 
 // startLogging is best-effort: logging errors must not block workspace operations.
 func startLogging(ctx context.Context, stateDir, root, command string, warnings io.Writer) (context.Context, func(error)) {
-	logger, closer, err := logging.Open(stateDir, root, warnings)
+	var level slog.Leveler = slog.LevelWarn
+	e, ok := ctx.Value(executionKey{}).(*execution)
+	if ok {
+		level = &e.level
+	}
+	logger, closer, err := logging.OpenWithLevel(stateDir, root, warnings, level)
 	if err != nil {
-		fmt.Fprintln(warnings, "warning: launcher logging unavailable:", err) //nolint:errcheck // Preserve the operation even if warnings cannot be written.
-		return ctx, func(error) {}
+		logger.Warn("Launcher logging unavailable", "error", err)
 	}
 	logger = logger.With("command", command)
+	if e != nil && e.managed {
+		e.logger = logger
+		e.closers = append(e.closers, closer)
+	}
 	ctx = logging.WithLogger(ctx, logger)
 	version, revision := "unknown", "unknown"
 	if info, ok := debug.ReadBuildInfo(); ok {
@@ -34,11 +42,13 @@ func startLogging(ctx context.Context, stateDir, root, command string, warnings 
 	logger.Info("Invocation started", "version", version, "revision", revision)
 	return ctx, func(err error) {
 		if err != nil {
-			logger.Error("Invocation failed", "error", err, "duration_ms", time.Since(started).Milliseconds())
+			logger.Info("Invocation finished", "success", false, "duration_ms", time.Since(started).Milliseconds())
 		} else {
 			logger.Info("Invocation finished", "duration_ms", time.Since(started).Milliseconds())
 		}
-		_ = closer.Close() //nolint:errcheck // The log writer reports close failures itself.
+		if e == nil || !e.managed {
+			_ = closer.Close() //nolint:errcheck // The log writer reports close failures itself.
+		}
 	}
 }
 
@@ -46,12 +56,12 @@ func startLogging(ctx context.Context, stateDir, root, command string, warnings 
 func logWorkspaceOperation(ctx context.Context, command string, warnings io.Writer, operation func(context.Context) error) (err error) {
 	w, resolveErr := workspace.Resolve(ctx, ".")
 	if resolveErr != nil {
-		fmt.Fprintln(warnings, "warning: launcher logging unavailable:", resolveErr) //nolint:errcheck // --all must still work outside a valid workspace.
+		logging.FromContext(ctx).Warn("Launcher logging unavailable", "error", resolveErr)
 		return operation(ctx)
 	}
 	stateDir, stateErr := hostStateDir(os.Getenv("XDG_STATE_HOME"), os.Getenv("HOME"))
 	if stateErr != nil {
-		fmt.Fprintln(warnings, "warning: launcher logging unavailable:", stateErr) //nolint:errcheck // Logging is best-effort.
+		logging.FromContext(ctx).Warn("Launcher logging unavailable", "error", stateErr)
 		return operation(ctx)
 	}
 	ctx, finish := startLogging(ctx, stateDir, w.Root(), command, warnings)

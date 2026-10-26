@@ -502,9 +502,10 @@ opencode-sandbox diagnostics network
 opencode-sandbox diagnostics network | jq '.denied_targets'
 ```
 
-This read-only command does not start a VM or load configuration, trust state, or
-credentials. It works after VM deletion and shows the latest saved snapshot, not
-live logs. Missing history is an error reported on stderr with a nonzero exit.
+This read-only command does not start a VM or load credentials. Only logging
+policy and existing workspace approval are read. It works after VM deletion and
+shows the latest saved snapshot, not live logs. Missing history is an error
+reported on stderr with a nonzero exit.
 Running `opencode-sandbox diagnostics` shows usage and the available category.
 
 `denied_targets` contains optional `hostname`, `ip`, `port`, `protocol`, and `reason`,
@@ -594,9 +595,9 @@ opencode-sandbox secret remove github # alias: rm
 opencode-sandbox secret list # alias: ls
 ```
 
-These commands do not read or change global/workspace configuration, request
-workspace approval, or launch a VM. The default service namespace is
-`opencode-sandbox`, and the account is the supplied name, whether or not that name
+These commands read only logging policy and existing workspace approval; they do
+not change configuration, request workspace approval, or launch a VM. The default
+service namespace is `opencode-sandbox`, and the account is the supplied name, whether or not that name
 is configured (including names currently configured as file-backed).
 Use `--service` to select another namespace, and `--account` on `set`/`remove` to
 override the account when using custom identifiers:
@@ -641,3 +642,20 @@ Only new VMs receive changes: recreate a VM to rotate or remove its stored
 credentials. Updating/deleting a keyring entry does not update existing VMs.
 Removing a secret definition stops loading its source, but does not revoke
 credentials in existing VMs. Revoke credentials upstream for immediate revocation.
+
+## Launcher logging
+
+Host launcher logs are written as JSON at Info and above to rotating private
+logfiles. Console logs are human-readable and go to stderr, never stdout.
+
+```toml
+[logging]
+console_level = "warn" # debug, info, warn, or error
+```
+
+`console_level` is a minimum severity and defaults to `warn`. Override it for one
+invocation with `opencode-sandbox --console-log-level debug`; this shared flag
+also works with subcommands. Precedence: CLI flag, approved workspace config,
+global config, built-in default. Unapproved workspace settings do not affect
+management commands. Startup uses the default until settings are loaded, unless
+the flag is supplied. File logging is unaffected by the console threshold.

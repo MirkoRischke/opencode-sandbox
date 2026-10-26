@@ -44,7 +44,7 @@ func (p Paths) LoadWorkspaceSettings(directory string, approve func(string, []by
 	}
 	path := filepath.Join(root, workspaceConfigName)
 	data, err := os.ReadFile(path)
-	p.log("Configuration source", "source", "workspace", "path", path, "present", !os.IsNotExist(err), "raw", string(data), "error", err)
+	p.log("Configuration source", "source", "workspace", "path", path, "present", !os.IsNotExist(err), "raw", string(data))
 	if os.IsNotExist(err) {
 		return settings, settings.ValidateFileSources()
 	}
@@ -64,7 +64,7 @@ func (p Paths) LoadWorkspaceSettings(directory string, approve func(string, []by
 		}
 		return approve(path, data, settings)
 	}); err != nil {
-		p.log("Workspace configuration trust", "path", path, "accepted", false, "error", err)
+		p.log("Workspace configuration trust", "path", path, "accepted", false)
 		return settings, err
 	}
 	p.log("Workspace configuration trust", "path", path, "accepted", true)

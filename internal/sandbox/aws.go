@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -40,7 +39,6 @@ test ! -L /root/.aws
 if [ -f /root/.aws/.opencode-sandbox-managed ]; then
   rm -f /root/.aws/credentials /root/.aws/config /root/.aws/.opencode-sandbox-managed
 fi`); err != nil {
-			s.log().Error("Clear guest AWS credentials failed", "component", "aws", "error", err)
 			return nil, fmt.Errorf("clear launcher-managed AWS credentials failed (details suppressed)")
 		}
 		return func() {}, nil
@@ -86,7 +84,6 @@ func (s *Sandbox) refreshAWS(ctx context.Context, settings *AWSOptions) (time.Ti
 		DurationSeconds: aws.Int32(3600),
 	})
 	if err != nil {
-		logger.Error("Assume AWS role failed", "error", err, "duration_ms", time.Since(started).Milliseconds())
 		return time.Time{}, fmt.Errorf("assume AWS role failed; check host authentication and role permissions (details suppressed)")
 	}
 	if result.Credentials == nil || result.Credentials.Expiration == nil || !result.Credentials.Expiration.After(time.Now()) {
@@ -101,7 +98,6 @@ func (s *Sandbox) refreshAWS(ctx context.Context, settings *AWSOptions) (time.Ti
 	}
 	payload := fmt.Sprintf("[default]\naws_access_key_id = %s\naws_secret_access_key = %s\naws_session_token = %s\n", values[0], values[1], values[2])
 	if err := s.writeAWSFiles(refreshCtx, payload, settings.Region); err != nil {
-		logger.Error("Write guest AWS credentials failed", "error", err)
 		return time.Time{}, fmt.Errorf("write guest AWS credentials failed; check for unmanaged ~/.aws files (details suppressed)")
 	}
 	logger.Info("AWS credentials refreshed", "expires_at", *credentials.Expiration, "duration_ms", time.Since(started).Milliseconds())
@@ -132,7 +128,6 @@ func (s *Sandbox) retryAWSRefresh(ctx context.Context, settings *AWSOptions, exp
 		if err == nil {
 			return updated, true
 		}
-		fmt.Fprintln(os.Stderr, "AWS credential refresh failed; retrying in 30s. Existing credentials expire at", expires.UTC().Format(time.RFC3339))
 		s.log().Warn("AWS credential refresh will retry", "component", "aws", "error", err, "retry_in_seconds", 30, "expires_at", expires)
 		if !waitAWSRefresh(ctx, 30*time.Second) {
 			return time.Time{}, false

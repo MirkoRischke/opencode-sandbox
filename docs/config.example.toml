@@ -3,7 +3,7 @@
 # Unless unrestricted is enabled: DNS hosts/suffixes, HTTPS/WSS on TCP 443 only.
 # Network: example.com matches exactly; .example.com includes all subdomains and the base.
 # Secrets: example.com matches exactly; *.example.com includes all subdomains and the base.
-# Applied only when creating a VM. Recreate it after changing this file.
+# VM settings apply on creation. Logging settings apply on each invocation.
 # Missing configuration uses the built-in host allowlist; invalid configuration fails.
 
 # Optional host file/directory mappings. Nothing is shared implicitly.
@@ -42,6 +42,10 @@ file = "creds/github-token"
 env = "GH_TOKEN"
 allowed_hosts = ["github.com", "api.github.com"]
 headers = ["authorization"]
+
+[logging]
+# Minimum stderr severity; overridden by --console-log-level. File logs stay Info+.
+console_level = "warn" # debug, info, warn, or error
 
 [vm]
 # Applied at VM creation only. Sizes are in MiB.

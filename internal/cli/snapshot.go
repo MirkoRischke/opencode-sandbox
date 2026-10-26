@@ -72,13 +72,14 @@ func newSnapshotCreateCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			applyConsoleLevel(ctx, settings.Logging.ConsoleLevel)
 			paths.Logger.Info("Effective configuration", "settings", settings)
 			secrets, err := sandbox.LoadSecrets(settings)
 			if err != nil {
 				return err
 			}
 			reference, err := sandbox.CreateWorkspaceSnapshot(ctx, w, secrets, settings,
-				sandbox.DiagnosticsOptions{StateDir: stateDir, Output: cmd.ErrOrStderr()})
+				sandbox.DiagnosticsOptions{StateDir: stateDir})
 			if err != nil {
 				return err
 			}
