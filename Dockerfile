@@ -6,9 +6,6 @@ FROM ghcr.io/jdx/mise:${MISE_VERSION} AS mise
 
 FROM debian:13-slim
 
-# Copy only the standalone mise binary; Debian remains the base image.
-COPY --from=mise /usr/local/bin/mise /usr/local/bin/mise
-
 # Runtime prerequisites and common agent development/network debugging tools.
 # Keep Debian package updates available when rebuilding the image.
 # hadolint ignore=DL3008
@@ -54,6 +51,8 @@ RUN install -m 0755 -d /etc/apt/keyrings \
 # otherwise defaults to the containerd image store under /var/lib/containerd.
 RUN mkdir -p /etc/docker \
     && printf '%s\n' '{"features":{"containerd-snapshotter":false},"storage-driver":"overlay2"}' > /etc/docker/daemon.json
+
+COPY --from=mise /usr/local/bin/mise /usr/local/bin/mise
 
 ENV MISE_DATA_DIR=/mise/data \
     MISE_CONFIG_DIR=/mise/config \
