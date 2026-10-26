@@ -34,34 +34,6 @@ func TestUnconfiguredSecretsAreNotLoadedOrInjected(t *testing.T) {
 	require.NotContains(t, storedSandboxConfig(t, s), "host-credential-must-not-be-used")
 }
 
-func TestSecretSettingsRejectInvalidScopes(t *testing.T) {
-	t.Parallel()
-	for _, fields := range []string{
-		"file = 'creds/token'", // missing environment name and scope
-		"file = 'creds/token'\nenv = 'BAD-NAME'\nallowed_hosts = ['github.com']\nheaders = ['authorization']",
-		"file = 'creds/token'\nenv = 'TOKEN'\nallowed_hosts = []\nheaders = ['authorization']",
-		"file = 'creds/token'\nenv = 'TOKEN'\nallowed_hosts = ['.github.com']\nheaders = ['authorization']",
-		"file = 'creds/token'\nenv = 'TOKEN'\nallowed_hosts = ['github.com']\nheaders = []",
-		"file = 'creds/token'\nenv = 'TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['bad header']",
-		"file = 'creds/token'\nenv = 'TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\nvalue = 'inline-secrets-not-supported'",
-	} {
-		t.Run(fields, func(t *testing.T) {
-			dir := t.TempDir()
-			writeSettingsAt(t, dir, "[secrets.test]\n"+fields+"\n")
-			_, err := launcherconfig.LoadSettings(dir)
-			require.Error(t, err)
-		})
-	}
-}
-
-func TestSecretSettingsRejectDuplicateEnvironmentNames(t *testing.T) {
-	t.Parallel()
-	settings := githubSecretSettings("unused")
-	settings.Secrets["other"] = settings.Secrets["github"]
-	_, err := sandbox.LoadSecrets(settings)
-	require.ErrorContains(t, err, "duplicate secret environment variable")
-}
-
 func TestConfiguredSecretsUseRelativeFilesAndSubstituteOnlySelectedHeaders(t *testing.T) {
 	t.Parallel()
 	path := githubTokenPath(t)

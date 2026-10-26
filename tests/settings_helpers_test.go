@@ -28,3 +28,13 @@ func writeSettingsAt(t *testing.T, configDir, contents string) {
 	path := filepath.Join(dir, "config.toml")
 	require.NoError(t, os.WriteFile(path, []byte(contents), 0600))
 }
+
+func repoSettingsFixture(t *testing.T, config string) (string, string, launcherconfig.Paths) {
+	t.Helper()
+	paths := launcherconfig.Paths{ConfigDir: t.TempDir(), StateDir: t.TempDir()}
+	root := filepath.Join(t.TempDir(), "repo")
+	runGit(t, "init", root)
+	path := filepath.Join(root, ".opencode-sandbox.toml")
+	require.NoError(t, os.WriteFile(path, []byte(config), 0600))
+	return root, path, paths
+}

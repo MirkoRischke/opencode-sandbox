@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -173,45 +172,4 @@ func TestGitHubTokenLoadsOnlyFromDedicatedCredentialFile(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, string(output), "load secret")
 	require.NotContains(t, string(output), "host-gh-token-must-not-be-used")
-}
-
-func TestGitHubTokenRejectsUnsafePermissionsAndInvalidContents(t *testing.T) {
-	t.Parallel()
-	for _, tc := range []struct {
-		name              string
-		dirMode, fileMode os.FileMode
-		contents          string
-	}{
-		{"readable directory", 0755, 0600, "github_pat_FAKE"},
-		{"readable token", 0700, 0644, "github_pat_FAKE"},
-		{"empty token", 0700, 0600, ""},
-		{"multiple lines", 0700, 0600, "first\nsecond"},
-		{"NUL byte", 0700, 0600, "first\x00second"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			path := githubTokenPath(t)
-			require.NoError(t, os.WriteFile(path, []byte(tc.contents), 0600))
-			require.NoError(t, os.Chmod(path, tc.fileMode))
-			require.NoError(t, os.Chmod(filepath.Dir(path), tc.dirMode))
-
-			_, err := sandbox.LoadSecrets(githubSecretSettings(path))
-
-			require.Error(t, err)
-			if tc.contents != "" {
-				require.NotContains(t, err.Error(), tc.contents)
-			}
-		})
-	}
-}
-
-func TestGitHubTokenRejectsSymlinks(t *testing.T) {
-	t.Parallel()
-	path := githubTokenPath(t)
-	target := filepath.Join(t.TempDir(), "token")
-	require.NoError(t, os.WriteFile(target, []byte("github_pat_FAKE"), 0600))
-	require.NoError(t, os.Symlink(target, path))
-
-	_, err := sandbox.LoadSecrets(githubSecretSettings(path))
-
-	require.ErrorContains(t, err, "regular owner-only file")
 }

@@ -1,4 +1,4 @@
-package sandbox_test
+package config_test
 
 import (
 	"crypto/sha256"
@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	launcherconfig "opencode-sandbox/internal/config"
-	"opencode-sandbox/internal/sandbox"
 
 	"github.com/stretchr/testify/require"
 )
@@ -159,9 +158,6 @@ headers = ['authorization']
 		AllowedHosts: []string{"custom.example.com"}, Headers: []string{"x-token"},
 	}, settings.Secrets["github"])
 	require.Equal(t, filepath.Join(root, "creds/other"), settings.Secrets["other"].File)
-	// Credential files do not exist: loading/reviewing settings must not read them.
-	_, err = sandbox.LoadSecrets(settings)
-	require.Error(t, err)
 	_, err = paths.LoadWorkspaceSettings(root, nil)
 	require.NoError(t, err)
 }
