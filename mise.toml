@@ -66,7 +66,15 @@ run = [
 
 [tasks."test:unit"]
 description = "Run fast tests without VMs or external services"
-run = "go test -count=1 -timeout 10s ./internal/..."
+run = "go test -count=1 -timeout 10s ./internal/... ./scripts/..."
+
+[tasks."test:non-vm"]
+description = "Run all tests without Microsandbox or host credentials; Docker required"
+depends = ["build"]
+run = [
+  "mkdir -p /tmp/opencode",
+  "go test -race -count=1 -v -timeout 2m ./internal/... ./scripts/... ./tests/cli ./tests/image",
+]
 
 [tasks."test:image"]
 description = "Build and smoke-test the Docker image without VMs or credentials"

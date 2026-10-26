@@ -170,7 +170,8 @@ mise run lint
 mise run verify      # Lint + prepare changed images + full standard test suite
 mise run quality baseline # Save local complexity metrics before a refactor
 mise run quality compare  # Show current hotspots and changes from that baseline
-mise run test:unit    # Fast internal tests; no VMs or external services
+mise run test:unit    # Fast source-adjacent tests; no VMs or external services
+mise run test:non-vm  # Unit/script + CLI + image tests; Docker only, no Microsandbox
 mise run test:image   # Build + offline image smoke tests; Docker only, no VMs
 mise run test:prepare # Prepare images only when image inputs change
 mise run test        # Prepare changed images, then run the full test suite
@@ -180,6 +181,13 @@ mise run test:live   # Opt-in OpenAI smoke test; uses host credentials
 Image preparation tracks both Dockerfiles and the base `.dockerignore`.
 Unchanged builds and imports are skipped; tests always run. After deleting
 Docker or Microsandbox images, run `mise run --force test:prepare` to prepare them again.
+
+Source-focused tests live beside their implementation. Higher-level tests are
+split into `tests/cli` (no Microsandbox), `tests/image` (Docker), and `tests/vm`
+(Microsandbox). PR checks run linting, build the launcher, check module consistency,
+compile all tests including the `live` tag, and run `test:non-vm` with race detection.
+Renovate automerges dependency updates, including majors, after checks pass;
+the Microsandbox SDK is excluded because it must be upgraded with its runtime.
 
 Quality reports are advisory and saved under `.quality/` (ignored by Git).
 They require Python 3 and the pinned golangci-lint; compare with the same tool

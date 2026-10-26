@@ -4,8 +4,22 @@
     "config:recommended",
     "customManagers:dockerfileVersions"
   ],
-  "enabledManagers": ["dockerfile", "custom.regex"],
-  "includePaths": ["Dockerfile"],
+  "enabledManagers": ["dockerfile", "custom.regex", "gomod"],
+  "includePaths": ["Dockerfile", "go.mod", "go.sum"],
+  "packageRules": [
+    {
+      "matchManagers": ["gomod"],
+      "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
+      "automerge": true
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchPackageNames": [
+        "github.com/superradcompany/microsandbox/sdk/go"
+      ],
+      "enabled": false
+    }
+  ],
   "automerge": true,
   "automergeType": "pr",
   "platformAutomerge": false

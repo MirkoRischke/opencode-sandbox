@@ -1,0 +1,41 @@
+name: PR checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: PR checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      # Use Go from go.mod via setup-go; never install the VM runtime in CI.
+      MISE_ENABLE_TOOLS: golangci-lint,hadolint
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: jdx/mise-action@v5
+        with:
+          cache_key_prefix: mise-v0-${{ env.MISE_ENABLE_TOOLS }}
+      - name: Prepare test temporary directory
+        run: mkdir -p /tmp/opencode
+      - name: Lint
+        run: mise run lint
+      - name: Build launcher
+        run: mise run cli
+      - name: Check module consistency
+        run: go mod tidy -diff
+      - name: Compile all tests, including live tests
+        run: go test -tags live -run '^$' ./...
+      - name: Run non-VM tests, including image smoke tests
+        run: mise run test:non-vm
