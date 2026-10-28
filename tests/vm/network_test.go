@@ -14,7 +14,7 @@ import (
 
 func TestRestrictedNetworkAllowsOnlyConfiguredHTTPSHostsWithoutCredentials(t *testing.T) {
 	t.Parallel()
-	settings := launcherconfig.DefaultSettings()
+	settings := testSettings(t)
 	settings.Network.AllowedHosts = []string{"GitHub.com"}
 	s := startSandboxWithSettings(t, settings)
 	execInSandbox(t, s, "curl", "--noproxy", "*", "--fail", "--silent", "--show-error", "--max-time", "15", "https://github.com")
@@ -43,7 +43,7 @@ func TestRestrictedNetworkAllowsOnlyConfiguredHTTPSHostsWithoutCredentials(t *te
 
 func TestEmptyNetworkAllowlistBlocksInternet(t *testing.T) {
 	t.Parallel()
-	settings := launcherconfig.DefaultSettings()
+	settings := testSettings(t)
 	settings.Network.AllowedHosts = []string{}
 	settings.Network.AdditionalAllowedHosts = []string{}
 	s := startSandboxWithSettings(t, settings)
@@ -52,7 +52,7 @@ func TestEmptyNetworkAllowlistBlocksInternet(t *testing.T) {
 
 func TestUnrestrictedNetworkAllowsPublicInternetButBlocksProtectedDestinations(t *testing.T) {
 	t.Parallel()
-	settings := launcherconfig.DefaultSettings()
+	settings := testSettings(t)
 	settings.Network.Unrestricted = true
 	settings.Network.AllowedHosts = []string{"github.com"}
 	settings.Network.AdditionalAllowedHosts = []string{"api.github.com"}
@@ -82,14 +82,14 @@ func TestMissingConfigDefaultsToDevelopmentAllowlistInVM(t *testing.T) {
 
 func TestExistingSandboxRetainsItsNetworkPolicy(t *testing.T) {
 	t.Parallel()
-	initial := launcherconfig.DefaultSettings()
+	initial := testSettings(t)
 	initial.Network.AllowedHosts = []string{}
 	initial.Network.AdditionalAllowedHosts = []string{}
 	s := startSandboxWithSettings(t, initial)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	require.NoError(t, s.Stop(ctx))
-	settings := launcherconfig.DefaultSettings()
+	settings := testSettings(t)
 	settings.Network.AllowedHosts = []string{"github.com"}
 	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, settings)
 	require.NoError(t, err)

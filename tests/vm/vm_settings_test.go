@@ -19,7 +19,7 @@ import (
 
 func TestVMUsesCustomLocalImage(t *testing.T) {
 	t.Parallel()
-	settings := launcherconfig.DefaultSettings()
+	settings := testSettings(t)
 	settings.VM.Image = "opencode-sandbox:test-custom"
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -43,7 +43,7 @@ func TestVMUsesCustomLocalImage(t *testing.T) {
 
 func TestVMMissingImagePullFails(t *testing.T) {
 	t.Parallel()
-	settings := launcherconfig.DefaultSettings()
+	settings := testSettings(t)
 	// A closed loopback port exercises pull failure without a public registry.
 	settings.VM.Image = fmt.Sprintf("127.0.0.1:1/opencode-sandbox-missing-test:%d", time.Now().UnixNano())
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -63,7 +63,7 @@ func TestVMMissingImagePullFails(t *testing.T) {
 
 func TestVMResourcesFollowConfigAndPersistAcrossResume(t *testing.T) {
 	t.Parallel()
-	settings := launcherconfig.DefaultSettings()
+	settings := testSettings(t)
 	settings.VM = launcherconfig.VMSettings{Image: settings.VM.Image, CPUs: 1, MemoryMiB: 1024, RootDiskMiB: 5120, DockerDiskMiB: 2048}
 	s := startSandboxWithSettings(t, settings)
 	var config m.SandboxConfig
@@ -77,7 +77,7 @@ func TestVMResourcesFollowConfigAndPersistAcrossResume(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	require.NoError(t, s.Stop(ctx))
-	resumeSettings := launcherconfig.DefaultSettings()
+	resumeSettings := testSettings(t)
 	resumeSettings.VM.Image = "127.0.0.1:1/must-not-resolve:resume"
 	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, resumeSettings)
 	require.NoError(t, err)

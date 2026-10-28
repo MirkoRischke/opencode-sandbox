@@ -103,7 +103,7 @@ func TestSecretHostDoesNotExpandNetworkAllowlist(t *testing.T) {
 
 func TestSecretIsNotSubstitutedOnAnUnlistedHost(t *testing.T) {
 	t.Parallel()
-	settings := launcherconfig.DefaultSettings()
+	settings := testSettings(t)
 	settings.Network.AllowedHosts = []string{"httpbingo.org"}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

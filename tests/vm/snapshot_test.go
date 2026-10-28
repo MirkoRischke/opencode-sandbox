@@ -21,7 +21,7 @@ func TestRepositorySnapshotWithoutPreparationCommand(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	worktree := newWorktree(t)
-	settings := config.DefaultSettings()
+	settings := testSettings(t)
 	settings.VM.CPUs, settings.VM.MemoryMiB = 1, 768
 	settings.VM.RootDiskMiB, settings.VM.DockerDiskMiB = 512, 256
 	source := filepath.Join(t.TempDir(), "instructions.md")
@@ -66,7 +66,7 @@ func TestSnapshotPreparationHasPublicAccessButRestoredVMIsRestricted(t *testing.
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
 			defer cancel()
 			worktree := newWorktree(t)
-			settings := config.DefaultSettings()
+			settings := testSettings(t)
 			settings.Network.AllowedHosts = []string{}
 			settings.Network.AdditionalAllowedHosts = nil
 			settings.Snapshot.Command = `
@@ -354,7 +354,7 @@ func newSnapshotFixture(t *testing.T, command string) snapshotFixture {
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
 	t.Cleanup(cancel)
 	worktree := newWorktree(t)
-	settings := config.DefaultSettings()
+	settings := testSettings(t)
 	settings.VM.CPUs, settings.VM.MemoryMiB = 1, 768
 	settings.VM.RootDiskMiB, settings.VM.DockerDiskMiB = 512, 256
 	settings.Snapshot.Command = command
@@ -381,7 +381,7 @@ func TestSnapshotRestoreUsesCurrentHostSecrets(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	worktree := newWorktree(t)
-	settings := config.DefaultSettings()
+	settings := testSettings(t)
 	settings.VM.CPUs, settings.VM.MemoryMiB = 1, 768
 	settings.VM.RootDiskMiB, settings.VM.DockerDiskMiB = 512, 256
 	settings.Snapshot.Command = `test "$GH_TOKEN" = '$MSB_GH_TOKEN'; touch /root/snapshot-preparation-proof`

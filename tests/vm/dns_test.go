@@ -97,7 +97,7 @@ func TestAllowedDNSCannotBypassProtectedDestinations(t *testing.T) {
 
 func startFilteringDNSProbe(t *testing.T, network launcherconfig.NetworkSettings) (*m.Sandbox, func() []string) {
 	t.Helper()
-	settings := launcherconfig.DefaultSettings()
+	settings := testSettings(t)
 	settings.Network = network
 	source := startSandboxWithSettings(t, settings)
 	upstream, queries := startDNSUpstream(t)

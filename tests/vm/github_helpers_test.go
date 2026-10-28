@@ -22,11 +22,11 @@ func githubTokenPath(t *testing.T) string {
 	return filepath.Join(dir, "github-token")
 }
 
-func prepareWithGitHub(t *testing.T, worktree string, token []byte) *sandbox.Sandbox {
+func prepareWithGitHub(t *testing.T, worktree string, token []byte, hosts ...string) *sandbox.Sandbox {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	s, err := sandbox.Prepare(ctx, worktree, githubSecrets(t, token), testSettings(t))
+	s, err := sandbox.Prepare(ctx, worktree, githubSecrets(t, token), testSettings(t, hosts...))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -50,6 +50,7 @@ func githubSecrets(t *testing.T, token []byte) []sandbox.Secret {
 
 func githubSecretSettings(path string) launcherconfig.Settings {
 	settings := launcherconfig.DefaultSettings()
+	settings.Network = launcherconfig.NetworkSettings{AllowedHosts: []string{}}
 	settings.Secrets = map[string]launcherconfig.SecretSettings{"github": {
 		File: path, Env: "GH_TOKEN", AllowedHosts: []string{"api.github.com", "github.com"}, Headers: []string{"authorization"},
 	}}

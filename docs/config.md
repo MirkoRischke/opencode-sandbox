@@ -16,7 +16,10 @@ This works outside Git and does not load user configuration, trust state, or
 credential files, or start a VM. Values come from the same `DefaultSettings()`
 used at runtime; descriptions come from configuration struct tags. The built-in
 allowlist includes OpenAI, the OpenCode model catalog, Context7 and AWS Knowledge
-MCPs, GitHub, mise metadata, Go downloads/modules, npm, Docker Hub, and ECR Public.
+MCPs, and GitHub Git/API/raw-file access. Tool downloads, package registries,
+source archives, release assets, and container registries are not included;
+snapshot preparation has public internet access. Add project-specific hosts for
+downloads needed while the agent runs.
 Diagnostics and unrestricted access are disabled; no credentials are enabled.
 For workspace overrides, keep only settings you want to override: saving all defaults
 also overrides your global values with those defaults.

@@ -95,7 +95,7 @@ func TestGitHubCredentialCanBeReusedWithoutChanges(t *testing.T) {
 func TestGitHubCredentialSubstitutionWorksOutsideGuestAndExcludesOtherHeaders(t *testing.T) {
 	t.Parallel()
 	const token = "github_pat_FAKE_ECHO_TEST_ONLY"
-	s := prepareWithGitHub(t, newWorktree(t), []byte(token))
+	s := prepareWithGitHub(t, newWorktree(t), []byte(token), "httpbingo.org")
 
 	response := echoedGitHubAuthorization(t, s)
 

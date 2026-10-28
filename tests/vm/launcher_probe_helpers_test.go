@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	launcherconfig "opencode-sandbox/internal/config"
 	"opencode-sandbox/internal/sandbox"
 
 	"github.com/stretchr/testify/require"
@@ -21,7 +20,7 @@ import (
 // OpenCode and carries its exit status through the fallback interactive shell.
 func prepareLauncherProbe(t *testing.T) *sandbox.Sandbox {
 	t.Helper()
-	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
+	s := startSandboxWithSettings(t, testSettings(t))
 	execInSandbox(t, s, "bash", "-eu", "-c", `
 touch /root/.opencode-sandbox-auth-ready
 cat > /mise/data/shims/opencode <<'PROBE'

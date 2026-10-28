@@ -53,7 +53,7 @@ func requireForwardedHTTP(t *testing.T, port uint16) {
 func TestPortMappingHTTPAndResume(t *testing.T) {
 	t.Parallel()
 	port := availableHostPort(t)
-	settings := config.DefaultSettings()
+	settings := testSettings(t)
 	settings.Network.AllowedHosts = []string{}
 	settings.Ports = []config.PortSettings{{Host: port, Guest: 8080}}
 	s := prepareSandboxWithSettings(t, newWorktree(t), settings)
@@ -87,7 +87,7 @@ func TestPortMappingAfterSnapshotRestore(t *testing.T) {
 func TestPortMappingWebSocket(t *testing.T) {
 	t.Parallel()
 	port := availableHostPort(t)
-	settings := config.DefaultSettings()
+	settings := testSettings(t)
 	settings.Ports = []config.PortSettings{{Host: port, Guest: 8080}}
 	s := startSandboxWithSettings(t, settings)
 	// A minimal WebSocket peer: read the upgrade headers and a masked text

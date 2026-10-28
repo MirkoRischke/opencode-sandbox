@@ -36,7 +36,7 @@ func TestDockerUsesOwnedStorageAndDoesNotForwardPorts(t *testing.T) {
 
 func TestDockerPullsFromAllowedRegistries(t *testing.T) {
 	t.Parallel()
-	s := startSandbox(t)
+	s := startDockerPullSandbox(t, "public.ecr.aws")
 	for _, image := range []string{"busybox:1.37.0", "public.ecr.aws/docker/library/busybox:1.37.0"} {
 		pullDockerImage(t, s, image)
 	}
@@ -44,7 +44,7 @@ func TestDockerPullsFromAllowedRegistries(t *testing.T) {
 
 func TestDockerBuildsAndRunsComposeServices(t *testing.T) {
 	t.Parallel()
-	s := startSandbox(t)
+	s := startDockerPullSandbox(t)
 	dir := buildDockerFixture(t, s)
 
 	require.Equal(t, "docker-ok", execInSandbox(t, s, "docker", "run", "--rm", "sandbox-docker-test:local"))
@@ -55,7 +55,7 @@ func TestDockerBuildsAndRunsComposeServices(t *testing.T) {
 
 func TestDockerContainersCannotBypassNetworkAllowlist(t *testing.T) {
 	t.Parallel()
-	s := startSandbox(t)
+	s := startDockerPullSandbox(t)
 	pullDockerImage(t, s, "busybox:1.37.0")
 	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 	defer cancel()
@@ -80,7 +80,7 @@ func TestEnsureDockerLeavesHealthyDaemonAndLogsUntouched(t *testing.T) {
 
 func TestDockerImagesContainersAndVolumesPersistAcrossRestart(t *testing.T) {
 	t.Parallel()
-	s := startSandbox(t)
+	s := startDockerPullSandbox(t)
 	dir := buildDockerFixture(t, s)
 	dockerCompose(t, s, dir, "up", "-d", "server")
 	dockerCompose(t, s, dir, "exec", "-T", "server", "sh", "-c", "echo persisted > /data/proof")
@@ -99,6 +99,16 @@ func TestDockerImagesContainersAndVolumesPersistAcrossRestart(t *testing.T) {
 	require.Equal(t, "docker-ok", execInSandbox(t, resumed, "docker", "start", "--attach", "retained"))
 	require.Equal(t, "persisted\n", execInSandbox(t, resumed, "docker", "run", "--rm", "-v", "sandbox-test_data:/data", "sandbox-docker-test:local", "cat", "/data/proof"))
 	require.Contains(t, execInSandbox(t, resumed, "cat", "/var/log/opencode-sandbox/dockerd.log"), "log-marker")
+}
+
+func startDockerPullSandbox(t *testing.T, additionalHosts ...string) *sandbox.Sandbox {
+	t.Helper()
+	hosts := []string{
+		"auth.docker.io", "registry-1.docker.io", "production.cloudflare.docker.com",
+		"production.cloudfront.docker.com",
+		"docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com",
+	}
+	return startSandboxWithSettings(t, testSettings(t, append(hosts, additionalHosts...)...))
 }
 
 func pullDockerImage(t *testing.T, s *sandbox.Sandbox, image string) {

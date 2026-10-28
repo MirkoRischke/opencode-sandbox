@@ -56,13 +56,6 @@ func TestDefaultNetworkAllowlist(t *testing.T) {
 		"chatgpt.com", "api.openai.com", "auth.openai.com",
 		"models.dev", "mcp.context7.com", "knowledge-mcp.global.api.aws",
 		"github.com", "api.github.com", "raw.githubusercontent.com",
-		"codeload.github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com",
-		"mise-versions.jdx.dev", "dl.google.com", "proxy.golang.org",
-		"sum.golang.org", "storage.googleapis.com", "registry.npmjs.org",
-		"auth.docker.io", "registry-1.docker.io", "production.cloudflare.docker.com",
-		"production.cloudfront.docker.com",
-		"docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com",
-		"public.ecr.aws",
 	}, settings.Network.AllowedHosts)
 	require.Empty(t, settings.Network.AdditionalAllowedHosts)
 	require.False(t, settings.Network.Diagnostics)

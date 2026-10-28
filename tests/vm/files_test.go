@@ -25,7 +25,7 @@ func TestCopiedFilesAreWritableAndNotRefreshedOnResume(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(tree, "nested", ".file"), []byte("host"), 0600))
 	require.NoError(t, os.Mkdir(filepath.Join(tree, "empty"), 0700))
 	require.NoError(t, os.Symlink("nested/.file", filepath.Join(tree, "link")))
-	settings := config.DefaultSettings()
+	settings := testSettings(t)
 	settings.VM.CPUs, settings.VM.MemoryMiB = 1, 768
 	settings.Files = []config.FileSettings{
 		{Source: gitconfig, Target: "/root/.gitconfig", Mode: "copy"},
@@ -64,7 +64,7 @@ func TestSnapshotCopiesMergeCurrentHostContentsIntoExactTarget(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(tree, "removed-on-host"), []byte("keep from snapshot"), 0600))
 	file := filepath.Join(source, "single")
 	require.NoError(t, os.WriteFile(file, []byte("old single file"), 0600))
-	settings := config.DefaultSettings()
+	settings := testSettings(t)
 	settings.VM.CPUs, settings.VM.MemoryMiB = 1, 768
 	settings.VM.RootDiskMiB, settings.VM.DockerDiskMiB = 512, 256
 	settings.Files = []config.FileSettings{
@@ -106,7 +106,7 @@ func TestFailedCopyDiscardsNewVM(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, sandbox.Remove(context.Background(), worktree)) })
 	source := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(source, "file"), []byte("retry"), 0600))
-	settings := config.DefaultSettings()
+	settings := testSettings(t)
 	settings.VM.CPUs, settings.VM.MemoryMiB = 1, 768
 	// A directory cannot be merged onto an image's existing regular file.
 	settings.Files = []config.FileSettings{{Source: source, Target: "/etc/debian_version", Mode: "copy"}}

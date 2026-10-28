@@ -7,17 +7,14 @@ import (
 
 	launcherconfig "opencode-sandbox/internal/config"
 
-	"github.com/BurntSushi/toml"
 	"github.com/stretchr/testify/require"
 )
 
-func testSettings(t *testing.T) launcherconfig.Settings {
+func testSettings(t *testing.T, hosts ...string) launcherconfig.Settings {
 	t.Helper()
-	var settings launcherconfig.Settings
-	_, err := toml.DecodeFile("../../docs/config.example.toml", &settings)
-	require.NoError(t, err)
-	// The credential substitution test sends fake values to this echo service.
-	settings.Network.AllowedHosts = append(settings.Network.AllowedHosts, "httpbingo.org")
+	settings := launcherconfig.DefaultSettings()
+	// Tests opt in to their own destinations, independently of production defaults.
+	settings.Network = launcherconfig.NetworkSettings{AllowedHosts: append([]string{}, hosts...)}
 	return settings
 }
 

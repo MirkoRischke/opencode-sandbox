@@ -73,17 +73,8 @@ func DefaultSettings() Settings {
 				"chatgpt.com", "api.openai.com", "auth.openai.com",
 				// Model catalog and remote documentation MCPs.
 				"models.dev", "mcp.context7.com", "knowledge-mcp.global.api.aws",
-				// GitHub source, APIs, and release downloads.
+				// GitHub Git operations, APIs, and raw files.
 				"github.com", "api.github.com", "raw.githubusercontent.com",
-				"codeload.github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com",
-				// mise metadata, Go toolchains/modules, and npm packages.
-				"mise-versions.jdx.dev", "dl.google.com", "proxy.golang.org",
-				"sum.golang.org", "storage.googleapis.com", "registry.npmjs.org",
-				// Docker Hub and Amazon ECR Public image pulls.
-				"auth.docker.io", "registry-1.docker.io", "production.cloudflare.docker.com",
-				"production.cloudfront.docker.com",
-				"docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com",
-				"public.ecr.aws",
 			},
 			AdditionalAllowedHosts: []string{},
 		},

@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	launcherconfig "opencode-sandbox/internal/config"
 	"opencode-sandbox/internal/sandbox"
 
 	"github.com/stretchr/testify/assert"
@@ -20,7 +19,7 @@ func TestNetworkDiagnosticsPreservesWorktreeHistoryAcrossVMRecreation(t *testing
 	defer cancel()
 	state, root := t.TempDir(), newWorktree(t)
 	diagnostics := sandbox.DiagnosticsOptions{StateDir: state}
-	settings := launcherconfig.DefaultSettings()
+	settings := testSettings(t)
 	settings.Network.Diagnostics = true
 	first := prepareSandboxWithSettings(t, root, settings, diagnostics)
 	requireNetworkBlocked(t, first, "https://example.org")
@@ -48,7 +47,7 @@ func TestNetworkDiagnosticsDoesNotReplayLogsWhenResumingOrDeletingVM(t *testing.
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 	state, root := t.TempDir(), newWorktree(t)
-	settings := launcherconfig.DefaultSettings()
+	settings := testSettings(t)
 	settings.Network.Diagnostics = true
 	diagnostics := sandbox.DiagnosticsOptions{StateDir: state}
 	original := prepareSandboxWithSettings(t, root, settings, diagnostics)
@@ -95,7 +94,7 @@ func readSavedDiagnostics(t *testing.T, root, state string) ([]byte, diagnosticO
 func TestSnapshotRestoreBlocksHTTPSWithoutDenialDiagnostics(t *testing.T) {
 	t.Parallel()
 	state := t.TempDir()
-	settings := launcherconfig.DefaultSettings()
+	settings := testSettings(t)
 	settings.Network.Diagnostics = true
 	settings.Snapshot.Command = "true"
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)

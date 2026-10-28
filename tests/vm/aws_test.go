@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	launcherconfig "opencode-sandbox/internal/config"
 	"opencode-sandbox/internal/sandbox"
 
 	"github.com/stretchr/testify/require"
@@ -97,7 +96,7 @@ func TestAWSRefreshesCredentialsAndStopsRefreshingOnExit(t *testing.T) {
 		}
 		return validAWSResponse(n)
 	})
-	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
+	s := startSandboxWithSettings(t, testSettings(t))
 	stop, err := s.StartAWS(context.Background(), host.options)
 	require.NoError(t, err)
 	defer stop()
@@ -125,14 +124,14 @@ func TestAWSRefreshesCredentialsAndStopsRefreshingOnExit(t *testing.T) {
 func TestAWSReplacesCredentialsOnReuseAndClearsThemWhenDisabled(t *testing.T) {
 	t.Parallel()
 	host := fakeAWSHost(t, "", validAWSResponse)
-	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
+	s := startSandboxWithSettings(t, testSettings(t))
 	stop, err := s.StartAWS(context.Background(), host.options)
 	require.NoError(t, err)
 	stop()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	require.NoError(t, s.Stop(ctx))
-	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, launcherconfig.DefaultSettings())
+	resumed, err := sandbox.Prepare(ctx, s.Worktree, nil, testSettings(t))
 	require.NoError(t, err)
 	defer func() { require.NoError(t, resumed.Close()) }()
 	stop, err = resumed.StartAWS(ctx, host.options)
@@ -149,7 +148,7 @@ func TestAWSReplacesCredentialsOnReuseAndClearsThemWhenDisabled(t *testing.T) {
 func TestAWSFailsClosedOnAssumeRoleFailure(t *testing.T) {
 	t.Parallel()
 	host := fakeAWSHost(t, "", func(int) (time.Time, bool) { return time.Time{}, false })
-	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
+	s := startSandboxWithSettings(t, testSettings(t))
 	_, err := s.StartAWS(context.Background(), host.options)
 	require.ErrorContains(t, err, "assume AWS role failed")
 	execInSandbox(t, s, "test", "!", "-e", "/root/.aws/credentials")
@@ -160,7 +159,7 @@ func TestAWSRejectsExpiredRoleCredentials(t *testing.T) {
 	host := fakeAWSHost(t, "", func(int) (time.Time, bool) {
 		return time.Now().Add(-time.Minute), true
 	})
-	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
+	s := startSandboxWithSettings(t, testSettings(t))
 	_, err := s.StartAWS(context.Background(), host.options)
 	require.ErrorContains(t, err, "expired role credentials")
 	execInSandbox(t, s, "test", "!", "-e", "/root/.aws/credentials")
@@ -171,7 +170,7 @@ func TestAWSRefreshFailureKeepsOnlyPreviousRoleCredentials(t *testing.T) {
 	host := fakeAWSHost(t, "", func(n int) (time.Time, bool) {
 		return time.Now().Add(5*time.Minute + 2*time.Second), n == 1
 	})
-	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
+	s := startSandboxWithSettings(t, testSettings(t))
 	stop, err := s.StartAWS(context.Background(), host.options)
 	require.NoError(t, err)
 	defer stop()
@@ -190,7 +189,7 @@ func TestAWSRefreshFailureKeepsOnlyPreviousRoleCredentials(t *testing.T) {
 func TestAWSDoesNotOverwriteOrRemoveUnmanagedGuestFiles(t *testing.T) {
 	t.Parallel()
 	host := fakeAWSHost(t, "", validAWSResponse)
-	s := startSandboxWithSettings(t, launcherconfig.DefaultSettings())
+	s := startSandboxWithSettings(t, testSettings(t))
 	execInSandbox(t, s, "bash", "-eu", "-c", "mkdir -p /root/.aws; printf 'user-owned' > /root/.aws/credentials")
 	_, err := s.StartAWS(context.Background(), host.options)
 	require.ErrorContains(t, err, "unmanaged")

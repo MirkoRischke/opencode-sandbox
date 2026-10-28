@@ -12,7 +12,8 @@ import (
 
 func TestOpenCodeCanReachOpenAI(t *testing.T) {
 	t.Parallel()
-	s := startSandbox(t)
+	s := startSandboxWithSettings(t, testSettings(t,
+		"chatgpt.com", "api.openai.com", "auth.openai.com", "models.dev"))
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	require.NoError(t, s.ImportOpenAI(ctx))
