@@ -5,7 +5,11 @@ inventory of Microsandbox features. Use it when evaluating an SDK/runtime upgrad
 
 Baseline: **Go SDK and runtime v0.7.8**. Inventory recorded 2026-10-28 from
 versioned source, existing experiments, tests, and the automatic-snapshot review.
-Tests were not rerun when writing this document. No later release has been checked.
+Tests were not rerun when writing the original inventory. Source rechecked through
+**Go SDK/runtime v0.7.11** on 2026-10-28; see the
+[upgrade research](../research/microsandbox-v0.7.11-upgrade.md). Source rechecks below
+are not behavioral verification. Separately attributed parent-session test results
+do not imply every upgrade check was exercised.
 
 Entries distinguish confirmed API gaps, observed behavior, and unverified issues.
 Documenting a security limitation does **not** make it safe or imply acceptance.
@@ -14,9 +18,11 @@ are described only to identify their impact and eventual removal criteria.
 
 ## MSB-01 — Go secret modification loses selected-header restrictions
 
-**Status:** confirmed Go API gap; security impact. Last checked: v0.7.8.
+**Status:** original Go API gap addressed upstream in v0.7.10; tool adaptation and
+behavioral verification outstanding. Security impact remains in the current tool.
+Last source and reproduced behavior check: v0.7.11 (2026-10-28).
 
-Creation supports selected-header substitution, but `SecretModifySpec` has no
+In v0.7.8, creation supports selected-header substitution, but `SecretModifySpec` has no
 `HeaderFields` equivalent. Adding credentials after restore therefore permits
 substitution in any header on the allowed hosts, instead of only configured
 headers. An allowed endpoint could log or reflect a credential placed in an
@@ -36,6 +42,19 @@ Rechecked 2026-10-28 with v0.7.8: reproduced all three selected-header failures.
 Only those assertions are now isolated in explicitly skipped `selected_headers`
 subtests; supported substitution, TLS, and host-scoping assertions still run.
 
+Source rechecked 2026-10-28 at v0.7.11: [PR #1880](https://github.com/superradcompany/microsandbox/pull/1880)
+(released v0.7.10; fixes upstream issue #1835) adds
+[`SecretModifySpec.Substitution`](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/go/modify.go#L99-L136),
+including `SecretSubstitution.HeaderFields`, and rejects unsupported native libraries.
+The tool's `restoredWorktreePatch` still omits this policy; upgrading alone therefore
+does not restore header restrictions. The parent upgrade session temporarily removed
+all three `selected_headers` skips and reran their targeted VM tests with v0.7.11:
+all three failed (`header_fields` nil instead of `[authorization]`, and arbitrary
+`X-Untrusted` headers received fake credentials instead of retaining placeholders).
+Skips were restored with v0.7.11 recheck messages. The integrated limitation is
+behaviorally confirmed, not evidence that the newly available policy API fails.
+The historical acceptance above is not evidence that the new API was evaluated.
+
 - Evidence: [Go secret modification API](https://github.com/superradcompany/microsandbox/blob/v0.7.8/sdk/go/modify.go#L85-L106),
   [restore experiment](../research/repo-snapshot-experiment.md#restore-enrichment-tls-and-credentials).
 - Project references: `internal/sandbox/snapshot.go` (`restoredWorktreePatch`),
@@ -47,6 +66,11 @@ subtests; supported substitution, TLS, and host-scoping assertions still run.
 ## MSB-02 — Restore cannot configure the full destination before boot
 
 **Status:** confirmed Go restore API gap. Last checked: v0.7.8.
+
+Source rechecked 2026-10-28 at v0.7.11:
+[`RestoreConfig`](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/go/restore.go#L15-L57)
+still lacks these destination settings. Live label modification added in v0.7.9
+does not supply restore-time secrets/workdir/TLS or eliminate the enrichment cycle.
 
 `RestoreConfig` accepts resource, mount, port, and host-policy overrides, but not
 create-time secrets, labels, working directory, arbitrary environment, TLS settings,
@@ -66,6 +90,11 @@ Adding the first secret also requires a restart.
 **Status:** confirmed API gap; custom-setting loss observed experimentally.
 Last checked: v0.7.8.
 
+Source rechecked 2026-10-28 at v0.7.11:
+[`RestoreConfig` and its validation](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/go/restore.go#L15-L57)
+still expose no TLS configuration. The temporary-secret adaptation remains necessary
+for the current Go integration; custom TLS ports/trust were not retested.
+
 Restore does not expose TLS interception configuration. Subsequent secret addition
 can enable default interception, but does not reproduce custom interception ports
 or custom upstream trust settings. The launcher currently uses a temporary
@@ -78,9 +107,25 @@ This is an existing adaptation, not a supported direct TLS restore option.
   separately verify custom ports and upstream trust. Proxy migration was only
   source-reviewed in the experiment, not exercised.
 
-## MSB-04 — Restores cannot enable the HTTP denial responder
+## MSB-04 — Restore HTTP overrides unavailable; default responder now enabled
 
 **Status:** confirmed Go restore validation restriction. Last checked: v0.7.8.
+
+Source rechecked 2026-10-28 at v0.7.11: explicit HTTP overrides are
+[still rejected](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/go/restore.go#L156-L163),
+but [PR #1825](https://github.com/superradcompany/microsandbox/pull/1825) changed the
+runtime default in v0.7.9 to
+[`deny_response: true` with JSON](https://github.com/superradcompany/microsandbox/blob/v0.7.11/packages/microsandbox-types/rust/lib/domain.rs#L1961-L1970).
+Thus omission no longer means the responder is disabled: the reset description
+below describes v0.7.8, not a universal v0.7.11 restore limitation.
+The parent upgrade session reproduced the old test's `false`-versus-`true`
+configuration failure twice with v0.7.11, then replaced it with
+`TestSnapshotRestoreBlocksHTTPSWithDenialDiagnostics`: it asserts the enabled
+responder and positive `example.org` hostname observations after blocked
+`curl --resolve example.org:443:1.1.1.1 https://example.org` (bypassing DNS).
+The updated test passed twice targeted and once in the full upgrade suite.
+The original missing-responder behavior is resolved for this tested default path;
+the explicit HTTP override restriction remains. This research session ran no tests.
 
 Restore accepts only network rules and default ingress/egress actions, not the
 `HTTP` configuration used for denial responses. The launcher must omit it on
@@ -97,6 +142,10 @@ diagnostic coverage; this does not itself remove destination enforcement.
 
 **Status:** confirmed Go API gap. Last checked: v0.7.8.
 
+Source rechecked 2026-10-28 at v0.7.11:
+[`ModifyOptions`](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/go/modify.go#L36-L90)
+adds published-port modification, not general network-policy modification.
+
 `ModifyOptions` has no network-policy field. The API used by this project cannot
 switch a running preparation VM from broad access to restricted access. This is
 an SDK-surface finding, not proof that every runtime/backend lacks the capability.
@@ -109,6 +158,13 @@ an SDK-surface finding, not proof that every runtime/backend lacks the capabilit
 ## MSB-06 — Previous interception CA remains in restored system trust
 
 **Status:** observed experimentally. Last checked: v0.7.8.
+
+Source rechecked 2026-10-28 at v0.7.11: v0.7.9's atomic CA-bundle replacement
+([PR #1856](https://github.com/superradcompany/microsandbox/pull/1856)) prevents partial
+writes and duplicate copies of the same CA. It still
+[appends to the existing bundle](https://github.com/superradcompany/microsandbox/blob/v0.7.11/crates/agentd/lib/tls.rs#L181-L213),
+without removing a different captured CA. This is not a revocation fix; no new CA
+transition or nested-container experiment was performed.
 
 The destination runtime installs its CA, but the preparation VM's CA can remain
 in the captured system trust bundle. Installing the new CA is not revocation of
@@ -123,6 +179,13 @@ not validated by that experiment.
 ## MSB-07 — Network denial logs are not a complete audit
 
 **Status:** known runtime observability limitation. Last checked: v0.7.8.
+
+Source rechecked 2026-10-28 at v0.7.11: default JSON denial responses improve supported
+HTTP/HTTPS diagnostics ([PR #1825](https://github.com/superradcompany/microsandbox/pull/1825)),
+including restores that omit HTTP options. This does not establish complete logging:
+[TLS denial handling](https://github.com/superradcompany/microsandbox/blob/v0.7.11/crates/network/lib/engine/tls/proxy.rs#L199-L223)
+still has bypass/response-failure paths, and the tool still parses system debug logs.
+No exhaustive denial matrix was run in this source review.
 
 Not every denial emits a diagnostic or exposes a hostname. Early default-deny TCP
 resets can be silent. Runtime debug logging includes unrelated records, with no
@@ -139,6 +202,14 @@ The saved network overview therefore cannot prove that no denied attempts occurr
 **Status:** documented integration limitation; precise failure modes need rechecking.
 Last recorded: v0.7.8.
 
+Source rechecked 2026-10-28 at v0.7.11: [PR #1825](https://github.com/superradcompany/microsandbox/pull/1825)
+(v0.7.9) explicitly adds no-SNI direct-IP TLS support. The
+[proxy](https://github.com/superradcompany/microsandbox/blob/v0.7.11/crates/network/lib/engine/tls/proxy.rs#L155-L198)
+binds certificate and secret identity to the original destination IP, not a cached
+DNS name. Upstream includes IPv4/IPv6 tests in `sdk/rust/tests/tls_intercept.rs`.
+This is a source-level fix candidate; the controlled valid-IP-SAN upgrade check
+below has not been run by this research session. Do not disable verification.
+
 Allowing public IP destinations does not guarantee direct-IP HTTPS works while
 verified TLS inspection is enabled. Network admission and TLS compatibility are
 separate concerns.
@@ -150,6 +221,12 @@ separate concerns.
 ## MSB-09 — Snapshot publication and removal have group constraints
 
 **Status:** observed native semantics, not necessarily bugs. Last checked: v0.7.8.
+
+Source rechecked 2026-10-28 at v0.7.11:
+[`group.rs`](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/rust/lib/backend/local/snapshot/group.rs)
+is byte-identical to v0.7.8. Explicit HEAD selection, the HEAD deletion guard,
+and retention of empty group metadata remain in source. New snapshot import and
+archive fixes do not replace the tool's publication/deletion ordering.
 
 Capturing a fresh, independent preparation VM does not automatically advance an
 existing group's HEAD. Capture and explicit HEAD selection are separate operations,
@@ -177,6 +254,12 @@ more than 90% of that capacity. The test now measures those instead of requiring
 nonzero size metadata. This is not evidence of lost capacity. Recheck metadata
 and actual capacity on an upgrade.
 
+Source rechecked 2026-10-28 at v0.7.11: the
+[restore builder](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/rust/lib/sandbox/builder.rs#L2315-L2319)
+still maps captured managed root disks to `size_mib: None`. This supports retaining
+the capacity-based assertion, not asserting nonzero metadata. Capacity was not
+measured by this source review.
+
 ### Native image-cache lookup failures in DNS fixtures
 
 Five DNS fixture failures were reported during implementation. Review identified
@@ -188,6 +271,12 @@ corrected; no upstream cache or DNS-enforcement bug is established.
 
 References: `tests/vm/dns_test.go`, `internal/sandbox/image.go`.
 
+Source rechecked 2026-10-28 at v0.7.11: anonymous native registry auth (v0.7.10) and
+[image-cache/pruning changes](https://github.com/superradcompany/microsandbox/pull/1919)
+(v0.7.11) do not establish an upstream DNS defect or justify reverting the fixture's
+identity-addressed image reference. The project still imports Docker archives and
+uses `PullPolicyNever`; this source review did not run DNS fixtures.
+
 ## Upgrade review checklist
 
 - Record the candidate SDK and runtime versions separately.
@@ -195,4 +284,6 @@ References: `tests/vm/dns_test.go`, `internal/sandbox/image.go`.
 - Keep security assertions intact; do not redefine success around missing APIs.
 - Record results per entry, including version and evidence; retain resolved history.
 - Only mark fixed after verifying behavior, not merely finding a new API field.
-- No upstream issue numbers are recorded here yet; add verified issue links when available.
+- MSB-01 maps to upstream [issue #1835](https://github.com/superradcompany/microsandbox/issues/1835)
+  and [PR #1880](https://github.com/superradcompany/microsandbox/pull/1880); add other
+  verified issue links when available.

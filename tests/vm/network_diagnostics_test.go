@@ -26,7 +26,7 @@ func TestNetworkDiagnosticsPreservesWorktreeHistoryAcrossVMRecreation(t *testing
 	require.NoError(t, first.Stop(ctx))
 	_, before := readSavedDiagnostics(t, root, state)
 	require.Equal(t, root, before.Worktree)
-	previous := before.observations("example.org")
+	previous := before.exampleOrgObservations()
 	require.Positive(t, previous)
 	require.NoError(t, first.Remove(ctx))
 
@@ -39,7 +39,7 @@ func TestNetworkDiagnosticsPreservesWorktreeHistoryAcrossVMRecreation(t *testing
 
 	_, after := readSavedDiagnostics(t, root, state)
 	require.Equal(t, root, after.Worktree)
-	require.Greater(t, after.observations("example.org"), previous, "new denials must merge with the previous VM's history")
+	require.Greater(t, after.exampleOrgObservations(), previous, "new denials must merge with the previous VM's history")
 }
 
 func TestNetworkDiagnosticsDoesNotReplayLogsWhenResumingOrDeletingVM(t *testing.T) {
@@ -54,7 +54,7 @@ func TestNetworkDiagnosticsDoesNotReplayLogsWhenResumingOrDeletingVM(t *testing.
 	requireNetworkBlocked(t, original, "https://example.org")
 	require.NoError(t, original.Stop(ctx))
 	before, overview := readSavedDiagnostics(t, root, state)
-	require.Positive(t, overview.observations("example.org"))
+	require.Positive(t, overview.exampleOrgObservations())
 	require.NoError(t, original.Close())
 
 	resumed := prepareSandboxWithSettings(t, root, settings, diagnostics)
@@ -72,10 +72,10 @@ type diagnosticOverview struct {
 	} `json:"denied_targets"`
 }
 
-func (o diagnosticOverview) observations(host string) uint64 {
+func (o diagnosticOverview) exampleOrgObservations() uint64 {
 	var count uint64
 	for _, target := range o.Targets {
-		if target.Hostname == host {
+		if target.Hostname == "example.org" {
 			count += target.Observations
 		}
 	}
@@ -91,7 +91,7 @@ func readSavedDiagnostics(t *testing.T, root, state string) ([]byte, diagnosticO
 	return output.Bytes(), stored
 }
 
-func TestSnapshotRestoreBlocksHTTPSWithoutDenialDiagnostics(t *testing.T) {
+func TestSnapshotRestoreBlocksHTTPSWithDenialDiagnostics(t *testing.T) {
 	t.Parallel()
 	state := t.TempDir()
 	settings := testSettings(t)
@@ -118,25 +118,13 @@ func TestSnapshotRestoreBlocksHTTPSWithoutDenialDiagnostics(t *testing.T) {
 		} `json:"network"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(storedSandboxConfig(t, s)), &restoredConfig))
-	// Microsandbox v0.7.8 restore loses the denial responder, not enforcement.
-	// Keep this expectation aligned with the documented snapshot limitation.
-	require.False(t, restoredConfig.Network.HTTP.DenyResponse)
-	// Bypass DNS so this exercises the missing HTTPS responder rather than
-	// the DNS-name denial, which is still diagnosed after restore.
+	require.True(t, restoredConfig.Network.HTTP.DenyResponse)
+	// Bypass DNS so this exercises the HTTPS responder rather than DNS denial.
 	err = s.Exec(ctx, nil, nil, nil, "curl", "--noproxy", "*", "--fail", "--silent", "--show-error",
 		"--max-time", "5", "--resolve", "example.org:443:1.1.1.1", "https://example.org")
 	require.Error(t, err)
 	require.NoError(t, ctx.Err(), "guest curl must fail, not the SDK deadline")
 	require.NoError(t, s.Stop(ctx), "flush diagnostics before inspecting the report")
-	var output bytes.Buffer
-	require.NoError(t, sandbox.WriteNetworkDiagnostics(ctx, s.Worktree, state, &output))
-	var stored struct {
-		Targets []struct {
-			Hostname string `json:"hostname"`
-		} `json:"denied_targets"`
-	}
-	require.NoError(t, json.Unmarshal(output.Bytes(), &stored))
-	for _, target := range stored.Targets {
-		require.NotEqual(t, "example.org", target.Hostname, "restored VMs cannot diagnose blocked HTTPS without the denial responder")
-	}
+	_, stored := readSavedDiagnostics(t, root, state)
+	require.Positive(t, stored.exampleOrgObservations(), "restored VMs must diagnose blocked HTTPS without a DNS query")
 }

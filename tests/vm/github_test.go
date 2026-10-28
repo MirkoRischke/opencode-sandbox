@@ -55,7 +55,7 @@ func TestGitHubInjectionIsRestrictedToAuthorizationOnExactGitHubHosts(t *testing
 	require.Equal(t, false, substitution["query"])
 	require.Equal(t, false, substitution["body"])
 	t.Run("selected_headers", func(t *testing.T) {
-		t.Skip("MSB-01: Microsandbox v0.7.8 restore loses selected-header restrictions; see docs/microsandbox-limitations.md")
+		t.Skip("MSB-01: rechecked Microsandbox v0.7.11; restore loses selected-header restrictions; see docs/microsandbox-limitations.md")
 		require.Equal(t, []any{"authorization"}, substitution["header_fields"])
 	})
 }
@@ -105,7 +105,7 @@ func TestGitHubCredentialSubstitutionWorksOutsideGuestAndExcludesOtherHeaders(t 
 	require.NoError(t, json.Unmarshal([]byte(response), &echoed))
 	require.Equal(t, []string{"Bearer " + token}, echoed.Headers["Authorization"])
 	t.Run("selected_headers", func(t *testing.T) {
-		t.Skip("MSB-01: Microsandbox v0.7.8 restore loses selected-header restrictions; see docs/microsandbox-limitations.md")
+		t.Skip("MSB-01: rechecked Microsandbox v0.7.11; restore loses selected-header restrictions; see docs/microsandbox-limitations.md")
 		require.Equal(t, []string{"$MSB_GH_TOKEN"}, echoed.Headers["X-Untrusted"])
 	})
 }
