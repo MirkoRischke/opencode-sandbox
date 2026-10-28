@@ -182,6 +182,10 @@ func createPreparationVM(ctx context.Context, w workspace.Workspace, name string
 	// running workspace VM for its host ports. Restore uses current mappings.
 	preparationSettings := settings
 	preparationSettings.Ports = nil
+	// Trusted provisioning needs arbitrary public tool/download hosts. Only this
+	// disposable VM gets broad access; restore applies the workspace policy.
+	// Unrestricted mode still blocks host/private/metadata destinations.
+	preparationSettings.Network.Unrestricted = true
 	opts := sandboxOptions(w, snapshotWorktree, preparationSettings)
 	opts = append(opts, m.WithImage(image))
 	for _, secret := range secrets {

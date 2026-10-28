@@ -54,6 +54,41 @@ func TestRepositorySnapshotWithoutPreparationCommand(t *testing.T) {
 	execInSandbox(t, child, "bash", "-eu", "-c", `if printf changed > /opt/instructions.md; then exit 1; fi; if touch /opt/skills/new; then exit 1; fi`)
 }
 
+func TestSnapshotPreparationHasPublicAccessButRestoredVMIsRestricted(t *testing.T) {
+	t.Parallel()
+	for _, automatic := range []bool{false, true} {
+		name := "manual"
+		if automatic {
+			name = "automatic"
+		}
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
+			defer cancel()
+			worktree := newWorktree(t)
+			settings := config.DefaultSettings()
+			settings.Network.AllowedHosts = []string{}
+			settings.Network.AdditionalAllowedHosts = nil
+			settings.Snapshot.Command = `
+curl --noproxy '*' --fail --silent --show-error --max-time 15 https://example.com > /root/preparation-download
+if curl --noproxy '*' --insecure --silent --max-time 3 https://host.microsandbox.internal; then
+  echo 'preparation unexpectedly reached host' >&2
+  exit 1
+fi
+`
+			if !automatic {
+				_, err := sandbox.CreateSnapshot(ctx, worktree, nil, settings)
+				require.NoError(t, err)
+			}
+			child := prepareSnapshotChild(t, ctx, worktree, settings)
+			require.Contains(t, execInSandbox(t, child, "cat", "/root/preparation-download"), "Example Domain")
+			require.False(t, settings.Network.Unrestricted, "preparation must not mutate caller settings")
+			requireNetworkBlocked(t, child, "https://example.com")
+			requireNetworkBlocked(t, child, "https://host.microsandbox.internal")
+		})
+	}
+}
+
 func TestSnapshotListingIncludesBaselineMetadataAndSeparatesWorkspaces(t *testing.T) {
 	t.Parallel()
 	f := newSnapshotFixture(t, "true")

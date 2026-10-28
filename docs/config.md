@@ -341,8 +341,14 @@ opencode-sandbox snapshot remove
 
 `create` always creates a **fresh** temporary VM from `vm.image`, starts Docker,
 configures GitHub integration, trusts/installs project mise tools, and runs the
-custom command if provided. It uses current approved networking and configured proxy secrets, but
-does not import OpenAI subscription credentials or assume a session AWS role.
+custom command if provided. Both manual and automatic snapshot preparation allow
+public internet access regardless of the workspace hostname allowlist. Host,
+private, link-local, and metadata destinations remain blocked; configured proxy
+secrets retain their destination scope. Preparation does not import OpenAI
+subscription credentials or assume a session AWS role. Mise configuration and
+setup scripts are trusted: they can access mounted workspace files and send data
+to public destinations during preparation. The preparation VM is stopped before
+capture; restored workspace VMs enforce the configured network policy from boot.
 Empty/omitted or whitespace-only `snapshot.command` skips only the custom command;
 normal project initialization is still captured. There is no
 incremental mode or automatic expiry/rebuild when scripts, settings, branches,
