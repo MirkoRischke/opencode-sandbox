@@ -23,7 +23,7 @@ jobs:
           persist-credentials: false
       - uses: jdx/mise-action@v5
         with:
-          cache_key_prefix: mise-v0-${{ env.MISE_ENABLE_TOOLS }}
+          cache_key_prefix: mise-v0-ci
       - name: Prepare test temporary directory
         run: mkdir -p /tmp/opencode
       - name: Lint
