@@ -509,10 +509,11 @@ func restoredWorktreePatch(root string, secrets []Secret) m.ModifyOptions {
 		if placeholder == "" {
 			placeholder = "$MSB_" + entry.EnvVar
 		}
-		// v0.7.8 Modify cannot express HeaderFields. Substitution is therefore
-		// all-header on the same allowed hosts; this accepted limitation is
-		// documented in docs/config.md, not silently treated as equivalent.
-		patch.Secrets[entry.EnvVar] = m.SecretModifySpec{Value: entry.Value, Placeholder: placeholder, AllowedHosts: entry.Allow}
+		patch.Secrets[entry.EnvVar] = m.SecretModifySpec{
+			Value: entry.Value, Placeholder: placeholder, AllowedHosts: entry.Allow,
+			Substitution: &entry.Substitution, AllowPlaceholderFor: entry.Passthrough,
+			ViolationAction: entry.ViolationAction, RequireTLSIdentity: entry.RequireTLSIdentity,
+		}
 	}
 	return patch
 }

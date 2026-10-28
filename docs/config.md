@@ -414,13 +414,10 @@ The existing top-level `remove` remains VM-only and does not delete baselines.
 
 **Microsandbox 0.7.11 restore limitations:** restored VMs require an extra
 stop/configure/start cycle for labels, working directory and credentials, before
-any project initialization. The launcher does not yet forward the configured
-`headers` restriction through the new Go secret-modification API (available since
-v0.7.10): **on snapshot-derived VMs substitution can
-occur in any header, but only on the configured allowed hosts**. Such an endpoint
-could log/reflect the credential. All newly created workspace VMs now restore a
-baseline, so this applies to normal first launches too. Only the preparation VM retains
-selected-header restrictions. Restores without secrets still enable verified TLS
+any project initialization. Restored VMs preserve the configured selected-header
+substitution policy and allowed hosts through the Go secret-modification API
+(available since v0.7.10), just like preparation VMs.
+Restores without secrets still enable verified TLS
 inspection via a temporary non-credential secret, removed before project commands.
 Network diagnostics retain debug logs and cumulative collection. In v0.7.11,
 restored VMs have the HTTP denial responder enabled when diagnostics are configured,

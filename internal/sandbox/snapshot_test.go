@@ -53,8 +53,10 @@ func TestSnapshotDiscoverySeparatesLinkedWorktrees(t *testing.T) {
 
 func TestRestoredSecretsKeepValuesHostSideAndRetainDestinationScope(t *testing.T) {
 	t.Parallel()
+	requireTLS := true
 	secret := Secret{entry: m.Secret.Env("GH_TOKEN", "synthetic-secret", m.SecretEnvOptions{
 		Allow: []string{"github.com"}, Substitution: m.SecretSubstitution{HeaderFields: []string{"authorization"}},
+		AllowPlaceholderFor: []string{"example.org"}, RequireTLSIdentity: &requireTLS,
 	})}
 	patch := restoredWorktreePatch("/worktree", []Secret{secret})
 	require.Equal(t, m.ModificationPolicyNextStart, patch.Policy)
@@ -63,6 +65,10 @@ func TestRestoredSecretsKeepValuesHostSideAndRetainDestinationScope(t *testing.T
 	require.Equal(t, "synthetic-secret", patch.Secrets["GH_TOKEN"].Value)
 	require.Equal(t, "$MSB_GH_TOKEN", patch.Secrets["GH_TOKEN"].Placeholder)
 	require.Equal(t, []string{"github.com"}, patch.Secrets["GH_TOKEN"].AllowedHosts)
+	require.Equal(t, &secret.entry.Substitution, patch.Secrets["GH_TOKEN"].Substitution)
+	require.Equal(t, secret.entry.Passthrough, patch.Secrets["GH_TOKEN"].AllowPlaceholderFor)
+	require.Equal(t, secret.entry.RequireTLSIdentity, patch.Secrets["GH_TOKEN"].RequireTLSIdentity)
+	require.Equal(t, secret.entry.ViolationAction, patch.Secrets["GH_TOKEN"].ViolationAction)
 	require.Contains(t, patch.Labels, "opencode-sandbox")
 }
 

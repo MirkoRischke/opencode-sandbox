@@ -4,6 +4,13 @@ Recorded **2026-10-28**. Candidate: **Go SDK v0.7.11 and runtime v0.7.11**.
 
 ## Outcome
 
+**Implementation follow-up (2026-10-28):** the findings below describe the upgrade
+before adaptation. The tool now forwards secret substitution and related policy
+fields during restore. All three selected-header skips were removed and their
+targeted VM tests passed on SDK/runtime v0.7.11. MSB-01 is resolved for this tool;
+the recommendation to implement policy preservation below is complete. See the
+[updated tracker](../docs/microsandbox-limitations.md#msb-01--go-secret-modification-loses-selected-header-restrictions).
+
 - **Upgrade verified by parent session:** `mise run upgrade-microsandbox 0.7.11`
   passed lint and the full standard suite after correcting one obsolete denial
   responder expectation. Launcher installed; dotfiles version pin updated;

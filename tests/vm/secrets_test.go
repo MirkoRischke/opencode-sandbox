@@ -82,7 +82,6 @@ headers = ['X-Api-Key']
 	require.Equal(t, []string{"FAKE_SECOND_SECRET"}, echoed.Headers["X-Api-Key"])
 	requireNetworkBlocked(t, s, "https://github.com")
 	t.Run("selected_headers", func(t *testing.T) {
-		t.Skip("MSB-01: rechecked Microsandbox v0.7.11; restore loses selected-header restrictions; see docs/microsandbox-limitations.md")
 		require.Equal(t, []string{"$MSB_FIRST_TOKEN"}, echoed.Headers["X-Untrusted"])
 	})
 }

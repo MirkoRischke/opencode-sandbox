@@ -18,8 +18,8 @@ are described only to identify their impact and eventual removal criteria.
 
 ## MSB-01 — Go secret modification loses selected-header restrictions
 
-**Status:** original Go API gap addressed upstream in v0.7.10; tool adaptation and
-behavioral verification outstanding. Security impact remains in the current tool.
+**Status:** resolved for this tool with Go SDK/runtime v0.7.11. Original Go API gap
+addressed upstream in v0.7.10; restore now preserves the substitution policy.
 Last source and reproduced behavior check: v0.7.11 (2026-10-28).
 
 In v0.7.8, creation supports selected-header substitution, but `SecretModifySpec` has no
@@ -32,7 +32,7 @@ Automatic snapshots make this affect ordinary first launches as well as explicit
 snapshot restores. The three selected-header failures reported during implementation
 are behavioral regressions, not assertions to relax merely to make tests pass.
 
-**Project decision (2026-10-28):** explicitly accept this limitation for automatic
+**Historical project decision (2026-10-28; superseded by the fix below):** explicitly accept this limitation for automatic
 and manual snapshot restores pending an upstream Microsandbox fix. Host restrictions
 remain enforced; selected-header restrictions are not preserved after restore.
 Keep the selected-header tests as evidence of the limitation and recheck them on
@@ -54,6 +54,16 @@ all three failed (`header_fields` nil instead of `[authorization]`, and arbitrar
 Skips were restored with v0.7.11 recheck messages. The integrated limitation is
 behaviorally confirmed, not evidence that the newly available policy API fails.
 The historical acceptance above is not evidence that the new API was evaluated.
+
+Follow-up verified 2026-10-28 with Go SDK/runtime v0.7.11: `restoredWorktreePatch`
+now passes the original `Substitution` policy, placeholder passthrough hosts,
+violation action, and TLS-identity requirement to `SecretModifySpec`. All three
+`selected_headers` skips were removed. Targeted VM tests now pass: stored header
+fields remain Authorization-only, authorized substitution works, and unrelated
+`X-Untrusted` headers retain their placeholders. The unit test also checks policy
+preservation. The accepted limitation above no longer applies.
+Full `mise run verify` (lint and standard suite, including all three re-enabled
+assertions) passed; the updated launcher was installed with `mise run install`.
 
 - Evidence: [Go secret modification API](https://github.com/superradcompany/microsandbox/blob/v0.7.8/sdk/go/modify.go#L85-L106),
   [restore experiment](../research/repo-snapshot-experiment.md#restore-enrichment-tls-and-credentials).
