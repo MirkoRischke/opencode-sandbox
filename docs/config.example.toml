@@ -63,7 +63,8 @@ memory_mib = 2048
 root_disk_mib = 4096
 docker_disk_mib = 10240
 
-# Optional: run explicitly with `opencode-sandbox snapshot create`.
+# Optional command: runs during automatic first-launch snapshot preparation.
+# Rebuild explicitly with `opencode-sandbox snapshot create`, then recreate the VM.
 # Usually put this section in each repo's .opencode-sandbox.toml instead.
 # [snapshot]
 # command = "./scripts/sandbox-prepare.sh"

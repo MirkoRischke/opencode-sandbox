@@ -18,7 +18,7 @@ type Settings struct {
 	AWS      AWSSettings               `toml:"aws" description:"Optional AWS role credentials for launches. CLI flags override individual fields; host credentials are never stored here."`
 	VM       VMSettings                `toml:"vm" description:"VM resources. Recreate the VM after changing these settings."`
 	Network  NetworkSettings           `toml:"network" description:"Outbound network access. Recreate the VM after policy changes."`
-	Snapshot SnapshotSettings          `toml:"snapshot" description:"Optional per-directory prepared disk baseline. Created and removed explicitly with the snapshot commands."`
+	Snapshot SnapshotSettings          `toml:"snapshot" description:"Per-directory prepared disk baseline. Created automatically on first launch; rebuild and remove with the snapshot commands. Rebuild the snapshot and recreate the VM after provisioning changes."`
 	Logging  LoggingSettings           `toml:"logging" description:"Host launcher logging. Console output goes to stderr; JSON logfiles retain Info and above."`
 	Secrets  map[string]SecretSettings `toml:"secrets" description:"Optional file- or OS-keyring-backed secrets, substituted by the host proxy. Workspace entries replace same-named global entries completely. Uncomment and adjust the example to enable."`
 }

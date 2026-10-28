@@ -8,8 +8,9 @@ retain installed tools and guest files for the next launch.
 
 - **Network allowlist:** allow common development services over HTTPS by default;
   customize allowed hosts or deny all application internet access.
-- **Custom credentials:** configure file- or OS-keyring-backed secrets, injected into selected
-  HTTPS headers by the host proxy without exposing their values to the guest.
+- **Custom credentials:** configure file- or OS-keyring-backed secrets, injected into
+  HTTPS headers by the host proxy without storing their values in the guest.
+  [Snapshot restore limitations](docs/config.md#workspace-snapshots) apply to header selection.
 - **Workspace configuration:** override global settings with a directory-local
   `.opencode-sandbox.toml`; new or changed configs require approval.
 - **Host file mappings:** explicitly mount selected files or directories read-only,
@@ -40,9 +41,10 @@ On launch, the host launcher:
    Parent repositories/configuration are never discovered. Changes are immediately
    visible on the host—no syncing or copying needed. Drive roots, home directories,
    and common broad/system directories are rejected; use a project subdirectory.
-2. Configures credentials and trusts mise configuration, automatically running
-   `mise install` when the project has mise configuration. Tool downloads require
-   the relevant hosts to be allowed by the network policy.
+2. If neither VM nor baseline exists, prepares a fresh snapshot with `mise install`
+   (when configured) and the optional snapshot command, then restores the VM from it.
+   Existing VMs are reused; otherwise the saved baseline is restored. Tool downloads
+   require the relevant hosts to be allowed by the network policy.
 3. Configures guest OpenCode, prepares authentication (including optional AWS
    role credentials), and attaches your terminal to OpenCode.
 
@@ -112,9 +114,11 @@ Optionally define an additional preparation command in the directory's `.opencod
 command = "./scripts/sandbox-prepare.sh"
 ```
 
-Run `opencode-sandbox snapshot create` to prepare a fresh VM and capture its
-guest disks, including installed mise tools and Docker images. No custom command
-is required.
+The first launch automatically prepares a baseline, including installed mise tools
+and Docker images. No custom command is required. Provisioning never runs on normal
+launches or restores. After provisioning configuration changes, run
+`opencode-sandbox snapshot create` to rebuild, then `opencode-sandbox remove` to
+recreate the workspace VM on the next launch. Baselines are not auto-invalidated.
 
 Each canonical directory has its own VM and baseline, including separate linked
 worktrees and repository subdirectories. Symlink aliases share identity.
@@ -155,8 +159,8 @@ complete -o default -F __start_opencode-sandbox ocs
   HTTPS destinations when requests bypass DNS. Network blocking and DNS-denial
   diagnostics still work, but those HTTPS-only denials are missing from
   `diagnostics network`. Denials collected during snapshot
-  preparation remain in the report. Use a fresh VM without snapshot restore
-  when complete blocked-HTTPS diagnostics are needed.
+   preparation remain in the report. Normal workspace VMs always restore a
+   baseline, so this limitation applies to all newly created workspace VMs.
 - **OpenAI-only automatic authentication:** the launcher imports an active host
   OpenAI subscription OAuth credential. Other providers aren't explicitly
   blocked, but their authentication isn't set up automatically; a fresh VM

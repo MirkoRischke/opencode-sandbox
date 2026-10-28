@@ -171,10 +171,14 @@ func TestRemovingSnapshotLeavesExistingVMDisksIntact(t *testing.T) {
 	require.NotNil(t, listing.Current)
 	require.Empty(t, listing.Current.Snapshots)
 	require.NoError(t, existing.Stop(f.ctx))
+	f.settings.Snapshot.Command = "exit 42"
 	resumed, err := sandbox.Prepare(f.ctx, f.worktree, nil, f.settings)
 	require.NoError(t, err)
 	defer func() { require.NoError(t, resumed.Close()) }()
 	require.Equal(t, "baseline\n", execInSandbox(t, resumed, "cat", "/root/generation"))
+	listing, err = sandbox.ListSnapshots(f.ctx, f.worktree)
+	require.NoError(t, err)
+	require.Empty(t, listing.Current.Snapshots, "an existing VM must not recreate a removed snapshot")
 }
 
 func TestSnapshotsAreIsolatedBetweenLinkedWorktreesAndClones(t *testing.T) {
@@ -183,11 +187,125 @@ func TestSnapshotsAreIsolatedBetweenLinkedWorktreesAndClones(t *testing.T) {
 	second := filepath.Join(filepath.Dir(f.worktree), "second")
 	runGit(t, "-C", filepath.Join(filepath.Dir(f.worktree), "repo"), "worktree", "add", "-b", "second", second)
 
+	f.settings.Snapshot.Command = ""
 	linked := prepareSnapshotChild(t, f.ctx, second, f.settings)
 	clone := prepareSnapshotChild(t, f.ctx, newWorktree(t), f.settings)
 
 	execInSandbox(t, linked, "test", "!", "-e", "/root/baseline-proof")
 	execInSandbox(t, clone, "test", "!", "-e", "/root/baseline-proof")
+}
+
+func TestFirstLaunchPreparesManagedSnapshotOnlyOnce(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
+	defer cancel()
+	worktree := newWorktree(t)
+	settings := testSettings(t)
+	// A deterministic offline mise substitute detects every provisioning call,
+	// including trust/config discovery, without downloading a toolchain.
+	mise := filepath.Join(t.TempDir(), "mise")
+	require.NoError(t, os.WriteFile(mise, []byte(`#!/bin/bash
+set -eu
+echo "$1" >> /root/mise-calls
+case "$1" in
+  trust) ;;
+  config) echo "$PWD/mise.toml" ;;
+  install) touch /root/tools-installed ;;
+  settings) ;;
+  *) exit 99 ;;
+esac
+`), 0700))
+	settings.Files = []config.FileSettings{{Source: mise, Target: "/usr/local/bin/mise", Mode: "copy"}}
+	settings.Snapshot.Command = `test -f /root/tools-installed; echo prepared > /root/baseline; echo prepared >> preparation-count`
+	s := prepareSnapshotChild(t, ctx, worktree, settings)
+	wantCalls := "trust\nconfig\ninstall\nsettings\n"
+	require.Equal(t, wantCalls, execInSandbox(t, s, "cat", "/root/mise-calls"))
+	require.Equal(t, "prepared\n", execInSandbox(t, s, "cat", "/root/baseline"))
+	execInSandbox(t, s, "docker", "info")
+	listing, err := sandbox.ListSnapshots(ctx, worktree)
+	require.NoError(t, err)
+	require.Len(t, listing.Current.Snapshots, 1)
+	require.True(t, listing.Current.Snapshots[0].Baseline)
+	reference := listing.Current.Snapshots[0].Reference
+
+	// Neither config changes nor a restart invalidate the VM or its baseline.
+	settings.Snapshot.Command = "exit 42"
+	settings.VM.Image = "127.0.0.1:1/must-not-resolve:existing-baseline"
+	require.NoError(t, s.Stop(ctx))
+	resumed := prepareSnapshotChild(t, ctx, worktree, settings)
+	require.Equal(t, wantCalls, execInSandbox(t, resumed, "cat", "/root/mise-calls"))
+	require.NoError(t, sandbox.Remove(ctx, worktree))
+	restored := prepareSnapshotChild(t, ctx, worktree, settings)
+	require.Equal(t, wantCalls, execInSandbox(t, restored, "cat", "/root/mise-calls"))
+	require.Equal(t, "prepared\n", execInSandbox(t, restored, "cat", "/root/baseline"))
+	count, err := os.ReadFile(filepath.Join(worktree, "preparation-count"))
+	require.NoError(t, err)
+	require.Equal(t, "prepared\n", string(count))
+	listing, err = sandbox.ListSnapshots(ctx, worktree)
+	require.NoError(t, err)
+	require.Len(t, listing.Current.Snapshots, 1)
+	require.Equal(t, reference, listing.Current.Snapshots[0].Reference)
+	require.NoError(t, sandbox.RemoveSnapshot(ctx, worktree))
+	listing, err = sandbox.ListSnapshots(ctx, worktree)
+	require.NoError(t, err)
+	require.Empty(t, listing.Current.Snapshots)
+}
+
+func TestFailedAutomaticSnapshotPreparationDoesNotCreateWorkspaceVM(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
+	defer cancel()
+	worktree := newWorktree(t)
+	settings := testSettings(t)
+	settings.Snapshot.Command = "exit 23"
+	t.Cleanup(func() {
+		require.NoError(t, sandbox.Remove(context.Background(), worktree))
+		require.NoError(t, sandbox.RemoveSnapshot(context.Background(), worktree))
+	})
+	s, err := sandbox.Prepare(ctx, worktree, nil, settings)
+	require.Nil(t, s)
+	require.ErrorContains(t, err, "snapshot preparation")
+	listing, err := sandbox.ListSnapshots(ctx, worktree)
+	require.NoError(t, err)
+	require.Empty(t, listing.Current.Snapshots)
+	removed := false
+	require.NoError(t, sandbox.Remove(ctx, worktree, func(string, *uint64) { removed = true }))
+	require.False(t, removed, "failed preparation must not leave a reusable workspace VM")
+	settings.Snapshot.Command = "echo recovered > /root/baseline"
+	recovered := prepareSnapshotChild(t, ctx, worktree, settings)
+	require.Equal(t, "recovered\n", execInSandbox(t, recovered, "cat", "/root/baseline"))
+}
+
+func TestAutomaticSnapshotStopsOnMiseInstallationFailure(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	worktree := newWorktree(t)
+	settings := testSettings(t)
+	mise := filepath.Join(t.TempDir(), "mise")
+	require.NoError(t, os.WriteFile(mise, []byte(`#!/bin/bash
+case "$1" in
+  trust) ;;
+  config) echo "$PWD/mise.toml" ;;
+  install) exit 24 ;;
+esac
+`), 0700))
+	settings.Files = []config.FileSettings{{Source: mise, Target: "/usr/local/bin/mise", Mode: "copy"}}
+	settings.Snapshot.Command = "touch custom-command-ran"
+	t.Cleanup(func() {
+		require.NoError(t, sandbox.Remove(context.Background(), worktree))
+		require.NoError(t, sandbox.RemoveSnapshot(context.Background(), worktree))
+	})
+	s, err := sandbox.Prepare(ctx, worktree, nil, settings)
+	require.Nil(t, s)
+	require.ErrorContains(t, err, "initialize project tools")
+	require.NoFileExists(t, filepath.Join(worktree, "custom-command-ran"))
+	listing, err := sandbox.ListSnapshots(ctx, worktree)
+	require.NoError(t, err)
+	require.Empty(t, listing.Current.Snapshots)
+	removed := false
+	require.NoError(t, sandbox.Remove(ctx, worktree, func(string, *uint64) { removed = true }))
+	require.False(t, removed)
 }
 
 type snapshotFixture struct {

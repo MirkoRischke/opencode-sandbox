@@ -26,6 +26,16 @@ Automatic snapshots make this affect ordinary first launches as well as explicit
 snapshot restores. The three selected-header failures reported during implementation
 are behavioral regressions, not assertions to relax merely to make tests pass.
 
+**Project decision (2026-10-28):** explicitly accept this limitation for automatic
+and manual snapshot restores pending an upstream Microsandbox fix. Host restrictions
+remain enforced; selected-header restrictions are not preserved after restore.
+Keep the selected-header tests as evidence of the limitation and recheck them on
+SDK/runtime upgrades; no local workaround is planned.
+
+Rechecked 2026-10-28 with v0.7.8: reproduced all three selected-header failures.
+Only those assertions are now isolated in explicitly skipped `selected_headers`
+subtests; supported substitution, TLS, and host-scoping assertions still run.
+
 - Evidence: [Go secret modification API](https://github.com/superradcompany/microsandbox/blob/v0.7.8/sdk/go/modify.go#L85-L106),
   [restore experiment](../research/repo-snapshot-experiment.md#restore-enrichment-tls-and-credentials).
 - Project references: `internal/sandbox/snapshot.go` (`restoredWorktreePatch`),
@@ -161,16 +171,20 @@ The automatic-snapshot implementation reported a failing metadata assertion in
 `tests/vm/vm_settings_test.go`. Source review indicates restored managed disks
 deliberately use unspecified size while retaining captured virtual capacity
 ([restore builder](https://github.com/superradcompany/microsandbox/blob/v0.7.8/sdk/rust/lib/sandbox/builder.rs#L2178-L2179)).
-Do not interpret zero as lost capacity without measuring the restored block device
-and filesystem. Recheck metadata and actual capacity on an upgrade.
+Rechecked 2026-10-28 with v0.7.8: the configured 5120 MiB writable root device
+retains its capacity after restore and stop/resume; the root filesystem spans
+more than 90% of that capacity. The test now measures those instead of requiring
+nonzero size metadata. This is not evidence of lost capacity. Recheck metadata
+and actual capacity on an upgrade.
 
 ### Native image-cache lookup failures in DNS fixtures
 
 Five DNS fixture failures were reported during implementation. Review identified
 fixtures passing an original Docker tag directly to native creation with
-`PullPolicyNever`, bypassing this project's identity-addressed import. This is
-not yet evidence of an upstream cache or DNS-enforcement bug. Reproduce using a
-properly imported native reference before classifying it as one.
+`PullPolicyNever`, bypassing this project's identity-addressed import. Rechecked
+2026-10-28 with v0.7.8: all five tests pass using the source VM's already imported
+image reference, with DNS-policy assertions unchanged. The fixture has been
+corrected; no upstream cache or DNS-enforcement bug is established.
 
 References: `tests/vm/dns_test.go`, `internal/sandbox/image.go`.
 

@@ -94,7 +94,6 @@ func CreateSnapshot(ctx context.Context, directory string, secrets []Secret, set
 
 // CreateWorkspaceSnapshot captures a baseline for an already resolved workspace.
 func CreateWorkspaceSnapshot(ctx context.Context, w workspace.Workspace, secrets []Secret, settings config.Settings, diagnostics ...DiagnosticsOptions) (reference string, err error) {
-	logging.FromContext(ctx).Info("Preparing workspace snapshot")
 	diagnosticOptions, err := validatePreparation(w, settings, diagnostics)
 	if err != nil {
 		return "", err
@@ -108,6 +107,13 @@ func CreateWorkspaceSnapshot(ctx context.Context, w workspace.Workspace, secrets
 	if err := configureRuntime(); err != nil {
 		return "", err
 	}
+	return repo.prepare(ctx, w, secrets, settings, diagnosticOptions)
+}
+
+// prepare shares publication and cleanup between explicit rebuilds and first
+// launches. The caller holds the workspace lock and has validated host inputs.
+func (repo workspaceSnapshot) prepare(ctx context.Context, w workspace.Workspace, secrets []Secret, settings config.Settings, diagnostics DiagnosticsOptions) (reference string, err error) {
+	logging.FromContext(ctx).Info("Preparing workspace snapshot")
 	// Refuse to overwrite unrelated artifacts, even at our deterministic name.
 	if _, err := repo.head(ctx); err != nil {
 		return "", err
@@ -117,7 +123,7 @@ func CreateWorkspaceSnapshot(ctx context.Context, w workspace.Workspace, secrets
 		return "", err
 	}
 	generation := fmt.Sprintf("prepared-%x", nonce)
-	prep, err := createPreparationVM(ctx, w, "oc-prepare-"+generation, secrets, settings, diagnosticOptions)
+	prep, err := createPreparationVM(ctx, w, "oc-prepare-"+generation, secrets, settings, diagnostics)
 	if err != nil {
 		return "", err
 	}
@@ -196,7 +202,12 @@ func createPreparationVM(ctx context.Context, w workspace.Workspace, name string
 		defer cancel()
 		return nil, errors.Join(err, prep.Remove(cleanup))
 	}
-	if err := prep.initializeProject(ctx, secrets); err != nil {
+	if err := prep.initializeRuntime(ctx, secrets); err != nil {
+		cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return nil, errors.Join(err, prep.Remove(cleanup))
+	}
+	if err := prep.initializeProject(ctx, w.Root()); err != nil {
 		cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		return nil, errors.Join(err, prep.Remove(cleanup))
@@ -360,7 +371,7 @@ func (r workspaceSnapshot) removeMembers(ctx context.Context, keepID string, obs
 	return nil
 }
 
-func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, secrets []Secret, settings config.Settings, opts []m.SandboxOption) (*m.Sandbox, bool, error) {
+func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, secrets []Secret, settings config.Settings, opts []m.SandboxOption, diagnostics DiagnosticsOptions) (*m.Sandbox, bool, error) {
 	logger := logging.FromContext(ctx).With("vm", name)
 	_, err := m.GetSandbox(ctx, name)
 	if err == nil {
@@ -392,20 +403,16 @@ func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, s
 		return nil, false, err
 	}
 	if head == nil {
-		logger.Info("Creating workspace VM")
-		image, err := resolveImage(ctx, settings.VM.Image)
+		if _, err := repo.prepare(ctx, w, secrets, settings, diagnostics); err != nil {
+			return nil, false, err
+		}
+		head, err = repo.head(ctx)
 		if err != nil {
 			return nil, false, err
 		}
-		opts = append(opts, m.WithImage(image))
-		for _, secret := range secrets {
-			opts = append(opts, m.WithSecrets(secret.entry))
+		if head == nil {
+			return nil, false, fmt.Errorf("prepared workspace snapshot has no baseline")
 		}
-		vm, err := m.CreateSandbox(ctx, name, opts...)
-		if err != nil {
-			return nil, false, fmt.Errorf("create worktree VM: %w", err)
-		}
-		return vm, true, nil
 	}
 	logger.Info("Restoring workspace VM", "snapshot", head.Reference())
 	vm, err := restoreWorktree(ctx, head, name, w, secrets, settings)

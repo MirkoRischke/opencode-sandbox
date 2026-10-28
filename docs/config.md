@@ -315,7 +315,7 @@ the AWS CLI. Docker is optional: images without `dockerd` skip daemon startup.
 
 ### Workspace snapshots
 
-Snapshots are optional, explicitly prepared disk baselines for a canonical
+Snapshots are prepared disk baselines, automatically created on first launch for a canonical
 directory, including non-Git directories. Linked worktrees have separate baselines.
 Optionally configure an additional shell command globally or in the approved
 directory-local `.opencode-sandbox.toml`:
@@ -357,7 +357,12 @@ a temporary VM or an unpublished generation; snapshot removal also cleans up
 managed leftover generations in that workspace's group.
 
 Normal launch first resumes an existing workspace VM. Otherwise it restores the
-directory's baseline if present, or creates a normal VM if none exists. A broken baseline
+directory's baseline if present, or uses the same fresh preparation/publication flow
+as `snapshot create` before restoring when none exists. Mise initialization and the
+custom command run only during snapshot preparation, never on normal launches,
+restores, or restarts; Docker startup and GitHub configuration still run each launch.
+Provisioning changes require an explicit `snapshot create` and workspace VM removal.
+A broken baseline
 is reported, not silently ignored. Workspace mounts, network policy, CPU/memory,
 and current host secrets are configured for the restored VM. Root/Docker capacity,
 base image and warmed disk contents come from the snapshot: recreate the baseline
@@ -403,7 +408,8 @@ stop/configure/start cycle for labels, working directory and credentials, before
 any project initialization. The Go secret-modification interface cannot express
 the configured `headers` restriction: **on snapshot-derived VMs substitution can
 occur in any header, but only on the configured allowed hosts**. Such an endpoint
-could log/reflect the credential. Freshly created VMs and the preparation VM retain
+could log/reflect the credential. All newly created workspace VMs now restore a
+baseline, so this applies to normal first launches too. Only the preparation VM retains
 selected-header restrictions. Restores without secrets still enable verified TLS
 inspection via a temporary non-credential secret, removed before project commands.
 Network diagnostics retain debug logs and cumulative collection, but restored

@@ -32,6 +32,13 @@ func newNamedWorktree(t *testing.T, repoName, worktreeName string) string {
 	runGit(t, "-C", repo, "-c", "user.name=Sandbox Test", "-c", "user.email=sandbox@example.invalid",
 		"-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "-m", "Initial commit")
 	runGit(t, "-C", repo, "worktree", "add", "-b", "sandbox", worktree)
+	// Some tests manage VM handles directly instead of using the shared cleanup.
+	// First launches now also leave a managed snapshot that outlives those VMs.
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		assert.NoError(t, sandbox.RemoveSnapshot(ctx, worktree))
+	})
 	return worktree
 }
 
@@ -63,6 +70,7 @@ func registerSandboxCleanup(t *testing.T, s *sandbox.Sandbox) {
 		if err := s.Close(); !m.IsKind(err, m.ErrInvalidHandle) {
 			assert.NoError(t, err)
 		}
+		assert.NoError(t, sandbox.RemoveSnapshot(ctx, s.Worktree))
 	})
 }
 

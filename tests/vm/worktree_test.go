@@ -116,7 +116,7 @@ func TestShutdownStopsSandboxAndPreservesGuestState(t *testing.T) {
 	execInSandbox(t, resumed, "test", "-f", "/root/persistent-state")
 }
 
-func TestPreparingAgainInstallsNewProjectTools(t *testing.T) {
+func TestNewProjectToolsRequireSnapshotRebuildAndVMRecreation(t *testing.T) {
 	t.Parallel()
 	s := startSandbox(t)
 	require.NoError(t, os.WriteFile(filepath.Join(s.Worktree, ".mise.toml"), []byte("[tools]\nbun = \"1.3.14\"\n"), 0644))
@@ -127,7 +127,12 @@ func TestPreparingAgainInstallsNewProjectTools(t *testing.T) {
 
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, resumed.Close()) })
-	execInSandbox(t, resumed, "bun", "--version")
+	require.Error(t, resumed.Exec(ctx, nil, nil, nil, "bun", "--version"))
+	_, err = sandbox.CreateSnapshot(ctx, s.Worktree, nil, testSettings(t))
+	require.NoError(t, err)
+	require.NoError(t, sandbox.Remove(ctx, s.Worktree))
+	recreated := prepareSandbox(t, s.Worktree)
+	require.Equal(t, "1.3.14\n", execInSandbox(t, recreated, "bun", "--version"))
 }
 
 func TestPreparingInstallsProjectTools(t *testing.T) {

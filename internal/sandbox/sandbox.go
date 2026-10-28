@@ -56,7 +56,7 @@ func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secr
 	s.log().Info("Preparing VM")
 	started := time.Now().UTC()
 	var created bool
-	s.vm, created, err = connectOrRestore(ctx, s.Name, w, secrets, settings, sandboxOptions(w, w.Root(), settings))
+	s.vm, created, err = connectOrRestore(ctx, s.Name, w, secrets, settings, sandboxOptions(w, w.Root(), settings), diagnosticOptions)
 	if err != nil {
 		return nil, fmt.Errorf("prepare sandbox: %w", err)
 	}
@@ -71,7 +71,7 @@ func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secr
 			return nil, errors.Join(err, s.Remove(cleanup))
 		}
 	}
-	if err := s.initializeProject(ctx, secrets); err != nil {
+	if err := s.initializeRuntime(ctx, secrets); err != nil {
 		return nil, errors.Join(err, s.Shutdown())
 	}
 	s.log().Info("VM ready", "duration_ms", time.Since(started).Milliseconds())
@@ -124,9 +124,8 @@ func sandboxOptions(w workspace.Workspace, guestRoot string, settings launcherco
 	return opts
 }
 
-// initializeProject is shared by worktree launches and fresh preparation VMs.
-// Session-specific OpenCode configuration/authentication happens only on launch.
-func (s *Sandbox) initializeProject(ctx context.Context, secrets []Secret) error {
+// initializeRuntime runs on every launch, including restored and resumed VMs.
+func (s *Sandbox) initializeRuntime(ctx context.Context, secrets []Secret) error {
 	if err := s.EnsureDocker(ctx); err != nil {
 		return err
 	}
@@ -134,9 +133,11 @@ func (s *Sandbox) initializeProject(ctx context.Context, secrets []Secret) error
 	for _, secret := range secrets {
 		githubEnabled = githubEnabled || secret.entry.EnvVar == "GH_TOKEN"
 	}
-	if err := s.configureGitHub(ctx, githubEnabled); err != nil {
-		return err
-	}
+	return s.configureGitHub(ctx, githubEnabled)
+}
+
+// initializeProject provisions tools only in disposable snapshot preparation VMs.
+func (s *Sandbox) initializeProject(ctx context.Context, workspaceRoot string) error {
 	// mise discovers supported filenames (including .mise.toml and mise/config.toml).
 	// Ignore the image's global config when deciding whether this project uses mise.
 	// Trust first: even config discovery parses trust-sensitive environment settings.
@@ -145,7 +146,11 @@ mise trust --all
 configs=$(mise config ls --no-header --no-truncate)
 if printf '%s\n' "$configs" | grep -F -- "$PWD/" >/dev/null; then
   mise install
-fi`)
+fi
+# Restore rebinds /workspace at the canonical directory path. Persist trust for
+# that path now, rather than running project setup again after every restore.
+mise settings add trusted_config_paths "$1"
+`, "initialize-project", workspaceRoot)
 	if err != nil {
 		return fmt.Errorf("initialize project tools: %w", err)
 	}

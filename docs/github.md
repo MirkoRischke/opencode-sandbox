@@ -37,8 +37,11 @@ not verify or reduce the token's authority. Organization approval may be needed.
 ## Guest behavior
 
 - `gh` uses a placeholder in `GH_TOKEN`, not the real token.
-- With the configuration above, Microsandbox replaces it only in Authorization headers sent to
-  exactly `api.github.com` or `github.com`, over verified intercepted TLS.
+- With the configuration above, preparation restricts replacement to Authorization
+  headers sent to exactly `api.github.com` or `github.com`, over verified intercepted TLS.
+  Workspace VMs restore a snapshot; Microsandbox 0.7.8 cannot retain selected-header
+  restrictions on restore, so replacement can occur in any header on those same hosts.
+  See [snapshot limitations](config.md#workspace-snapshots).
 - The guest GitHub CLI credential helper authenticates **HTTPS** clone/fetch.
   SSH remotes are not converted or supported by this token mechanism.
 - No host credential directory, keychain, or SSH agent is mounted.

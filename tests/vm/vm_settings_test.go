@@ -71,7 +71,7 @@ func TestVMResourcesFollowConfigAndPersistAcrossResume(t *testing.T) {
 	require.EqualValues(t, 1, config.CPUs)
 	require.EqualValues(t, 1024, config.MemoryMiB)
 	require.NotNil(t, config.RootDisk)
-	require.EqualValues(t, 5120, config.RootDisk.SizeMiB)
+	requireRootDiskCapacity(t, s, settings.VM.RootDiskMiB)
 	require.Equal(t, "2147483648\n", execInSandbox(t, s, "sh", "-ec", `blockdev --getsize64 "$(findmnt -n -o SOURCE /var/lib/docker)"`))
 	require.Equal(t, "1\n", execInSandbox(t, s, "nproc"))
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -86,6 +86,26 @@ func TestVMResourcesFollowConfigAndPersistAcrossResume(t *testing.T) {
 	require.EqualValues(t, 1, config.CPUs)
 	require.EqualValues(t, 1024, config.MemoryMiB)
 	require.NotNil(t, config.RootDisk)
-	require.EqualValues(t, 5120, config.RootDisk.SizeMiB)
+	requireRootDiskCapacity(t, resumed, settings.VM.RootDiskMiB)
 	require.Equal(t, "2147483648\n", execInSandbox(t, resumed, "sh", "-ec", `blockdev --getsize64 "$(findmnt -n -o SOURCE /var/lib/docker)"`))
+}
+
+func requireRootDiskCapacity(t *testing.T, s *sandbox.Sandbox, sizeMiB uint32) {
+	t.Helper()
+	// Restored root-disk metadata can leave SizeMiB unspecified (MSB tracker).
+	// Check both the actual device and the filesystem mounted on it instead.
+	require.Equal(t, fmt.Sprintf("%d\n", uint64(sizeMiB)*1024*1024),
+		execInSandbox(t, s, "sh", "-ec", `
+# The root is overlayfs; its backing mount is hidden after pivoting root.
+# This fixture has two writable disks: the root upper and the Docker disk.
+docker=$(findmnt -n -o SOURCE /var/lib/docker)
+root=$(lsblk -dnpo NAME,RO | awk -v docker="$docker" '$2 == 0 && $1 != docker {print $1}')
+blockdev --getsize64 "$root"`))
+	filesystem := execInSandbox(t, s, "sh", "-ec", `df -B1 --output=size / | tail -n 1`)
+	var filesystemBytes uint64
+	_, err := fmt.Sscan(filesystem, &filesystemBytes)
+	require.NoError(t, err)
+	// Filesystem metadata consumes some capacity; it must still span the disk.
+	require.Greater(t, filesystemBytes, uint64(sizeMiB)*1024*1024*9/10)
+	require.LessOrEqual(t, filesystemBytes, uint64(sizeMiB)*1024*1024)
 }

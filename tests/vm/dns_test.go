@@ -101,7 +101,7 @@ func startFilteringDNSProbe(t *testing.T, network launcherconfig.NetworkSettings
 	settings.Network = network
 	source := startSandboxWithSettings(t, settings)
 	upstream, queries := startDNSUpstream(t)
-	return startDNSProbe(t, source, settings.VM.Image, upstream), queries
+	return startDNSProbe(t, source, upstream), queries
 }
 
 func queryDNS(t *testing.T, probe *m.Sandbox, transport, name string) string {
@@ -116,7 +116,7 @@ func queryDNS(t *testing.T, probe *m.Sandbox, transport, name string) string {
 
 // Clone the launcher's actual serialized network policy, changing only the
 // trusted upstream. This avoids a production-only hook for DNS test fixtures.
-func startDNSProbe(t *testing.T, source *sandbox.Sandbox, image, upstream string) *m.Sandbox {
+func startDNSProbe(t *testing.T, source *sandbox.Sandbox, upstream string) *m.Sandbox {
 	t.Helper()
 	var config struct {
 		Network struct {
@@ -134,6 +134,8 @@ func startDNSProbe(t *testing.T, source *sandbox.Sandbox, image, upstream string
 		} `json:"network"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(storedSandboxConfig(t, source)), &config))
+	var sourceConfig m.SandboxConfig
+	require.NoError(t, json.Unmarshal([]byte(storedSandboxConfig(t, source)), &sourceConfig))
 	network := &m.NetworkConfig{
 		DefaultEgress:  config.Network.Policy.DefaultEgress,
 		DefaultIngress: config.Network.Policy.DefaultIngress,
@@ -165,7 +167,10 @@ func startDNSProbe(t *testing.T, source *sandbox.Sandbox, image, upstream string
 	name := source.Name + "-dns"
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	probe, err := m.CreateSandbox(ctx, name, m.WithImage(image), m.WithPullPolicy(m.PullPolicyNever),
+	// Preparation already imported this identity-addressed image. Reuse that
+	// reference rather than assuming the original Docker tag is in the native cache.
+	require.NotEmpty(t, sourceConfig.Image)
+	probe, err := m.CreateSandbox(ctx, name, m.WithImage(sourceConfig.Image), m.WithPullPolicy(m.PullPolicyNever),
 		m.WithMemory(512), m.WithRootDisk(m.RootDisk.Managed(1024)), m.WithDetached(),
 		m.WithNetwork(network), m.WithInterceptTLS())
 	require.NoError(t, err)
