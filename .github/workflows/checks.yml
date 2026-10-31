@@ -12,7 +12,7 @@ permissions:
 jobs:
   checks:
     name: PR checks
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     env:
       # Use the local toolchain versions; never install the VM runtime in CI.
