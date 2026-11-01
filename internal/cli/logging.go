@@ -14,7 +14,7 @@ import (
 
 // startLogging is best-effort: logging errors must not block workspace operations.
 func startLogging(ctx context.Context, stateDir, root, command string, warnings io.Writer) (context.Context, func(error)) {
-	var level slog.Leveler = slog.LevelWarn
+	var level slog.Leveler = slog.LevelInfo
 	e, ok := ctx.Value(executionKey{}).(*execution)
 	if ok {
 		level = &e.level
@@ -39,12 +39,12 @@ func startLogging(ctx context.Context, stateDir, root, command string, warnings 
 		}
 	}
 	started := time.Now()
-	logger.Info("Invocation started", "version", version, "revision", revision)
+	logger.Debug("Invocation started", "version", version, "revision", revision)
 	return ctx, func(err error) {
 		if err != nil {
-			logger.Info("Invocation finished", "success", false, "duration_ms", time.Since(started).Milliseconds())
+			logger.Debug("Invocation finished", "success", false, "duration_ms", time.Since(started).Milliseconds())
 		} else {
-			logger.Info("Invocation finished", "duration_ms", time.Since(started).Milliseconds())
+			logger.Debug("Invocation finished", "duration_ms", time.Since(started).Milliseconds())
 		}
 		if e == nil || !e.managed {
 			_ = closer.Close() //nolint:errcheck // The log writer reports close failures itself.

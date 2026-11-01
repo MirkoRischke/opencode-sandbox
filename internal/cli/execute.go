@@ -25,7 +25,7 @@ type execution struct {
 
 func newExecution(output io.Writer) *execution {
 	e := &execution{}
-	e.level.Set(slog.LevelWarn)
+	e.level.Set(slog.LevelInfo)
 	e.logger = logging.Console(output, &e.level)
 	return e
 }

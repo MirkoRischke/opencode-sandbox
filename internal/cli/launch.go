@@ -40,7 +40,7 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 	defer func() { finish(err) }()
 	logger := logging.FromContext(ctx)
 	paths.Logger = logger
-	logger.Info("CLI configuration overrides", "aws_role", awsRole, "aws_profile", awsProfile)
+	logger.Debug("CLI configuration overrides", "aws_role", awsRole, "aws_profile", awsProfile)
 	settings, err := paths.LoadWorkspaceSettings(w.Root(), approveWorkspaceConfig)
 	if err != nil {
 		return err
@@ -53,7 +53,7 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 		return err
 	}
 	settings.AWS = awsSettings
-	logger.Info("Effective configuration", "settings", settings)
+	logger.Debug("Effective configuration", "settings", settings)
 	secrets, err := sandbox.LoadSecrets(settings)
 	if err != nil {
 		return err

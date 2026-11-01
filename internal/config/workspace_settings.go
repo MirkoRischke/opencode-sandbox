@@ -22,7 +22,7 @@ type Paths struct {
 
 func (p Paths) log(message string, args ...any) {
 	if p.Logger != nil {
-		p.Logger.Info(message, args...)
+		p.Logger.Debug(message, args...)
 	}
 }
 

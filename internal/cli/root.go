@@ -34,7 +34,7 @@ func NewCommand() *cobra.Command {
 			return launch(cmd.Context(), role, profile)
 		},
 	}
-	root.PersistentFlags().String("console-log-level", "", "Minimum stderr log level: debug, info, warn, or error (default warn; overrides config)")
+	root.PersistentFlags().String("console-log-level", "", "Minimum stderr log level: debug, info, warn, or error (default info; overrides config)")
 	root.Flags().StringVar(&awsRole, "aws-role", "", "IAM role ARN to assume for this session (optional)")
 	root.Flags().StringVar(&awsProfile, "aws-profile", "", "Optional host AWS source profile (requires a role via config or --aws-role)")
 	root.AddCommand(newListCommand(), newRemoveCommand(), newConfigCommand(), newDiagnosticsCommand(), newSnapshotCommand(), newSecretCommand())

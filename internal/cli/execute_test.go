@@ -93,6 +93,15 @@ func TestInvalidConsoleFlag(t *testing.T) {
 	require.Contains(t, stderr.String(), "--console-log-level must be")
 }
 
+func TestConsoleDefaultsToInfo(t *testing.T) {
+	t.Parallel()
+	var stderr bytes.Buffer
+	e := newExecution(&stderr)
+	e.logger.Debug("hidden details")
+	e.logger.Info("Preparing VM")
+	require.Equal(t, "INFO Preparing VM\n", stderr.String())
+}
+
 func TestConfiguredConsoleLevelAppliesWithoutFlag(t *testing.T) {
 	t.Parallel()
 	var stderr bytes.Buffer
@@ -117,7 +126,7 @@ func TestInvalidConfiguredConsoleLevelRetainsCause(t *testing.T) {
 	require.ErrorContains(t, err, `parse console log level "not-a-level"`)
 	require.ErrorContains(t, err, "slog:")
 	require.Error(t, errors.Unwrap(err))
-	require.Equal(t, slog.LevelWarn, e.level.Level())
+	require.Equal(t, slog.LevelInfo, e.level.Level())
 	require.Empty(t, stderr.String(), "caller handles the returned error")
 	e.override = true
 	require.NoError(t, applyConsoleLevel(ctx, "not-a-level"), "explicit flag overrides config")

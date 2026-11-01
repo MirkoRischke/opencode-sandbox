@@ -705,15 +705,28 @@ credentials in existing VMs. Revoke credentials upstream for immediate revocatio
 
 ## Launcher logging
 
-Host launcher logs are written as JSON at Info and above to rotating private
-logfiles. Console logs are human-readable and go to stderr, never stdout.
+Host launcher logs are written as JSON at Debug and above to rotating private
+logfiles. Console logs go to stderr, never stdout, and default to Info and above.
+They show compact progress lines, omit repeated workspace/PID/command/VM context,
+and render durations in human-readable units. Useful attributes and error causes
+remain visible; JSON files retain all context and original attribute values.
+Configuration dumps and invocation/build metadata are Debug records, normally
+visible only in files.
+
+```text
+INFO Preparing VM
+INFO Reusing workspace VM
+INFO VM connected created=false (2s)
+INFO VM ready (3.2s)
+```
 
 ```toml
 [logging]
-console_level = "warn" # debug, info, warn, or error
+console_level = "info" # debug, info, warn, or error
 ```
 
-`console_level` is a minimum severity and defaults to `warn`. Override it for one
+`console_level` is a minimum severity and defaults to `info`. Use `warn` for quieter
+output. Override it for one
 invocation with `opencode-sandbox --console-log-level debug`; this shared flag
 also works with subcommands. Precedence: CLI flag, approved workspace config,
 global config, built-in default. Unapproved workspace settings do not affect

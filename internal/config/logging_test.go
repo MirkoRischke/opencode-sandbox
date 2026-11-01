@@ -14,7 +14,7 @@ func TestLoggingSettingsLayers(t *testing.T) {
 	root := t.TempDir()
 	settings, err := p.LoadLoggingSettings(root)
 	require.NoError(t, err)
-	require.Equal(t, "warn", settings.ConsoleLevel)
+	require.Equal(t, "info", settings.ConsoleLevel)
 	global := filepath.Join(p.ConfigDir, "opencode-sandbox", "config.toml")
 	require.NoError(t, os.MkdirAll(filepath.Dir(global), 0700))
 	require.NoError(t, os.WriteFile(global, []byte("[logging]\nconsole_level = 'error'\n"), 0600))

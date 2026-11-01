@@ -63,7 +63,7 @@ type NetworkSettings struct {
 // DefaultSettings allows common development services over HTTPS.
 func DefaultSettings() Settings {
 	return Settings{
-		Logging: LoggingSettings{ConsoleLevel: "warn"},
+		Logging: LoggingSettings{ConsoleLevel: "info"},
 		Files:   []FileSettings{},
 		Ports:   []PortSettings{},
 		VM:      VMSettings{Image: "opencode-sandbox:poc", CPUs: 2, MemoryMiB: 2048, RootDiskMiB: 4096, DockerDiskMiB: 10240},

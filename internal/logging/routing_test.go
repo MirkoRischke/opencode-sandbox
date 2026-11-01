@@ -37,8 +37,7 @@ func TestDestinationLevelsAndFormats(t *testing.T) {
 			require.Len(t, files, 1)
 			data, err := os.ReadFile(files[0])
 			require.NoError(t, err)
-			require.NotContains(t, string(data), "DEBUG record")
-			for _, severity := range []string{"INFO", "WARN", "ERROR"} {
+			for _, severity := range []string{"DEBUG", "INFO", "WARN", "ERROR"} {
 				require.Contains(t, string(data), `"level":"`+severity+`"`)
 			}
 			console.Reset()

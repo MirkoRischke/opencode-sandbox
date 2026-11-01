@@ -54,7 +54,7 @@ func Directory(stateDir, workspaceRoot string) string {
 // Open starts a locked segment and prunes inactive logs across workspaces.
 // Each JSON record is written immediately; there is no userspace buffer.
 func Open(stateDir, workspaceRoot string, warnings io.Writer) (*slog.Logger, io.Closer, error) {
-	return OpenWithLevel(stateDir, workspaceRoot, warnings, slog.LevelWarn)
+	return OpenWithLevel(stateDir, workspaceRoot, warnings, slog.LevelInfo)
 }
 
 // Console constructs a human-readable logger independent of logfile availability.
@@ -62,7 +62,10 @@ func Console(output io.Writer, level slog.Leveler) *slog.Logger {
 	if output == nil {
 		output = io.Discard
 	}
-	return slog.New(slog.NewTextHandler(output, &slog.HandlerOptions{Level: level}))
+	if level == nil {
+		level = slog.LevelInfo
+	}
+	return slog.New(&consoleHandler{output: output, level: level, mu: &sync.Mutex{}})
 }
 
 // OpenWithLevel routes each record independently to the file and console handlers.
@@ -79,7 +82,7 @@ func OpenWithLevel(stateDir, workspaceRoot string, warnings io.Writer, level slo
 	if err := w.rotate(w.now()); err != nil {
 		return console, noopCloser{}, err
 	}
-	handler := slog.NewMultiHandler(slog.NewJSONHandler(w, nil), console.Handler())
+	handler := slog.NewMultiHandler(slog.NewJSONHandler(w, &slog.HandlerOptions{Level: slog.LevelDebug}), console.Handler())
 	return slog.New(handler).With("workspace", workspaceRoot, "pid", os.Getpid()), w, nil
 }
 

@@ -51,8 +51,8 @@ allowed_hosts = ["github.com", "api.github.com"]
 headers = ["authorization"]
 
 [logging]
-# Minimum stderr severity; overridden by --console-log-level. File logs stay Info+.
-console_level = "warn" # debug, info, warn, or error
+# Minimum stderr severity; overridden by --console-log-level. File logs stay Debug+.
+console_level = "info" # debug, info, warn, or error
 
 [vm]
 # Applied at VM creation only. Sizes are in MiB.

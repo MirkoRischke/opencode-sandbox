@@ -58,7 +58,7 @@ func TestJSONLogsArePrivateAndUnbuffered(t *testing.T) {
 			require.Equal(t, os.FileMode(0600), info.Mode().Perm())
 		}
 	}
-	require.Contains(t, warnings.String(), "level=ERROR")
+	require.Contains(t, warnings.String(), "ERROR Operation failed")
 	require.Contains(t, warnings.String(), "outer: unexpected EOF")
 }
 

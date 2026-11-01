@@ -289,7 +289,7 @@ func TestNetworkDiagnosticsDefersWarningsUntilShutdown(t *testing.T) {
 			d.finish()
 
 			messages := captured.String()
-			require.Contains(t, messages, "level=WARN")
+			require.Contains(t, messages, "WARN ")
 			require.Contains(t, messages, scenario.name)
 			if scenario.collectError != nil {
 				require.ErrorIs(t, d.collectionFailure, scenario.collectError)
