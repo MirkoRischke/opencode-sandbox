@@ -12,14 +12,14 @@ func TestToolsAreAvailable(t *testing.T) {
 
 	for _, tool := range []string{
 		"mise", "git", "gh", "aws", "opencode", "docker", "dockerd",
-		"jq", "rg", "file", "patch", "less", "tree", "curl", "unzip", "xz",
+		"jq", "rg", "file", "patch", "less", "tree", "curl", "unzip", "vim", "xz",
 		"ps", "pgrep", "pkill", "ip", "ss", "dig", "nslookup", "nc", "ping", "lsof", "findmnt",
 	} {
 		t.Run(tool, func(t *testing.T) {
 			container.exec(t, "sh", "-ec", `command -v "$1"`, "sh", tool)
 		})
 	}
-	for _, tool := range []string{"git", "gh", "aws", "mise", "opencode"} {
+	for _, tool := range []string{"git", "gh", "aws", "mise", "opencode", "vim"} {
 		container.exec(t, tool, "--version")
 	}
 }
