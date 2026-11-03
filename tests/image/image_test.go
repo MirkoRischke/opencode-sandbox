@@ -14,6 +14,7 @@ func TestToolsAreAvailable(t *testing.T) {
 		"mise", "git", "gh", "aws", "opencode", "docker", "dockerd",
 		"jq", "rg", "file", "patch", "less", "tree", "curl", "vim", "xz",
 		"ps", "pgrep", "pkill", "ss", "findmnt",
+		"gcc", // Go's Linux race detector requires a C compiler.
 	} {
 		t.Run("version/"+tool, func(t *testing.T) {
 			container.exec(t, tool, "--version")

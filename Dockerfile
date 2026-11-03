@@ -12,6 +12,7 @@ FROM debian:13-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     awscli \
     bind9-dnsutils \
+    build-essential \
     ca-certificates \
     curl \
     file \
