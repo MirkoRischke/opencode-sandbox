@@ -1,4 +1,4 @@
-ARG MISE_VERSION=2026.10.25
+ARG MISE_VERSION=2026.11.0
 # renovate: datasource=npm depName=@opencode/cli
 ARG OPENCODE_VERSION=2.2.5
 
