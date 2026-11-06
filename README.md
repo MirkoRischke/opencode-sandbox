@@ -50,9 +50,16 @@ On launch, the host launcher:
 **The OpenCode TUI runs inside the guest**, alongside its tools and commands—not
 on the host. Exiting stops the VM without deleting its persistent disk.
 
+## Prerequisites
+
+- [mise](https://mise.jdx.dev) — manages the pinned development tools and setup tasks.
+- [Docker](https://www.docker.com) — with its daemon running, to build and import sandbox images.
+- [Microsandbox](https://microsandbox.dev) (`msb`) — required on `PATH` when running `opencode-sandbox`,
+  including outside this repository. Use the version pinned in [mise.toml](mise.toml).
+
 ## Setup
 
-With mise, Docker, and Microsandbox available, run from this repository:
+Run from this repository:
 
 ```sh
 mise install
