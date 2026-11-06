@@ -1,6 +1,5 @@
 version: "2"
 run:
-  build-tags: [live]
   timeout: 5m
 linters:
   default: none

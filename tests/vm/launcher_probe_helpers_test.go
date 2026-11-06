@@ -22,7 +22,6 @@ func prepareLauncherProbe(t *testing.T) *sandbox.Sandbox {
 	t.Helper()
 	s := startSandboxWithSettings(t, testSettings(t))
 	execInSandbox(t, s, "bash", "-eu", "-c", `
-touch /root/.opencode-sandbox-auth-ready
 cat > /mise/data/shims/opencode <<'PROBE'
 #!/bin/bash
 # mise inspects tool versions during Prepare, before the interactive launch.

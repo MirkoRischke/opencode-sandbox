@@ -75,8 +75,6 @@ func DefaultSettings() Settings {
 			HostToVM: []PortSettings{},
 			VMToHost: VMToHostSettings{Ports: []uint16{}},
 			AllowedHosts: []string{
-				// OpenAI inference and authentication.
-				"chatgpt.com", "api.openai.com", "auth.openai.com",
 				// Model catalog and remote documentation MCPs.
 				"models.dev", "mcp.context7.com", "knowledge-mcp.global.api.aws",
 				// GitHub Git operations, APIs, and raw files.

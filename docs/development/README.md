@@ -13,7 +13,6 @@ mise run test:non-vm  # Unit/script + CLI + image tests; Docker only, no Microsa
 mise run test:image   # Build + offline image smoke tests; Docker only, no VMs
 mise run test:prepare # Prepare changed images only when image inputs change
 mise run test        # Prepare changed images, then run the full test suite
-mise run test:live   # Opt-in OpenAI smoke test; uses host credentials
 ```
 
 Image preparation tracks both Dockerfiles and the base `.dockerignore`.
@@ -23,7 +22,7 @@ Docker or Microsandbox images, run `mise run --force test:prepare` to prepare th
 Source-focused tests live beside their implementation. Higher-level tests are
 split into `tests/cli` (no Microsandbox), `tests/image` (Docker), and `tests/vm`
 (Microsandbox). PR checks run linting, build the launcher, check module consistency,
-compile all tests including the `live` tag, and run `test:non-vm` with race detection.
+compile all tests, and run `test:non-vm` with race detection.
 Renovate automerges dependency updates, including majors, after checks pass;
 the Microsandbox SDK is excluded because it must be upgraded with its runtime.
 

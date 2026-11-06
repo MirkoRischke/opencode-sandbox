@@ -72,9 +72,6 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 		return err
 	}
 	defer stopAWS()
-	if err := s.ImportOpenAI(ctx); err != nil {
-		return err
-	}
 	return s.Open(ctx)
 }
 

@@ -9,7 +9,7 @@ includes = ["llm-gateway/tasks.toml"]
 
 [tasks.lint]
 description = "Lint Go code and the Dockerfile"
-run = ["golangci-lint run --build-tags live ./...", "hadolint Dockerfile"]
+run = ["golangci-lint run ./...", "hadolint Dockerfile"]
 
 [tasks.verify]
 description = "Run linting and the standard test suite"
@@ -88,7 +88,3 @@ run = "go test -count=1 -v -timeout 2m ./tests/image"
 description = "Prepare changed images and run the test suite"
 depends = ["test:prepare"]
 run = "go test -count=1 -v -parallel 4 -timeout 10m ./..."
-
-[tasks."test:live"]
-description = "Run the opt-in OpenAI authentication smoke test using host credentials"
-run = "go test -count=1 -v -tags live -run '^TestOpenCodeCanReachOpenAI$' -timeout 1m ./tests/vm"

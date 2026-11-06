@@ -32,7 +32,7 @@ jobs:
         run: mise run cli
       - name: Check module consistency
         run: go mod tidy -diff
-      - name: Compile all tests, including live tests
-        run: go test -tags live -run '^$' ./...
+      - name: Compile all tests
+        run: go test -run '^$' ./...
       - name: Run non-VM tests, including image smoke tests
         run: mise run test:non-vm

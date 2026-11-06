@@ -7,10 +7,6 @@
   `diagnostics network`. Denials collected during snapshot
    preparation remain in the report. Normal workspace VMs always restore a
    baseline, so this limitation applies to all newly created workspace VMs.
-- **OpenAI-only automatic authentication:** the launcher imports an active host
-  OpenAI subscription OAuth credential. Other providers aren't explicitly
-  blocked, but their authentication isn't set up automatically; a fresh VM
-  currently requires the OpenAI import to succeed.
 
 See [Microsandbox limitations and bugs](microsandbox.md) for upstream evidence
 and checks for future upgrades.

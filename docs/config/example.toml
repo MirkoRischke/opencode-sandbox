@@ -72,12 +72,6 @@ unrestricted = false
 # responses instead of resets where supported. Recreate VM on change.
 diagnostics = false
 allowed_hosts = [
-  # OpenAI subscription inference (legacy Codex and Sign in with ChatGPT)
-  # and OAuth token refresh. No credential inspection needed to include both.
-  "chatgpt.com",
-  "api.openai.com",
-  "auth.openai.com",
-
   # OpenCode model catalog.
   "models.dev",
 
@@ -139,8 +133,6 @@ ports = [] # Example opt-in: [5432, 6379]
 # - No unrestricted web browsing/search; add destinations deliberately.
 #
 # Sources:
-# https://github.com/anomalyco/opencode/blob/v2.0.30/packages/core/src/plugin/provider/openai.ts
-# https://github.com/anomalyco/opencode/blob/v2.0.30/packages/core/src/plugin/provider/chatgpt.ts
 # https://github.com/upstash/context7#installation
 # https://awslabs.github.io/mcp/servers/aws-knowledge-mcp-server
 # https://github.com/jdx/mise/blob/v2026.10.12/settings.toml
