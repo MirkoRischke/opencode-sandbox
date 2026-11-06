@@ -250,6 +250,36 @@ command found.
 - Upgrade check: independent fresh captures, interrupted publication, member
   deletion ordering, and complete group cleanup through public APIs.
 
+## MSB-10 — Bind-mount file locks do not coordinate independent VMs
+
+**Status:** confirmed source-level limitation, not behaviorally reproduced here.
+Checked Go SDK/runtime v0.7.11 and its pinned `msb_krun` v0.1.41 dependency.
+
+The Unix passthrough backend does not negotiate `POSIX_LOCKS` or `FLOCK_LOCKS`.
+Its underlying filesystem trait leaves `getlk`, `setlk`, and `setlkw`
+unimplemented. Linux FUSE therefore handles locks locally in each guest kernel,
+not as shared host locks across independent VMs. DAX/mmap support alone does not
+provide the missing locking semantics.
+
+Impact: the experimental per-repository OpenCode SQLite database is deliberately
+mounted writable into multiple worktree VMs. SQLite WAL requires coherent shared
+memory and file locking. Concurrent database access can corrupt or lose history;
+this project explicitly accepts that risk for experimentation. A successful
+short test is not evidence of safety. OpenCode's independent-server coordination
+is a separate application-level concern, not a Microsandbox defect.
+
+- Evidence: [v0.7.11 backend capability negotiation](https://github.com/superradcompany/microsandbox/blob/v0.7.11/crates/filesystem/lib/backends/passthroughfs/unix/mod.rs#L613-L654),
+  [pinned dependency](https://github.com/superradcompany/microsandbox/blob/v0.7.11/Cargo.toml),
+  [`msb_krun` v0.1.41 source locking stubs](https://github.com/zerocore-ai/libkrun/blob/b35c7e118d7a1e48c8fad103b258e64ff5c49147/src/devices/src/virtio/fs/filesystem.rs#L1222-L1235),
+  [Linux FUSE local-lock fallback](https://github.com/torvalds/linux/blob/master/fs/fuse/file.c),
+  [SQLite WAL requirements](https://sqlite.org/wal.html).
+- Project references: `internal/sandbox/opencode.go`, `internal/sandbox/snapshot.go`,
+  [OpenCode history](../features/opencode-history.md).
+- Upgrade check: verify POSIX byte-range locks conflict across two independent
+  guests mounting the same host directory, including lock release after guest
+  termination. Separately verify WAL shared-memory coherence and crash recovery.
+  Recheck OpenCode multi-server behavior independently before claiming safety.
+
 ## Issues needing verification, not confirmed upstream bugs
 
 ### Restored root-disk metadata reports `SizeMiB = 0`

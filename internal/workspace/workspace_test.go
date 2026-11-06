@@ -43,6 +43,12 @@ func TestWorkspaceTypesAndMounts(t *testing.T) {
 	require.Equal(t, []Mount{{Source: tree, Target: tree}, {Source: common, Target: common}}, linked.Mounts(tree))
 	require.Equal(t, []Mount{{Source: tree, Target: "/workspace"}, {Source: common, Target: common}}, linked.Mounts("/workspace"))
 	require.NotEqual(t, checkout.ID(), linked.ID())
+	require.Equal(t, checkout.RepositoryID(), linked.RepositoryID())
+	require.NotEqual(t, checkout.ID(), checkout.RepositoryID())
+	require.Equal(t, plain.ID(), plain.RepositoryID())
+	otherRepo := filepath.Join(parent, "other-repo")
+	git(t, "clone", repo, otherRepo)
+	require.NotEqual(t, checkout.RepositoryID(), resolve(t, otherRepo).RepositoryID())
 	for _, root := range []string{repo, tree} {
 		subdir := filepath.Join(root, "subdir")
 		require.NoError(t, os.Mkdir(subdir, 0700))
@@ -64,6 +70,7 @@ func TestCanonicalIdentityAndFreshMountSlices(t *testing.T) {
 	other := resolve(t, alias)
 	require.Equal(t, w.Root(), other.Root())
 	require.Equal(t, w.ID(), other.ID())
+	require.Equal(t, w.RepositoryID(), other.RepositoryID())
 	require.Len(t, w.ID(), 64)
 	mounts := w.Mounts("/workspace")
 	mounts[0].Source = "/changed"

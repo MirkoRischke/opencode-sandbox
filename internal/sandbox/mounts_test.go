@@ -29,7 +29,7 @@ func TestMountsCannotOverlapManagedMounts(t *testing.T) {
 	t.Parallel()
 	w, err := workspace.Resolve(context.Background(), t.TempDir())
 	require.NoError(t, err)
-	for _, target := range []string{filepath.Dir(w.Root()), w.Root(), filepath.Join(w.Root(), "subdir"), "/workspace", "/var/lib", "/var/lib/docker/subdir", "/proc/file", "/sys", "/dev", "/etc", "/etc/opencode", systemOpenCodeConfig, "/etc/opencode-sandbox", sandboxInstructions} {
+	for _, target := range []string{filepath.Dir(w.Root()), w.Root(), filepath.Join(w.Root(), "subdir"), "/workspace", "/var/lib", "/var/lib/docker/subdir", openCodeDatabaseDir, openCodeDatabase, "/proc/file", "/sys", "/dev", "/etc", "/etc/opencode", systemOpenCodeConfig, "/etc/opencode-sandbox", sandboxInstructions} {
 		t.Run(target, func(t *testing.T) {
 			settings := config.DefaultSettings()
 			settings.Files = []config.FileSettings{{Source: t.TempDir(), Target: target}}

@@ -10,7 +10,7 @@ import (
 )
 
 func validateMounts(w workspace.Workspace, settings config.Settings) error {
-	reservedPaths := []string{w.Root(), snapshotWorktree, "/var/lib/docker", "/proc", "/sys", "/dev", "/etc/opencode", "/etc/opencode-sandbox"}
+	reservedPaths := []string{w.Root(), snapshotWorktree, "/var/lib/docker", openCodeDatabaseDir, "/proc", "/sys", "/dev", "/etc/opencode", "/etc/opencode-sandbox"}
 	for _, mount := range w.Mounts(snapshotWorktree) {
 		reservedPaths = append(reservedPaths, mount.Target)
 	}

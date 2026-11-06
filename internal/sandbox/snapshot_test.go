@@ -61,7 +61,7 @@ func TestRestoredSecretsKeepValuesHostSideAndRetainDestinationScope(t *testing.T
 	patch := restoredWorktreePatch("/worktree", []Secret{secret})
 	require.Equal(t, m.ModificationPolicyNextStart, patch.Policy)
 	require.Equal(t, "/worktree", patch.Workdir)
-	require.Empty(t, patch.Env, "never put resolved credentials in guest environment")
+	require.Equal(t, map[string]string{"OPENCODE_DB": openCodeDatabase}, patch.Env, "never put resolved credentials in guest environment")
 	require.Equal(t, "synthetic-secret", patch.Secrets["GH_TOKEN"].Value)
 	require.Equal(t, "$MSB_GH_TOKEN", patch.Secrets["GH_TOKEN"].Placeholder)
 	require.Equal(t, []string{"github.com"}, patch.Secrets["GH_TOKEN"].AllowedHosts)

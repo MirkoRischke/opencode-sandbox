@@ -154,8 +154,9 @@ Forced termination (`SIGKILL`) or a host crash cannot run cleanup.
 ### Read-only host mounts
 
 Explicitly expose host files or directories with `[[files]]` entries in global
-`config.toml` or an approved workspace `.opencode-sandbox.toml`. No extra host files,
-OpenCode configuration, instructions, or skills are shared by default.
+`config.toml` or an approved workspace `.opencode-sandbox.toml`. Beyond the workspace,
+required Git metadata, and [managed OpenCode database](../features/opencode-history.md),
+no extra host files, OpenCode configuration, instructions, or skills are shared by default.
 
 ```toml
 [[files]]
@@ -195,7 +196,7 @@ File arrays replace, rather than append, across configuration layers. Use
 `files = []` at the top level of a workspace config to disable inherited mappings.
 New/changed workspace configuration requires the normal approval, which authorizes
 the displayed host paths. Duplicate or nested targets and overlaps with the
-workspace, Git metadata, Docker storage, or runtime mounts are rejected.
+workspace, Git metadata, Docker storage, managed OpenCode database, or runtime mounts are rejected.
 
 Mappings apply at VM creation; recreate the VM after adding, removing, or changing
 them. Configured mounts are also available during snapshot preparation and are

@@ -12,6 +12,12 @@ This tool reduces risk; it does not eliminate it. I accept the following risks f
   Review changes before trusting or running them; automatic host tooling may
   execute them before review.
 - **Data exfiltration:** network restrictions do not guarantee that repository contents cannot be leaked. The agent might abuse allowed domains to exfiltrate data.
+- **Shared OpenCode database (experimental):** linked-worktree VMs can read and
+  modify the same host-backed OpenCode database, including database-resident state
+  beyond session transcripts. Concurrent writers can corrupt or lose history;
+  Microsandbox does not coordinate file locks across VMs. This risk is explicitly
+  accepted for experimentation, not a claim of supported concurrency. See
+  [OpenCode history](features/opencode-history.md).
 - **Guest-readable credentials:** unlike custom proxy secrets, AWS role
   credentials and imported OpenAI credentials can be read and used by guest code.
   - AWS role credentials are temporary. I only use roles with limited permissions

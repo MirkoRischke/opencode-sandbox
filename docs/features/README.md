@@ -7,6 +7,9 @@
   so you can use your usual editor without syncing files.
 - **Persistent environments:** VMs stop when OpenCode exits, but retain installed
   tools and guest files for the next launch.
+- **Persistent OpenCode history (experimental):** a checkout and its linked Git
+  worktrees share a host-backed OpenCode database, independent of VM disks and
+  snapshots. See [storage and concurrency risks](opencode-history.md).
 - **Project tools:** automatically install tools declared in the directory's
   `mise.toml` during workspace snapshot preparation.
 - **Custom VM images:** use a custom Docker/OCI image with your required tools
@@ -21,7 +24,8 @@
 - **Host file mappings:** explicitly mount selected files or directories read-only,
   or copy them into writable guest storage on creation and snapshot restore,
   including OpenCode configuration, instructions, and skills. No extra host files
-  are shared by default. See [`[[files]]` configuration](../config/README.md#read-only-host-mounts).
+  are shared by default beyond the workspace, required Git metadata, and managed
+  OpenCode database. See [`[[files]]` configuration](../config/README.md#read-only-host-mounts).
 - **Sandbox-aware instructions:** OpenCode gets information about the sandbox
   it is running in.
 - **AWS roles:** assume a role on the host and provide automatically refreshed,

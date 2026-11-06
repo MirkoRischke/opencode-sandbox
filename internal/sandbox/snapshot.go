@@ -424,6 +424,10 @@ func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, s
 }
 
 func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, w workspace.Workspace, secrets []Secret, settings config.Settings) (*m.Sandbox, error) {
+	databaseDir, err := prepareOpenCodeStorage(w)
+	if err != nil {
+		return nil, err
+	}
 	policy := networkPolicy(settings.Network, settings.Ports...)
 	// Restore accepts host policy only, not HTTP/TLS creation settings.
 	policy.HTTP = nil
@@ -432,6 +436,7 @@ func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, w
 		Volumes: workspaceMounts(w, snapshotWorktree, w.Root()),
 		Ports:   portBindings(settings.Ports),
 	}
+	addOpenCodeMount(restore.Volumes, databaseDir)
 	addReadOnlyMounts(restore.Volumes, settings)
 	if settings.Network.Diagnostics {
 		restore.LogLevel = m.LogLevelDebug
@@ -500,6 +505,7 @@ func configureRestoredWorktree(ctx context.Context, restored *m.Sandbox, name, r
 func restoredWorktreePatch(root string, secrets []Secret) m.ModifyOptions {
 	patch := m.ModifyOptions{
 		Policy: m.ModificationPolicyNextStart, Workdir: root,
+		Env:     map[string]string{"OPENCODE_DB": openCodeDatabase},
 		Labels:  map[string]string{"opencode-sandbox": ""},
 		Secrets: make(map[string]m.SecretModifySpec, len(secrets)),
 	}
