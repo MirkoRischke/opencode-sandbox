@@ -29,6 +29,7 @@ case "$*" in
   *" ps "*)
     if test -f ready; then printf 'litellm healthy\ndb healthy\n'; fi ;;
   *" up "*) touch ready ;;
+  *" stop") rm -f ready ;;
 esac
 `), 0700))
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -47,6 +48,24 @@ esac
 	env, err := os.Stat(filepath.Join(g.Directory(), ".env"))
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0600), env.Mode().Perm())
+	require.NoError(t, g.Stop(context.Background(), io.Discard))
+	require.NoFileExists(t, filepath.Join(g.Directory(), "ready"))
+	afterStop, err := os.ReadFile(filepath.Join(g.Directory(), ".env"))
+	require.NoError(t, err)
+	require.True(t, bytes.Equal(firstEnv, afterStop), "stopping must preserve credentials")
+	require.NoError(t, g.Ensure(context.Background(), io.Discard))
+	calls, err = os.ReadFile(log)
+	require.NoError(t, err)
+	require.Equal(t, 2, strings.Count(string(calls), "up --wait --wait-timeout 180"))
+	require.Contains(t, string(calls), " stop\n")
+	require.NotContains(t, string(calls), " down")
+}
+
+func TestStopBeforeFirstStartDoesNotCreateGatewayFiles(t *testing.T) {
+	t.Parallel()
+	g := gateway.New(t.TempDir())
+	require.NoError(t, g.Stop(context.Background(), io.Discard))
+	require.NoDirExists(t, g.Directory())
 }
 
 //nolint:forbidigo // Serial PATH override tests device-login invocation without contacting any provider.

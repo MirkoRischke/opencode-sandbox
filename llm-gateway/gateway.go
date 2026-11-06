@@ -68,6 +68,26 @@ func (g *Gateway) Ensure(ctx context.Context, output io.Writer) error {
 	return nil
 }
 
+// Stop halts the shared containers without removing credentials or data. It uses
+// the startup lock so a concurrent Ensure cannot race the Compose operation.
+func (g *Gateway) Stop(ctx context.Context, output io.Writer) error {
+	lock, err := os.OpenFile(filepath.Join(g.directory, ".lock"), os.O_CREATE|os.O_RDWR, 0600)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil // No installation exists yet; don't create one just to stop it.
+	}
+	if err != nil {
+		return fmt.Errorf("open gateway lock: %w", err)
+	}
+	defer lock.Close() //nolint:errcheck // Closing releases the advisory lock.
+	if err := acquire(ctx, lock); err != nil {
+		return err
+	}
+	if err := g.compose(ctx, nil, output, output, "stop"); err != nil {
+		return fmt.Errorf("stop LLM gateway: %w", err)
+	}
+	return nil
+}
+
 // Authenticate runs a human-driven device login against the persistent auth volume.
 // Access tokens are deliberately not printed by the Python expression.
 func (g *Gateway) Authenticate(ctx context.Context, provider string, input io.Reader, output, stderr io.Writer) error {

@@ -146,6 +146,8 @@ configure your gateway secret and OpenCode provider using the
 
 Use `opencode-sandbox gateway start` to start it explicitly. The gateway stays
 running after sandbox exit and is shared by all sandboxes.
+Stop it with `opencode-sandbox gateway stop`; credentials and data are preserved,
+and the next sandbox launch starts it again.
 
 See the [development guide](docs/development/README.md) for testing, quality checks,
 and upgrading Microsandbox.

@@ -38,6 +38,16 @@ func newGatewayCommand() *cobra.Command {
 			return g.Ensure(cmd.Context(), cmd.ErrOrStderr())
 		},
 	}, &cobra.Command{
+		Use: "stop", Short: "Stop the shared LLM gateway, preserving credentials and data",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			g, err := hostGateway()
+			if err != nil {
+				return err
+			}
+			return g.Stop(cmd.Context(), cmd.ErrOrStderr())
+		},
+	}, &cobra.Command{
 		Use: "authenticate [chatgpt|copilot]", Short: "Authenticate a gateway provider using device login (default chatgpt)",
 		Args: cobra.MaximumNArgs(1), ValidArgs: []string{"chatgpt", "copilot"},
 		RunE: func(cmd *cobra.Command, args []string) error {

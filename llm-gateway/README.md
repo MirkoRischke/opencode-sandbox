@@ -28,8 +28,12 @@ Start explicitly with `opencode-sandbox gateway start`. To stop without deleting
 credentials or usage data:
 
 ```sh
-docker compose --project-directory "${XDG_DATA_HOME:-$HOME/.local/share}/opencode-sandbox/gateway" down
+opencode-sandbox gateway stop
 ```
+
+This stops the shared containers without removing them or their volumes. It
+interrupts gateway access for any running sandboxes. The next sandbox launch
+starts the gateway again automatically.
 
 The repository's standalone `mise run gateway:*` tasks remain available for
 development. They use this directory's `.env` and Compose files rather than the
