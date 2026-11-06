@@ -1,5 +1,7 @@
 # opencode-sandbox
 
+This is an independent project, not built by or affiliated with the OpenCode team.
+
 > [!WARNING]
 > This is a personal tool built for my workflow. I published it primarily as a reference and starting point. **Do not rely on this tool for anything important.**
 >
