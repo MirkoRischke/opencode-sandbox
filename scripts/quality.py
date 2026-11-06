@@ -100,7 +100,7 @@ def render(current, baseline=None):
             lines.append(f"| `{key}` | {' | '.join(changes)} |")
         lines += ["", "New/deleted/renamed functions appear separately; line moves alone are ignored."]
     lines += ["", "Length counts follow funlen (comments ignored); only lengths above 60 are collected.",
-              "Readability needs a separate evidence-based review: docs/quality-review.md."]
+              "Readability needs a separate evidence-based review: docs/development/quality-review.md."]
     return "\n".join(lines) + "\n"
 
 

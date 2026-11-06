@@ -1,5 +1,7 @@
 # Log retention pilot
 
+> Historical task report, not current guidance. See the [development guide](../development/README.md) for current instructions.
+
 Scope: local quality tooling and one workflow, host log retention. Baseline
 production and tests are from `30e2eae`; tooling is in `b516205` and the focused
 test changes in `a5162d9`. Other repository hotspots remain outside this pilot.
@@ -36,7 +38,7 @@ partially uncovered.
 
 ## Readability review
 
-Reviewed both versions and the extracted helpers using `quality-review.md`.
+Reviewed both versions and the extracted helpers using [the readability review rubric](../development/quality-review.md).
 These are evidence-based judgments, separate from numeric scores.
 
 | Category | Status | Evidence |
@@ -67,4 +69,4 @@ comparison and may be replaced by subsequent baselines. Run
 `mise run quality compare` to inspect them; use `mise run quality baseline`
 when intentionally starting a new comparison. The tooling reports numeric
 changes automatically. For a readability comparison, ask an agent to apply
-`quality-review.md` against the baseline revision and current code.
+[the readability review rubric](../development/quality-review.md) against the baseline revision and current code.

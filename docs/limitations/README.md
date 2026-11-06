@@ -11,3 +11,6 @@
   OpenAI subscription OAuth credential. Other providers aren't explicitly
   blocked, but their authentication isn't set up automatically; a fresh VM
   currently requires the OpenAI import to succeed.
+
+See [Microsandbox limitations and bugs](microsandbox.md) for upstream evidence
+and checks for future upgrades.

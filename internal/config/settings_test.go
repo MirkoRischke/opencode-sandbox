@@ -121,7 +121,7 @@ func TestSettingsRejectInvalidConfiguration(t *testing.T) {
 func TestExampleSettingsLoad(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	data, err := os.ReadFile("../../docs/config.example.toml")
+	data, err := os.ReadFile("../../docs/config/example.toml")
 	require.NoError(t, err)
 	writeSettingsAt(t, dir, string(data))
 	settings, err := launcherconfig.LoadSettings(dir)

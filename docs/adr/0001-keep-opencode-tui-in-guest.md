@@ -8,4 +8,4 @@ Keeping the TUI inside the VM contains plugin execution within the same isolatio
 
 Reconsider a host TUI only after a pinned client provides a verified, host-controlled way to block all guest/project-supplied plugin code **before discovery/import execution**, including reload and reconnect paths, and other server-directed host execution paths have been reviewed. Alternatively, the client itself must run in a suitable sandbox. Our current evidence is static source inspection, not an executed exploit or an audit of the installed host client.
 
-See [remote TUI plugin isolation research](../../research/remote-tui-plugin-isolation.md) for primary-source citations and limitations.
+See [remote TUI plugin isolation research](../research/remote-tui-plugin-isolation.md) for primary-source citations and limitations.

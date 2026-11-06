@@ -79,7 +79,7 @@ No claim that Docker is already functional on this exact guest kernel/root-disk 
 
 ## Primary sources
 
-- **R1:** Local repository: [`Dockerfile`](../Dockerfile), [`go.mod`](../go.mod), [`mise.toml`](../mise.toml), [`Prepare`, `Exec`, `Open`, `Shutdown`](../internal/sandbox/sandbox.go), [`connectWithSecrets`](../internal/sandbox/secrets.go). Observed working-tree state on research date.
+- **R1:** Local repository: [`Dockerfile`](../../Dockerfile), [`go.mod`](../../go.mod), [`mise.toml`](../../mise.toml), [`Prepare`, `Exec`, `Open`, `Shutdown`](../../internal/sandbox/sandbox.go), [`connectWithSecrets`](../../internal/sandbox/secrets.go). Observed working-tree state on research date.
 - **V1:** [0.7.8 annotated tag](https://api.github.com/repos/superradcompany/microsandbox/git/ref/tags/v0.7.8), [tag object / peeled commit](https://api.github.com/repos/superradcompany/microsandbox/git/tags/3f72f34253264a488058939afd24578b16ffaaef).
 - **M1:** [Go create/connect-or-create implementation](https://github.com/superradcompany/microsandbox/blob/v0.7.8/sdk/go/sandbox.go#L99-L144).
 - **M2:** [Versioned commands docs: creation is boot-only; literal exec ignores OCI defaults](https://github.com/superradcompany/microsandbox/blob/v0.7.8/docs/sandboxes/commands.mdx#L11-L51).

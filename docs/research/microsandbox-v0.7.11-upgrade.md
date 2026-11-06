@@ -9,7 +9,7 @@ before adaptation. The tool now forwards secret substitution and related policy
 fields during restore. All three selected-header skips were removed and their
 targeted VM tests passed on SDK/runtime v0.7.11. MSB-01 is resolved for this tool;
 the recommendation to implement policy preservation below is complete. See the
-[updated tracker](../docs/microsandbox-limitations.md#msb-01--go-secret-modification-loses-selected-header-restrictions).
+[updated tracker](../limitations/microsandbox.md#msb-01--go-secret-modification-loses-selected-header-restrictions).
 
 - **Upgrade verified by parent session:** `mise run upgrade-microsandbox 0.7.11`
   passed lint and the full standard suite after correcting one obsolete denial
@@ -264,5 +264,5 @@ upgrade check, especially skipped assertions and exploratory trust/IP tests.
    respectively improve reliability and visibility, not trust revocation or audit
    completeness.
 
-Tracker updated: [`docs/microsandbox-limitations.md`](../docs/microsandbox-limitations.md).
+Tracker updated: [`docs/limitations/microsandbox.md`](../limitations/microsandbox.md).
 This research changed no code, tests, or README.

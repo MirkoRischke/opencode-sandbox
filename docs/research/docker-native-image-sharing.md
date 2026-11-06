@@ -61,27 +61,27 @@ as sharing across independent VM kernels/disks. [S13][S14]
 
 ## Repository constraints checked
 
-- [Dockerfile](../Dockerfile), lines 26–42: guest-installed Engine, Buildx and
+- [Dockerfile](../../Dockerfile), lines 26–42: guest-installed Engine, Buildx and
   Compose; `features.containerd-snapshotter=false` and `storage-driver=overlay2`.
   Docker package versions are not pinned, so the actual installed Engine/Buildx/
   embedded BuildKit versions must be checked before relying on version-specific
   details below. Fresh Engine 29+ installations otherwise default to the
   containerd image store. [R1][S10][S15]
-- [docs/config.md](../docs/config.md#docker-inside-the-vm): private VM-owned ext4
+- [docs/config/README.md](../config/README.md#docker-inside-the-vm): private VM-owned ext4
   `/var/lib/docker`; stop/start preserves it, VM removal deletes it; no host
   Docker socket. Microsandbox's outer VM image store and guest Docker images are
   separate. Loading a VM template with `msb load` does not populate guest Docker.
   [R2]
-- [internal/sandbox/docker.go](../internal/sandbox/docker.go): `dockerd` starts
+- [internal/sandbox/docker.go](../../internal/sandbox/docker.go): `dockerd` starts
   without overriding the image's daemon configuration. Thus a custom VM image can
   include Docker's documented mirror configuration without a new cache client.
   There is currently no automatic image archive import. [R4]
-- [internal/sandbox/network.go](../internal/sandbox/network.go), lines 24–40:
+- [internal/sandbox/network.go](../../internal/sandbox/network.go), lines 24–40:
   host, private, loopback, link-local and metadata destinations are explicitly
   denied before exact-hostname TCP/443 allowances. Merely adding a DNS name that
   resolves to a private cache does not make it reachable. A typical tutorial's
   `localhost:5000`/host-port cache is not usable across these VMs unchanged. [R3]
-- [internal/sandbox/sandbox.go](../internal/sandbox/sandbox.go), lines 64–78:
+- [internal/sandbox/sandbox.go](../../internal/sandbox/sandbox.go), lines 64–78:
   current mounts are the worktree, external Git common directory when needed,
   and owned Docker disk. **An arbitrary common host archive/cache directory is
   not currently mounted by configuration.** Use an archive in an already mounted
@@ -470,11 +470,11 @@ hostname policy; the required full host set was not established here. [R3][S8]
 
 Repository sources (local primary evidence):
 
-- [R1] [Dockerfile](../Dockerfile), especially lines 26–42.
-- [R2] [docs/config.md](../docs/config.md#docker-inside-the-vm), Docker/custom-image/network sections.
-- [R3] [internal/sandbox/network.go](../internal/sandbox/network.go), `networkPolicy`.
-- [R4] [internal/sandbox/docker.go](../internal/sandbox/docker.go), daemon initialization.
-- [R5] [internal/sandbox/sandbox.go](../internal/sandbox/sandbox.go), mount construction.
+- [R1] [Dockerfile](../../Dockerfile), especially lines 26–42.
+- [R2] [docs/config/README.md](../config/README.md#docker-inside-the-vm), Docker/custom-image/network sections.
+- [R3] [internal/sandbox/network.go](../../internal/sandbox/network.go), `networkPolicy`.
+- [R4] [internal/sandbox/docker.go](../../internal/sandbox/docker.go), daemon initialization.
+- [R5] [internal/sandbox/sandbox.go](../../internal/sandbox/sandbox.go), mount construction.
 
 External primary documentation/source (retrieved on research date; live docs may change):
 

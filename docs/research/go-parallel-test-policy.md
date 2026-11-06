@@ -152,11 +152,11 @@ Do not replace the existing test runner with a custom goroutine launcher or proc
 
 Repository sources (relative links are local primary evidence):
 
-- **R1:** [`go.mod`](../go.mod), [`mise.toml`](../mise.toml), [`.golangci.yml`](../.golangci.yml).
-- **R2:** Prior audit supplied in task; examples: [`tests/aws_helpers_test.go`](../tests/aws_helpers_test.go), [`tests/tui_helpers_test.go`](../tests/tui_helpers_test.go), [`tests/settings_test.go`](../tests/settings_test.go), [`tests/launcher_test.go`](../tests/launcher_test.go).
-- **R3:** [`tests/terminal_helpers_test.go`](../tests/terminal_helpers_test.go), [`tests/terminal_test.go`](../tests/terminal_test.go).
-- **R4:** [`tests/openai_test.go`](../tests/openai_test.go), [`tests/opencode_helpers_test.go`](../tests/opencode_helpers_test.go): `//go:build live`.
-- **R5:** [`tests/smoke_test.go`](../tests/smoke_test.go).
+- **R1:** [`go.mod`](../../go.mod), [`mise.toml`](../../mise.toml), [`.golangci.yml`](../../.golangci.yml).
+- **R2:** Prior audit supplied in task; examples: [`tests/aws_helpers_test.go`](../../tests/aws_helpers_test.go), [`tests/tui_helpers_test.go`](../../tests/tui_helpers_test.go), [`tests/settings_test.go`](../../tests/settings_test.go), [`tests/launcher_test.go`](../../tests/launcher_test.go).
+- **R3:** [`tests/terminal_helpers_test.go`](../../tests/terminal_helpers_test.go), [`tests/terminal_test.go`](../../tests/terminal_test.go).
+- **R4:** [`tests/openai_test.go`](../../tests/openai_test.go), [`tests/opencode_helpers_test.go`](../../tests/opencode_helpers_test.go): `//go:build live`.
+- **R5:** [`tests/smoke_test.go`](../../tests/smoke_test.go).
 
 Upstream primary sources:
 

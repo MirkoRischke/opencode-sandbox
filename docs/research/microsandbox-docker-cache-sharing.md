@@ -6,10 +6,10 @@ Research date: 2026-10-18. Primary-source inspection only; no VM operations, dae
 
 ## Versions and current repository
 
-- Both [`go.mod`](../go.mod) and [`mise.toml`](../mise.toml) pin **0.7.8**. Inspected upstream tag `v0.7.8` resolves to source commit **`7b7b9dc89e9a1c77801918f7833c3381d1754579`**. All versioned source links below refer to that release, not current website assumptions. [R1, P1]
+- Both [`go.mod`](../../go.mod) and [`mise.toml`](../../mise.toml) pin **0.7.8**. Inspected upstream tag `v0.7.8` resolves to source commit **`7b7b9dc89e9a1c77801918f7833c3381d1754579`**. All versioned source links below refer to that release, not current website assumptions. [R1, P1]
 - Current `main` observed at **`e52668369899e840223b5b8f2bd234f9d94d113d`**, 30 commits ahead. The comparison includes snapshot-catalog and volume-removal fixes, new published-port modification, and unrelated network/runtime/docs changes. The owned-disk restore implementation inspected here is already in 0.7.8, **not a future feature**. No upgrade is required to obtain the core volume/snapshot mechanisms described below. Do not infer that every current-main documentation example is in this pin. [P2]
 - Current launcher uses a shared/layered OCI root plus a **private owned ext4 disk at `/var/lib/docker`**, default 10 GiB; image explicitly selects classic `overlay2` rather than the containerd image store. Owned disk survives stop/start but is removed with its VM. Worktree is a host bind mount. `Prepare` connects/creates, then ensures Docker is running. [R1]
-- Existing `research/microsandbox-dockerd-startup.md` was read for conventions, but its older repository-state description predates the current Docker implementation. This report uses the actual working-tree files, not that old state. [R1]
+- Existing `docs/research/microsandbox-dockerd-startup.md` was read for conventions, but its older repository-state description predates the current Docker implementation. This report uses the actual working-tree files, not that old state. [R1]
 
 ## Options ranked by implementation and operational burden
 
@@ -132,7 +132,7 @@ A narrowly shared read-only archive directory avoids all these network/TLS chang
 
 ## Primary sources
 
-- **R1:** Working tree: [`go.mod`](../go.mod), [`mise.toml`](../mise.toml), [`Dockerfile`](../Dockerfile), [`internal/sandbox/sandbox.go`](../internal/sandbox/sandbox.go), [`internal/sandbox/network.go`](../internal/sandbox/network.go), [`docs/config.md`](../docs/config.md), [`research/microsandbox-dockerd-startup.md`](microsandbox-dockerd-startup.md). Observed state on research date.
+- **R1:** Working tree: [`go.mod`](../../go.mod), [`mise.toml`](../../mise.toml), [`Dockerfile`](../../Dockerfile), [`internal/sandbox/sandbox.go`](../../internal/sandbox/sandbox.go), [`internal/sandbox/network.go`](../../internal/sandbox/network.go), [`docs/config/README.md`](../config/README.md), [`docs/research/microsandbox-dockerd-startup.md`](microsandbox-dockerd-startup.md). Observed state on research date.
 - **P1:** [Pinned source commit](https://github.com/superradcompany/microsandbox/tree/7b7b9dc89e9a1c77801918f7833c3381d1754579).
 - **P2:** [Observed main commit](https://github.com/superradcompany/microsandbox/commit/e52668369899e840223b5b8f2bd234f9d94d113d), [release-to-main comparison](https://github.com/superradcompany/microsandbox/compare/v0.7.8...e52668369899e840223b5b8f2bd234f9d94d113d).
 - **V1:** [v0.7.8 volume guide: bind, owned, named, sharing, disk images](https://github.com/superradcompany/microsandbox/blob/v0.7.8/docs/sandboxes/volumes.mdx#L64-L398).

@@ -1,5 +1,7 @@
 # Codebase quality refactor
 
+> Historical task report, not current guidance. See the [development guide](../development/README.md) for current instructions.
+
 Baseline: `46c5597` (the completed log-retention pilot). Branch: `codex/readability-quality`.
 Local tooling and thresholds are unchanged. All initial measured hotspots were reviewed; 37 were resolved and two explicitly retained below. No CI checks were added.
 
@@ -68,7 +70,7 @@ Each entry is a review disposition, not a numerical readability score. The full 
 
 ## Readability review
 
-Reviewed the old and new functions and their helpers using `quality-review.md`:
+Reviewed the old and new functions and their helpers using [the readability review rubric](../development/quality-review.md):
 
 - Resolved test-purpose problems: CLI approval and secret actions, DNS policy modes, snapshot lifecycle behaviors, Docker contracts, and diagnostics persistence now have focused scenarios.
 - Resolved visibility problems: test inputs and expected results remain in test bodies; helpers own VM/process setup, protocol mechanics, fixture creation, and command execution.

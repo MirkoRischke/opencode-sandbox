@@ -6,7 +6,7 @@ outdated by your changes. Exceptions:
 - a new command was added
 
 When encountering a Microsandbox limitation or issue while working on this tool,
-update `docs/microsandbox-limitations.md` with the affected SDK/runtime version,
+update `docs/limitations/microsandbox.md` with the affected SDK/runtime version,
 impact on this tool, evidence, and a check for future upgrades. Distinguish
 confirmed limitations from suspected bugs; update existing entries when rechecked.
 

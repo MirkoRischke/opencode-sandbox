@@ -26,7 +26,7 @@ Read the [accepted risks](docs/risks.md) before using this tool.
 
 ## Features
 
-See the [feature overview](docs/features.md).
+See the [feature overview](docs/features/README.md).
 
 ## How it works
 
@@ -80,11 +80,11 @@ opencode-sandbox snapshot remove # Delete this directory's baseline, leaving VMs
 opencode-sandbox snapshot remove --all # Delete ALL managed snapshots without confirmation
 ```
 
-Configure network access and secrets in [launcher configuration](docs/config.md).
+Configure network access and secrets in [launcher configuration](docs/config/README.md).
 New VMs use a built-in development-service allowlist by default. See also
-[GitHub access](docs/github.md) and [AWS credentials](docs/aws.md).
+[GitHub access](docs/features/github.md) and [AWS credentials](docs/features/aws.md).
 Custom local Docker images and registry images are supported through
-[`vm.image`](docs/config.md#custom-vm-images); Docker is required on the host.
+[`vm.image`](docs/config/README.md#custom-vm-images); Docker is required on the host.
 
 ### Prepared workspace snapshots
 
@@ -104,7 +104,7 @@ recreate the workspace VM on the next launch. Baselines are not auto-invalidated
 Each canonical directory has its own VM and baseline, including separate linked
 worktrees and repository subdirectories. Symlink aliases share identity.
 
-See [snapshot configuration and limitations](docs/config.md#workspace-snapshots).
+See [snapshot configuration and limitations](docs/config/README.md#workspace-snapshots).
 
 ### Shell completion
 
@@ -127,9 +127,9 @@ complete -o default -F __start_opencode-sandbox ocs
 
 ## Limitations
 
-See the [known limitations](docs/limitations.md).
+See the [known limitations](docs/limitations/README.md).
 
 ## Development
 
-See the [development guide](docs/development.md) for testing, quality checks,
+See the [development guide](docs/development/README.md) for testing, quality checks,
 and upgrading Microsandbox.

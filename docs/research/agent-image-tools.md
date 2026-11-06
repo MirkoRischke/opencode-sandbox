@@ -12,8 +12,8 @@ debuggers, browsers, database clients, and extra cloud CLIs should be opt-in.
 
 This repo already installs `awscli ca-certificates curl git gh libatomic1
 util-linux unzip xz-utils`, Docker Engine/CLI, Buildx, Compose, mise, Node 24, and
-OpenCode **2.0.30** ([Dockerfile](../Dockerfile)). Project initialization already
-trusts/installs project mise tools ([configuration](../docs/config.md#snapshots),
+OpenCode **2.0.30** ([Dockerfile](../../Dockerfile)). Project initialization already
+trusts/installs project mise tools ([configuration](../config/README.md#snapshots),
 lines 272–275 at research time). Therefore, do not duplicate every project's
 runtime/version manager in the image. Installed dependencies may already supply
 some commands: distinguish “not explicitly installed” from “absent.”

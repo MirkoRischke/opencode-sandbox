@@ -1,6 +1,6 @@
 # Launcher configuration
 
-Copy `docs/config.example.toml` to
+Copy `docs/config/example.toml` to
 `~/.config/opencode-sandbox/config.toml` (or
 `$XDG_CONFIG_HOME/opencode-sandbox/config.toml`). This is the general launcher
 configuration; OpenCode's `opencode.json` and `cli.json` remain separate.
@@ -144,7 +144,7 @@ their separate validation rules. These checks prevent common mistakes, not
 arbitrarily large projects or sensitive files within an otherwise allowed project.
 
 AWS role access is enabled per launch with `--aws-role` and optional
-`--aws-profile`, not with global configuration. See [AWS credentials](aws.md).
+`--aws-profile`, not with global configuration. See [AWS credentials](../features/aws.md).
 
 The launcher always stops its VM on exit, including errors and handled termination
 signals. Installed tools and guest files persist for the next launch. A newly
@@ -457,7 +457,7 @@ listener configured by the supplied image. Compose networks and published
 container ports work inside the VM. To reach them from the host, configure
 an explicit [port mapping](#port-mappings) in addition to Docker's port publishing.
 
-The built-in defaults and `docs/config.example.toml` allow public Docker Hub and
+The built-in defaults and `docs/config/example.toml` allow public Docker Hub and
 Amazon ECR Public pulls, including Docker Hub's authentication and image-download
 hosts. Guest builds and containers still obey the VM network
 policy: package repositories and other download hosts need separate approval.
