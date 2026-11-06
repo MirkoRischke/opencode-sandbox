@@ -8,15 +8,22 @@ import (
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
-func networkPolicy(n config.NetworkSettings, ports ...config.PortSettings) *m.NetworkConfig {
+func networkPolicy(n config.NetworkSettings) *m.NetworkConfig {
 	policy := &m.NetworkConfig{
 		DefaultEgress:  m.PolicyActionDeny,
 		DefaultIngress: m.PolicyActionDeny,
 	}
-	for _, port := range ports {
+	for _, port := range n.HostToVM {
 		policy.Rules = append(policy.Rules, m.PolicyRule{
 			Action: m.PolicyActionAllow, Direction: m.PolicyDirectionIngress,
-			Destination: "loopback", Protocol: m.PolicyProtocolTCP, Port: strconv.Itoa(int(port.Guest)),
+			Destination: "loopback", Protocol: m.PolicyProtocolTCP, Port: strconv.Itoa(int(port.VMPort)),
+		})
+	}
+	// Explicit host-service permissions precede protected-destination denies.
+	for _, port := range n.VMToHost.Ports {
+		policy.Rules = append(policy.Rules, m.PolicyRule{
+			Action: m.PolicyActionAllow, Direction: m.PolicyDirectionEgress,
+			Destination: "host", Protocol: m.PolicyProtocolTCP, Port: strconv.Itoa(int(port)),
 		})
 	}
 	if n.Unrestricted {

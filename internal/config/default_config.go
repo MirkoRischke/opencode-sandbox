@@ -13,7 +13,7 @@ import (
 // Examples document optional file mappings and named sections without enabling them.
 // Values are serialized by the same encoder as actual defaults.
 var configExamples = map[reflect.Type]any{
-	reflect.TypeFor[PortSettings](): PortSettings{Host: 3000, Guest: 3000},
+	reflect.TypeFor[PortSettings](): PortSettings{HostPort: 3000, VMPort: 8080},
 	reflect.TypeFor[FileSettings](): FileSettings{
 		Source: "~/.config/opencode/skills", Target: "/root/.config/opencode/skills", Mode: "mount",
 	},

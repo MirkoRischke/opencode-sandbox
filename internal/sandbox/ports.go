@@ -35,7 +35,7 @@ func portBindings(ports []config.PortSettings) []m.PortBinding {
 	bindings := make([]m.PortBinding, 0, len(ports))
 	for _, port := range ports {
 		bindings = append(bindings, m.PortBinding{
-			Bind: "127.0.0.1", HostPort: port.Host, GuestPort: port.Guest, Protocol: m.PortProtocolTCP,
+			Bind: "127.0.0.1", HostPort: port.HostPort, GuestPort: port.VMPort, Protocol: m.PortProtocolTCP,
 		})
 	}
 	return bindings

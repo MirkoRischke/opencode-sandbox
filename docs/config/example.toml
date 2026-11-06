@@ -6,13 +6,6 @@
 # VM settings apply on creation. Logging settings apply on each invocation.
 # Missing configuration uses the built-in host allowlist; invalid configuration fails.
 
-# Optional TCP mappings; host listens only on 127.0.0.1. No ports exposed by default.
-# Application must listen on 0.0.0.0 in the VM. Recreate the VM after changes.
-# Workspace lists replace global lists; top-level ports = [] disables inheritance.
-# [[ports]]
-# host = 3000
-# guest = 8080
-
 # Optional host file/directory mappings. Nothing is shared implicitly.
 # Sources must exist. ~/ means the host home; relative paths use this config's directory.
 # Repo file lists replace the global list; top-level files = [] disables inheritance.
@@ -71,7 +64,7 @@ docker_disk_mib = 10240
 
 [network]
 # Allow any public destination/port/protocol, ignoring both host lists.
-# Host/private, loopback, link-local, metadata and multicast remain blocked.
+# Protected destinations remain blocked, except explicitly allowed VM-to-host ports.
 # Secret substitution scopes are unchanged.
 unrestricted = false
 # Best-effort cumulative denied-target summary per worktree. Also enables all
@@ -113,6 +106,20 @@ allowed_hosts = [
   # Not needed for normal sandbox use.
   # "httpbingo.org",
 ]
+
+# Host → VM: optional TCP mappings, bound only to host 127.0.0.1.
+# Application must listen on 0.0.0.0 in the VM. Recreate the VM after changes.
+# Workspace lists replace global lists; host_to_vm = [] under [network] clears them.
+# [[network.host_to_vm]]
+# host_port = 3000
+# vm_port = 8080
+
+# VM → host: no access by default, even with unrestricted = true.
+# Connect to host.microsandbox.internal:<port>, not the VM's localhost.
+# TCP only. Workspace lists replace global lists; [] clears inherited access.
+# Recreate the VM after changes.
+[network.vm_to_host]
+ports = [] # Example opt-in: [5432, 6379]
 
 # Optional directory-local .opencode-sandbox.toml additions to the global baseline above:
 # [network]

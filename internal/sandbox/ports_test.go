@@ -15,7 +15,7 @@ func TestPortBindingsAreLoopbackTCP(t *testing.T) {
 	require.Empty(t, portBindings(nil))
 	require.Equal(t, []m.PortBinding{
 		{Bind: "127.0.0.1", HostPort: 3000, GuestPort: 8080, Protocol: m.PortProtocolTCP},
-	}, portBindings([]config.PortSettings{{Host: 3000, Guest: 8080}}))
+	}, portBindings([]config.PortSettings{{HostPort: 3000, VMPort: 8080}}))
 }
 
 func TestOccupiedHostPortFailsClearly(t *testing.T) {
@@ -25,7 +25,7 @@ func TestOccupiedHostPortFailsClearly(t *testing.T) {
 	address, ok := listener.Addr().(*net.TCPAddr)
 	require.True(t, ok)
 	port := uint16(address.Port)
-	bindings := portBindings([]config.PortSettings{{Host: port, Guest: 8080}})
+	bindings := portBindings([]config.PortSettings{{HostPort: port, VMPort: 8080}})
 	err = checkPortBindings(bindings)
 	require.ErrorContains(t, err, "host TCP port 127.0.0.1:")
 	var opErr *net.OpError

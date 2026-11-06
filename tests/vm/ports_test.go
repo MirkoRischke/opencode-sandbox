@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -25,6 +26,60 @@ func availableHostPort(t *testing.T) uint16 {
 	port := uint16(address.Port)
 	require.NoError(t, listener.Close())
 	return port
+}
+
+func hostHTTPService(t *testing.T) (uint16, string) {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if _, err := io.WriteString(w, "host-service"); err != nil {
+			t.Errorf("write host response: %v", err)
+		}
+	}))
+	t.Cleanup(server.Close)
+	address, ok := server.Listener.Addr().(*net.TCPAddr)
+	require.True(t, ok)
+	port := uint16(address.Port)
+	return port, fmt.Sprintf("http://host.microsandbox.internal:%d", port)
+}
+
+func TestVMToHostPorts(t *testing.T) {
+	t.Parallel()
+	for _, unrestricted := range []bool{false, true} {
+		for _, allowHost := range []bool{false, true} {
+			t.Run(fmt.Sprintf("unrestricted=%t/allow_host=%t", unrestricted, allowHost), func(t *testing.T) {
+				t.Parallel()
+				port, allowedURL := hostHTTPService(t)
+				_, blockedURL := hostHTTPService(t)
+				settings := testSettings(t)
+				settings.Network.Unrestricted = unrestricted
+				if allowHost {
+					settings.Network.VMToHost.Ports = []uint16{port}
+				}
+				s := prepareSandboxWithSettings(t, newWorktree(t), settings)
+				if allowHost {
+					require.Equal(t, "host-service", execInSandbox(t, s, "curl", "--noproxy", "*", "--fail", "--silent", "--show-error", "--max-time", "5", allowedURL))
+				} else {
+					requireNetworkBlocked(t, s, allowedURL)
+				}
+				requireNetworkBlocked(t, s, blockedURL)
+			})
+		}
+	}
+}
+
+func TestVMToHostPortsAfterSnapshotRestoreAndResume(t *testing.T) {
+	t.Parallel()
+	f := newSnapshotFixture(t, "true")
+	port, allowedURL := hostHTTPService(t)
+	_, blockedURL := hostHTTPService(t)
+	f.settings.Network.VMToHost.Ports = []uint16{port}
+	s := prepareSnapshotChild(t, f.ctx, f.worktree, f.settings)
+	require.Equal(t, "host-service", execInSandbox(t, s, "curl", "--noproxy", "*", "--fail", "--silent", "--show-error", "--max-time", "5", allowedURL))
+	requireNetworkBlocked(t, s, blockedURL)
+	require.NoError(t, s.Stop(f.ctx))
+	resumed := prepareSandboxWithSettings(t, s.Worktree, f.settings)
+	require.Equal(t, "host-service", execInSandbox(t, resumed, "curl", "--noproxy", "*", "--fail", "--silent", "--show-error", "--max-time", "5", allowedURL))
+	requireNetworkBlocked(t, resumed, blockedURL)
 }
 
 func serveGuestHTTP(t *testing.T, s *sandbox.Sandbox) {
@@ -55,7 +110,7 @@ func TestPortMappingHTTPAndResume(t *testing.T) {
 	port := availableHostPort(t)
 	settings := testSettings(t)
 	settings.Network.AllowedHosts = []string{}
-	settings.Ports = []config.PortSettings{{Host: port, Guest: 8080}}
+	settings.Network.HostToVM = []config.PortSettings{{HostPort: port, VMPort: 8080}}
 	s := prepareSandboxWithSettings(t, newWorktree(t), settings)
 	serveGuestHTTP(t, s)
 	requireForwardedHTTP(t, port)
@@ -78,7 +133,7 @@ func TestPortMappingAfterSnapshotRestore(t *testing.T) {
 	t.Parallel()
 	f := newSnapshotFixture(t, "true")
 	port := availableHostPort(t)
-	f.settings.Ports = []config.PortSettings{{Host: port, Guest: 8080}}
+	f.settings.Network.HostToVM = []config.PortSettings{{HostPort: port, VMPort: 8080}}
 	s := prepareSnapshotChild(t, f.ctx, f.worktree, f.settings)
 	serveGuestHTTP(t, s)
 	requireForwardedHTTP(t, port)
@@ -88,7 +143,7 @@ func TestPortMappingWebSocket(t *testing.T) {
 	t.Parallel()
 	port := availableHostPort(t)
 	settings := testSettings(t)
-	settings.Ports = []config.PortSettings{{Host: port, Guest: 8080}}
+	settings.Network.HostToVM = []config.PortSettings{{HostPort: port, VMPort: 8080}}
 	s := startSandboxWithSettings(t, settings)
 	// A minimal WebSocket peer: read the upgrade headers and a masked text
 	// frame, then return an unmasked text frame over the same TCP connection.

@@ -120,7 +120,8 @@ func TestPortMappingsAllowOnlyLoopbackIngressWithoutChangingEgress(t *testing.T)
 		settings := config.DefaultSettings().Network
 		settings.Unrestricted = unrestricted
 		baseline := networkPolicy(settings)
-		policy := networkPolicy(settings, config.PortSettings{Host: 3000, Guest: 8080})
+		settings.HostToVM = []config.PortSettings{{HostPort: 3000, VMPort: 8080}}
+		policy := networkPolicy(settings)
 		require.Equal(t, m.PolicyActionDeny, policy.DefaultIngress)
 		require.Equal(t, baseline.DefaultEgress, policy.DefaultEgress)
 		require.Equal(t, baseline.Rules, policy.Rules[1:])
@@ -128,5 +129,25 @@ func TestPortMappingsAllowOnlyLoopbackIngressWithoutChangingEgress(t *testing.T)
 			Action: m.PolicyActionAllow, Direction: m.PolicyDirectionIngress,
 			Destination: "loopback", Protocol: m.PolicyProtocolTCP, Port: "8080",
 		}, policy.Rules[0])
+	}
+}
+
+func TestVMToHostAllowsOnlyExplicitTCPPortsBeforeProtectedDenies(t *testing.T) {
+	t.Parallel()
+	for _, unrestricted := range []bool{false, true} {
+		settings := config.DefaultSettings().Network
+		settings.Unrestricted = unrestricted
+		baseline := networkPolicy(settings)
+		settings.VMToHost.Ports = []uint16{5432, 443}
+		policy := networkPolicy(settings)
+		require.Equal(t, baseline.Rules, policy.Rules[2:])
+		for i, port := range []string{"5432", "443"} {
+			require.Equal(t, m.PolicyRule{
+				Action: m.PolicyActionAllow, Direction: m.PolicyDirectionEgress,
+				Destination: "host", Protocol: m.PolicyProtocolTCP, Port: port,
+			}, policy.Rules[i])
+		}
+		require.Equal(t, m.PolicyActionDeny, policy.DefaultEgress)
+		require.Equal(t, m.PolicyActionDeny, policy.DefaultIngress)
 	}
 }

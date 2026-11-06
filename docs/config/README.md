@@ -97,14 +97,16 @@ prompt is open. Approval is checked before loading credentials or starting the V
 including when resuming an existing VM. Existing VM policies and credentials still
 require recreation to change, as described below.
 
-## Port mappings
+## Directional port access
+
+### Host → VM
 
 Expose a development server to your host browser with explicit TCP mappings:
 
 ```toml
-[[ports]]
-host = 3000
-guest = 8080
+[[network.host_to_vm]]
+host_port = 3000
+vm_port = 8080
 ```
 
 Run the application on `0.0.0.0:8080` inside the VM, then open
@@ -114,8 +116,8 @@ certificate. Host listeners bind only to `127.0.0.1`, never your LAN.
 
 No ports are exposed by default. Both fields are required, in the range 1–65535;
 host ports must be unique and available when starting the VM. Multiple mappings
-are supported. Workspace `ports` replaces the entire global list; top-level
-`ports = []` disables inherited mappings. Workspace changes require normal config
+are supported. Workspace `network.host_to_vm` replaces the entire global list;
+`host_to_vm = []` under `[network]` disables inherited mappings. Workspace changes require normal config
 approval. Outbound network restrictions are unchanged.
 
 Mappings last while the VM runs and release their host ports when it stops.
@@ -124,6 +126,27 @@ Snapshot restores apply the current configuration; snapshot preparation does not
 bind host ports. For Docker applications, also publish the container port to the
 VM (for example, `docker run -p 8080:80 ...`). UDP, LAN binding, automatic port
 selection, and coordination between worktrees are not supported.
+
+### VM → host
+
+Allow access to selected host-local TCP services, without publishing or remapping ports:
+
+```toml
+[network.vm_to_host]
+ports = [5432, 6379]
+```
+
+Connect from the VM to `host.microsandbox.internal:5432`, not `localhost`
+(which refers to the VM itself). Services bound to host `127.0.0.1` are reachable.
+No host service ports are reachable by default, even with `network.unrestricted = true`.
+Only explicitly listed TCP ports are allowed; other host ports and protected
+destinations remain blocked. Microsandbox's internal DNS remains separate from
+host service access.
+
+Ports must be unique and in the range 1–65535. Workspace lists replace global
+lists; `ports = []` under `[network.vm_to_host]` clears inherited access. Workspace
+approval applies as usual. Recreate the VM after changes; snapshot restores use
+the current policy. Host access also applies during snapshot preparation.
 
 ## Launch behaviour
 
@@ -456,7 +479,7 @@ explicit graceful Docker shutdown. Exiting the launcher stops the entire VM.
 The Docker socket is guest-local, never the host's socket; there is no TCP daemon
 listener configured by the supplied image. Compose networks and published
 container ports work inside the VM. To reach them from the host, configure
-an explicit [port mapping](#port-mappings) in addition to Docker's port publishing.
+an explicit [port mapping](#directional-port-access) in addition to Docker's port publishing.
 
 The built-in defaults and `docs/config/example.toml` allow public Docker Hub and
 Amazon ECR Public pulls, including Docker Hub's authentication and image-download
@@ -470,7 +493,7 @@ make HTTPS requests through the inspected network must trust that CA themselves.
 Both network host lists accept Microsandbox's native syntax: `example.com` matches
 only that host; `.example.com` matches the base domain and all nested subdomains.
 Values are passed unchanged; `*.example.com`, URLs, IPs, and ports are rejected.
-Connections are limited to TCP port 443
+Internet connections are limited to TCP port 443
 with strict hostname checks and verified TLS inspection. Other outbound traffic
 is denied, apart from DNS for allowed names through Microsandbox's gateway.
 Disallowed DNS queries are rejected locally without forwarding upstream; an
@@ -479,7 +502,7 @@ can follow CNAMEs while resolving an allowed name, without granting guest access
 to query the alias targets directly. Suffix entries also permit DNS queries for
 all matching subdomains, so avoid suffixes containing attacker-controlled names.
 Host/private networks, loopback, link-local and metadata destinations remain
-blocked. Both host lists
+blocked, except explicitly configured `network.vm_to_host.ports`. Both host lists
 must be empty and `unrestricted` must be false to deny application internet access. Missing files or omitted
 network settings use the built-in development-service allowlist. Malformed TOML, unknown keys,
 and invalid values fail launch before VM startup.
@@ -496,9 +519,11 @@ by Microsandbox, including plain HTTP and direct IP connections. Both
 `allowed_hosts` and `additional_allowed_hosts` are ignored, not rejected; their
 values take effect again when `unrestricted` is disabled. Configured hostnames
 must still be valid. Host/private networks, loopback, link-local, metadata,
-multicast, and unspecified addresses remain blocked, apart from gateway DNS.
+multicast, and unspecified addresses remain blocked, apart from gateway DNS and
+explicitly configured `network.vm_to_host.ports`.
 Guest-local loopback is internal to the VM and is unaffected by egress policy.
-Inbound access remains denied. TLS inspection and verified upstream TLS remain
+Inbound access remains denied except configured `network.host_to_vm` mappings.
+TLS inspection and verified upstream TLS remain
 enabled, and secret substitution stays limited to its configured hosts/headers.
 Unrestricted access does not expand any credential's substitution scope.
 Existing TLS inspection limitations still apply: direct-IP HTTPS can fail even

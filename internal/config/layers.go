@@ -35,7 +35,10 @@ func mergeSettings(settings Settings, data []byte, origin string) (Settings, err
 	if metadata.IsDefined("files") {
 		delete(overlay, "files")
 	}
-	delete(overlay, "ports") // Preserve TOML's strict array-table decoding.
+	if network, ok := overlay["network"].(map[string]any); ok {
+		delete(network, "host_to_vm") // Preserve TOML's strict array-table decoding.
+		delete(network, "vm_to_host")
+	}
 	k := koanf.New(".")
 	base := settings
 	base.Secrets = nil // Preserve named entries and empty keyring tables outside koanf.
@@ -50,9 +53,13 @@ func mergeSettings(settings Settings, data []byte, origin string) (Settings, err
 		return settings, err
 	}
 	merged.Secrets = mergeSecretEntries(settings.Secrets, partial.Secrets)
-	merged.Ports = settings.Ports
-	if metadata.IsDefined("ports") {
-		merged.Ports = partial.Ports
+	merged.Network.HostToVM = settings.Network.HostToVM
+	if metadata.IsDefined("network", "host_to_vm") {
+		merged.Network.HostToVM = partial.Network.HostToVM
+	}
+	merged.Network.VMToHost = settings.Network.VMToHost
+	if metadata.IsDefined("network", "vm_to_host", "ports") {
+		merged.Network.VMToHost.Ports = partial.Network.VMToHost.Ports
 	}
 	merged.Files = settings.Files
 	if metadata.IsDefined("files") {

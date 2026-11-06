@@ -13,11 +13,10 @@ import (
 // Settings is the host-side launcher configuration, separate from OpenCode's
 // guest JSON configuration. Add new launcher settings as fields or sections.
 type Settings struct {
-	Ports    []PortSettings            `toml:"ports" description:"TCP mappings from host 127.0.0.1 to guest ports. Empty exposes nothing. Workspace lists replace global lists; recreate the VM after changes."`
 	Files    []FileSettings            `toml:"files" description:"Explicit host file/directory mappings. Default mode mount is read-only; copy seeds writable guest files on creation and snapshot restore. Recreate the VM after changing mappings."`
 	AWS      AWSSettings               `toml:"aws" description:"Optional AWS role credentials for launches. CLI flags override individual fields; host credentials are never stored here."`
 	VM       VMSettings                `toml:"vm" description:"VM resources. Recreate the VM after changing these settings."`
-	Network  NetworkSettings           `toml:"network" description:"Outbound network access. Recreate the VM after policy changes."`
+	Network  NetworkSettings           `toml:"network" description:"Network access and directional port exposure. Recreate the VM after changes."`
 	Snapshot SnapshotSettings          `toml:"snapshot" description:"Per-directory prepared disk baseline. Created automatically on first launch; rebuild and remove with the snapshot commands. Rebuild the snapshot and recreate the VM after provisioning changes."`
 	Logging  LoggingSettings           `toml:"logging" description:"Host launcher logging. Console output goes to stderr; JSON logfiles retain Info and above."`
 	Secrets  map[string]SecretSettings `toml:"secrets" description:"Optional file- or OS-keyring-backed secrets, substituted by the host proxy. Workspace entries replace same-named global entries completely. Uncomment and adjust the example to enable."`
@@ -54,10 +53,16 @@ type VMSettings struct {
 }
 
 type NetworkSettings struct {
-	Unrestricted           bool     `toml:"unrestricted" description:"Allow public internet on any port/protocol, ignoring both host lists. Protected destinations remain blocked; secret scopes are unchanged."`
-	Diagnostics            bool     `toml:"diagnostics" description:"Collect cumulative denied-target diagnostics per workspace. Enables full rotating runtime debug logs and HTTP denial responses; recreate the VM after changing this setting."`
-	AllowedHosts           []string `toml:"allowed_hosts" description:"Baseline DNS hosts: example.com matches exactly; .example.com includes the base domain and all subdomains. Passed unchanged to Microsandbox; HTTPS/WSS on TCP port 443 only."`
-	AdditionalAllowedHosts []string `toml:"additional_allowed_hosts" description:"Extra hostnames, combined with allowed_hosts after merging. With unrestricted disabled, both lists must be empty to deny internet access. Each list replaces its inherited value when specified."`
+	Unrestricted           bool             `toml:"unrestricted" description:"Allow public internet on any port/protocol, ignoring both host lists. Protected destinations remain blocked except explicit vm_to_host ports; secret scopes are unchanged."`
+	Diagnostics            bool             `toml:"diagnostics" description:"Collect cumulative denied-target diagnostics per workspace. Enables full rotating runtime debug logs and HTTP denial responses; recreate the VM after changing this setting."`
+	AllowedHosts           []string         `toml:"allowed_hosts" description:"Baseline DNS hosts: example.com matches exactly; .example.com includes the base domain and all subdomains. Passed unchanged to Microsandbox; HTTPS/WSS on TCP port 443 only."`
+	AdditionalAllowedHosts []string         `toml:"additional_allowed_hosts" description:"Extra hostnames, combined with allowed_hosts after merging. With unrestricted disabled, both lists must be empty to deny internet access. Each list replaces its inherited value when specified."`
+	HostToVM               []PortSettings   `toml:"host_to_vm" description:"TCP mappings allowing the host to reach VM services, bound to host 127.0.0.1 only. Empty exposes nothing. Workspace lists replace global lists."`
+	VMToHost               VMToHostSettings `toml:"vm_to_host" description:"Allow the VM to reach explicitly selected host-local services via host.microsandbox.internal. No port mapping."`
+}
+
+type VMToHostSettings struct {
+	Ports []uint16 `toml:"ports" description:"Host TCP ports (1-65535) reachable from the VM. Empty blocks all host service ports, including with unrestricted enabled. Workspace lists replace global lists; [] clears inherited access."`
 }
 
 // DefaultSettings allows common development services over HTTPS.
@@ -65,9 +70,10 @@ func DefaultSettings() Settings {
 	return Settings{
 		Logging: LoggingSettings{ConsoleLevel: "info"},
 		Files:   []FileSettings{},
-		Ports:   []PortSettings{},
 		VM:      VMSettings{Image: "opencode-sandbox:poc", CPUs: 2, MemoryMiB: 2048, RootDiskMiB: 4096, DockerDiskMiB: 10240},
 		Network: NetworkSettings{
+			HostToVM: []PortSettings{},
+			VMToHost: VMToHostSettings{Ports: []uint16{}},
 			AllowedHosts: []string{
 				// OpenAI inference and authentication.
 				"chatgpt.com", "api.openai.com", "auth.openai.com",
@@ -135,15 +141,25 @@ func (s Settings) Validate() error {
 	if err := validateFiles(s.Files); err != nil {
 		return err
 	}
-	if err := validatePorts(s.Ports); err != nil {
-		return err
-	}
 	return ValidateSecrets(s.Secrets)
 }
 
 var hostnamePattern = regexp.MustCompile(`(?i)^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
 
 func (n NetworkSettings) validate() error {
+	if err := validatePorts(n.HostToVM); err != nil {
+		return err
+	}
+	seen := make(map[uint16]bool, len(n.VMToHost.Ports))
+	for i, port := range n.VMToHost.Ports {
+		if port == 0 {
+			return fmt.Errorf("network.vm_to_host.ports[%d]: port must be between 1 and 65535", i)
+		}
+		if seen[port] {
+			return fmt.Errorf("network.vm_to_host.ports[%d]: duplicate host TCP port %d", i, port)
+		}
+		seen[port] = true
+	}
 	if n.AllowedHosts == nil {
 		return fmt.Errorf("network.allowed_hosts is required (use [] for an empty baseline)")
 	}

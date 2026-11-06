@@ -34,6 +34,10 @@
   Each VM has its own persistent Docker data disk.
   See [Docker configuration](../config/README.md#docker-inside-the-vm).
 - **Port mappings:** access servers running inside the VM from your host using
-  explicit loopback-only [TCP port mappings](../config/README.md#port-mappings).
+  explicit loopback-only [TCP port mappings](../config/README.md#directional-port-access).
+- **Host service access:** reach explicitly allowed host TCP ports from inside the
+  VM at `host.microsandbox.internal:<port>` (for example,
+  `http://host.microsandbox.internal:3000`). No host service ports are reachable by
+  default. See [directional port access](../config/README.md#directional-port-access).
 - **Prepared workspace snapshots:** warm tools, dependency caches, and Docker images
   once; recreated VMs restore the directory's baseline, with or without Git.

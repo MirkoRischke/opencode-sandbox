@@ -181,10 +181,10 @@ func createPreparationVM(ctx context.Context, w workspace.Workspace, name string
 	// Preparation does not serve applications and must not compete with a
 	// running workspace VM for its host ports. Restore uses current mappings.
 	preparationSettings := settings
-	preparationSettings.Ports = nil
+	preparationSettings.Network.HostToVM = nil
 	// Trusted provisioning needs arbitrary public tool/download hosts. Only this
 	// disposable VM gets broad access; restore applies the workspace policy.
-	// Unrestricted mode still blocks host/private/metadata destinations.
+	// Explicit host-service permissions remain; other protected destinations stay blocked.
 	preparationSettings.Network.Unrestricted = true
 	opts := sandboxOptions(w, snapshotWorktree, preparationSettings)
 	opts = append(opts, m.WithImage(image))
@@ -403,7 +403,7 @@ func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, s
 	if err != nil {
 		return nil, false, err
 	}
-	if err := checkPortBindings(portBindings(settings.Ports)); err != nil {
+	if err := checkPortBindings(portBindings(settings.Network.HostToVM)); err != nil {
 		return nil, false, err
 	}
 	if head == nil {
@@ -428,13 +428,13 @@ func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, w
 	if err != nil {
 		return nil, err
 	}
-	policy := networkPolicy(settings.Network, settings.Ports...)
+	policy := networkPolicy(settings.Network)
 	// Restore accepts host policy only, not HTTP/TLS creation settings.
 	policy.HTTP = nil
 	restore := m.RestoreConfig{
 		CPUs: &settings.VM.CPUs, MemoryMiB: &settings.VM.MemoryMiB, NetworkPolicy: policy,
 		Volumes: workspaceMounts(w, snapshotWorktree, w.Root()),
-		Ports:   portBindings(settings.Ports),
+		Ports:   portBindings(settings.Network.HostToVM),
 	}
 	addOpenCodeMount(restore.Volumes, databaseDir)
 	addReadOnlyMounts(restore.Volumes, settings)
