@@ -34,7 +34,7 @@ func TestDefaultConfigRoundTripsToRuntimeDefaults(t *testing.T) {
 	require.Contains(t, out.String(), `role = ""`)
 	require.Contains(t, out.String(), `profile = ""`)
 	require.Empty(t, settings.AWS, "defaults must not enable AWS")
-	require.Contains(t, out.String(), `image = "opencode-sandbox:poc"`)
+	require.Contains(t, out.String(), `image = "opencode-sandbox:base"`)
 	var again bytes.Buffer
 	require.NoError(t, WriteDefaultConfig(&again))
 	require.Equal(t, out.String(), again.String())

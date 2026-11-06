@@ -58,7 +58,7 @@ console_level = "info" # debug, info, warn, or error
 [vm]
 # Applied at VM creation only. Sizes are in MiB.
 # Image must already be loaded into Microsandbox (msb load); no automatic pulls.
-image = "opencode-sandbox:poc"
+image = "opencode-sandbox:base"
 cpus = 2
 memory_mib = 2048
 root_disk_mib = 4096

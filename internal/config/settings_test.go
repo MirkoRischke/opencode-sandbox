@@ -51,7 +51,7 @@ func TestVMSettingsOverrideDefaultsIndependently(t *testing.T) {
 	writeSettingsAt(t, dir, "[vm]\nmemory_mib = 3072\n")
 	settings, err := launcherconfig.LoadSettings(dir)
 	require.NoError(t, err)
-	require.Equal(t, launcherconfig.VMSettings{Image: "opencode-sandbox:poc", CPUs: 2, MemoryMiB: 3072, RootDiskMiB: 4096, DockerDiskMiB: 10240}, settings.VM)
+	require.Equal(t, launcherconfig.VMSettings{Image: "opencode-sandbox:base", CPUs: 2, MemoryMiB: 3072, RootDiskMiB: 4096, DockerDiskMiB: 10240}, settings.VM)
 	require.Equal(t, launcherconfig.DefaultSettings().Network.AllowedHosts, settings.Network.AllowedHosts)
 }
 

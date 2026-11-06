@@ -284,7 +284,7 @@ the guest; the guest receives no Herdr socket access.
 
 ```toml
 [vm]
-image = "opencode-sandbox:poc"
+image = "opencode-sandbox:base"
 cpus = 2
 memory_mib = 2048
 root_disk_mib = 4096
@@ -303,7 +303,7 @@ recreate them to apply changes.
 ### Custom VM images
 
 Set `vm.image` in global `config.toml` or workspace `.opencode-sandbox.toml` to select
-your own image. It defaults to `opencode-sandbox:poc` and must not be empty.
+your own image. It defaults to `opencode-sandbox:base` and must not be empty.
 Docker must be available on the host. For fresh VMs and snapshot preparation, the
 launcher uses the image in your local Docker store whenever present; otherwise it
 runs `docker pull`, using your Docker context and registry credentials. Registry
@@ -335,8 +335,8 @@ Existing VMs resume from their persistent disks without resolving the image.
 Snapshot restores likewise use the captured image. Recreate the VM and, when used,
 the snapshot baseline to adopt a changed image.
 
-The simplest compatible image extends the supplied image with
-`FROM opencode-sandbox:poc`. Custom images need Bash, Git, mise, and OpenCode on
+The supplied `opencode-sandbox:base` image is a base for your own images. Extend it
+with `FROM opencode-sandbox:base`. Custom images need Bash, Git, mise, and OpenCode on
 `PATH`, plus a working system CA trust store for Microsandbox's TLS inspection.
 GitHub credential integration additionally requires `gh`; AWS integration requires
 the AWS CLI. Docker is optional: images without `dockerd` skip daemon startup.

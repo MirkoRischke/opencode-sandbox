@@ -45,17 +45,17 @@ flag "--dotfiles <path>" default="../dotfiles"
 run = 'go run ./scripts/upgrade-microsandbox --dotfiles "${usage_dotfiles?}" "${usage_version?}"'
 
 [tasks.build]
-description = "Build the sandbox image"
+description = "Build the sandbox base image"
 sources = ["Dockerfile", ".dockerignore"]
 outputs = { auto = true }
-run = "docker build -t opencode-sandbox:poc ."
+run = "docker build -t opencode-sandbox:base ."
 
 [tasks.load]
 description = "Build and import the image into Microsandbox"
 depends = ["build"]
 sources = ["Dockerfile", ".dockerignore"]
 outputs = { auto = true }
-run = "bash -o pipefail -c 'docker save opencode-sandbox:poc | msb load'"
+run = "bash -o pipefail -c 'docker save opencode-sandbox:base | msb load'"
 
 [tasks."test:prepare"]
 description = "Prepare test images when their inputs change"
