@@ -261,12 +261,12 @@ unimplemented. Linux FUSE therefore handles locks locally in each guest kernel,
 not as shared host locks across independent VMs. DAX/mmap support alone does not
 provide the missing locking semantics.
 
-Impact: the experimental per-repository OpenCode SQLite database is deliberately
-mounted writable into multiple worktree VMs. SQLite WAL requires coherent shared
-memory and file locking. Concurrent database access can corrupt or lose history;
-this project explicitly accepts that risk for experimentation. A successful
-short test is not evidence of safety. OpenCode's independent-server coordination
-is a separate application-level concern, not a Microsandbox defect.
+Impact: OpenCode SQLite storage is dedicated to each workspace VM, rather than
+shared across worktree VMs. Keep that isolation: SQLite WAL requires coherent
+shared memory and file locking, and concurrent database access across VMs can
+corrupt or lose history. A successful short test is not evidence of safety.
+OpenCode's independent-server coordination is a separate application-level
+concern, not a Microsandbox defect.
 
 - Evidence: [v0.7.11 backend capability negotiation](https://github.com/superradcompany/microsandbox/blob/v0.7.11/crates/filesystem/lib/backends/passthroughfs/unix/mod.rs#L613-L654),
   [pinned dependency](https://github.com/superradcompany/microsandbox/blob/v0.7.11/Cargo.toml),

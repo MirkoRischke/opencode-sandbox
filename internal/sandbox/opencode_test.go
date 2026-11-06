@@ -3,6 +3,7 @@ package sandbox
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -19,7 +20,7 @@ func TestOpenCodeStorageUsesXDGAndPreservesExistingData(t *testing.T) {
 	require.NoError(t, err)
 	dir, err := prepareOpenCodeStorage(w)
 	require.NoError(t, err)
-	require.Equal(t, filepath.Join(state, "opencode-sandbox", "opencode", w.RepositoryID()), dir)
+	require.Equal(t, filepath.Join(state, "opencode-sandbox", "opencode", w.ID()), dir)
 	info, err := os.Stat(dir)
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0700), info.Mode().Perm())
@@ -31,6 +32,32 @@ func TestOpenCodeStorageUsesXDGAndPreservesExistingData(t *testing.T) {
 	contents, err := os.ReadFile(database)
 	require.NoError(t, err)
 	require.Equal(t, "existing history", string(contents))
+}
+
+func TestOpenCodeStorageIsolatedBetweenLinkedWorktrees(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir()) //nolint:forbidigo // Isolate host storage; Setenv prevents parallel execution.
+	parent := t.TempDir()
+	repo, tree := filepath.Join(parent, "repo"), filepath.Join(parent, "tree")
+	for _, args := range [][]string{
+		{"init", "--initial-branch=main", repo},
+		{"-C", repo, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "-m", "initial"},
+		{"-C", repo, "worktree", "add", "-b", "other", tree},
+	} {
+		out, err := exec.Command("git", args...).CombinedOutput()
+		require.NoError(t, err, "%s", out)
+	}
+	checkout, err := workspace.Resolve(t.Context(), repo)
+	require.NoError(t, err)
+	linked, err := workspace.Resolve(t.Context(), tree)
+	require.NoError(t, err)
+	require.Equal(t, checkout.RepositoryID(), linked.RepositoryID())
+	first, err := prepareOpenCodeStorage(checkout)
+	require.NoError(t, err)
+	second, err := prepareOpenCodeStorage(linked)
+	require.NoError(t, err)
+	require.NotEqual(t, first, second)
+	require.NoError(t, os.WriteFile(filepath.Join(first, "opencode.db"), []byte("checkout history"), 0600))
+	require.NoFileExists(t, filepath.Join(second, "opencode.db"))
 }
 
 func TestOpenCodeStorageFallsBackToHome(t *testing.T) {
