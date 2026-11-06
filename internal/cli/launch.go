@@ -36,6 +36,9 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 	if err != nil {
 		return err
 	}
+	if err := workspace.Track(stateDir, w); err != nil {
+		return err
+	}
 	ctx, finish := startLogging(ctx, stateDir, w.Root(), "launch", os.Stderr)
 	defer func() { finish(err) }()
 	logger := logging.FromContext(ctx)

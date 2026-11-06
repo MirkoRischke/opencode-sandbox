@@ -7,6 +7,9 @@
   so you can use your usual editor without syncing files.
 - **Persistent environments:** VMs stop when OpenCode exits, but retain installed
   tools and guest files for the next launch.
+- **Resource cleanup:** prune the current worktree, a repo, or all managed
+  workspaces, including history, snapshots, and logs. Global cleanup also removes
+  all MSB images and prunes runtime caches. See [cleanup](cleanup.md).
 - **Persistent OpenCode history (experimental):** a checkout and its linked Git
   worktrees share a host-backed OpenCode database, independent of VM disks and
   snapshots. See [storage and concurrency risks](opencode-history.md).

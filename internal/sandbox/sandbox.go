@@ -117,6 +117,7 @@ func sandboxOptions(w workspace.Workspace, guestRoot string, settings launcherco
 		m.WithNetwork(networkPolicy(settings.Network)), m.WithInterceptTLS(),
 		m.WithPortBindings(portBindings(settings.Network.HostToVM)...),
 		m.WithLabel("opencode-sandbox", ""),
+		m.WithLabel("workspace-id", w.ID()),
 	}
 	if settings.Network.Diagnostics {
 		opts = append(opts, m.WithLogLevel(m.LogLevelDebug))

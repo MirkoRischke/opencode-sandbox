@@ -280,6 +280,40 @@ concern, not a Microsandbox defect.
   termination. Separately verify WAL shared-memory coherence and crash recovery.
   Recheck OpenCode multi-server behavior independently before claiming safety.
 
+## MSB-11 — Cache cleanup retains owned backing
+
+**Status:** confirmed public interface limitation. Checked Go SDK/runtime v0.7.11
+on 2026-11-07; source-level check, not a live ownership experiment.
+
+`PruneStorage` only removes unused runtime RAM. Its options expose dry-run and age
+filtering, but no force flag. The runtime revalidates ownership under its own locks
+and retains active or pending-handoff files. Stable lock files are also retained.
+This is a safety constraint, not a suspected bug.
+
+Image removal has a related constraint: `Image.Remove(..., true)` removes a
+reference even when a sandbox/snapshot uses it, but retains the backing owned by
+those resources. Active storage operations can still return `ErrImageInUse`.
+`Image.Prune` collects unreferenced backing but also respects ownership.
+
+Impact: `prune --all` force-removes all cached MSB images, but cannot promise to
+delete every runtime cache while unrelated MSB resources still own it. The command
+rescans caches after managed VM/snapshot removal and reports retained files as
+incomplete cleanup. It never bypasses ownership locks or removes stable lock files.
+Image references are removed machine-wide, but image backing owned by unrelated
+sandboxes/snapshots remains. Removing those unrelated VMs/snapshots is outside the
+command's scope.
+
+- Evidence: [Go storage contract](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/go/storage.go),
+  [prune options and report](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/go/internal/ffi/storage.go),
+  [runtime cache ownership](https://github.com/superradcompany/microsandbox/blob/v0.7.11/crates/runtime/lib/checkpoint/cache_storage.rs),
+  [image cleanup and force semantics](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/rust/lib/image/cleanup.rs).
+- Project references: `internal/sandbox/prune_runtime.go`, `internal/sandbox/prune_test.go`.
+- Upgrade check: recheck force/ownership options and retained-file report states;
+  verify cleanup before and after releasing an unrelated runtime owner. Do not
+  infer complete cache deletion merely from a successful pruning call.
+  Also recheck forced image removal versus backing retention, and orphaned image
+  backing collection after its final sandbox/snapshot owner is removed.
+
 ## Issues needing verification, not confirmed upstream bugs
 
 ### Restored root-disk metadata reports `SizeMiB = 0`

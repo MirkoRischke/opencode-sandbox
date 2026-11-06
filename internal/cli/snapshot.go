@@ -65,6 +65,9 @@ func newSnapshotCreateCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := workspace.Track(stateDir, w); err != nil {
+				return err
+			}
 			ctx, finish := startLogging(cmd.Context(), stateDir, w.Root(), "snapshot create", cmd.ErrOrStderr())
 			defer func() { finish(err) }()
 			paths.Logger = logging.FromContext(ctx)

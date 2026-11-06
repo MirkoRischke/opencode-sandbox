@@ -74,6 +74,10 @@ opencode-sandbox        # Launch for the exact current directory (Git optional)
 opencode-sandbox list   # List managed VMs (alias: ls)
 opencode-sandbox remove # Delete this directory's VM without confirmation (alias: rm)
 opencode-sandbox remove --all # Delete ALL managed VMs without confirmation
+opencode-sandbox prune --dry-run # Preview deletion of this worktree's resources
+opencode-sandbox prune # Delete this worktree's VMs, snapshots, history, logs, and diagnostics
+opencode-sandbox prune --repo # Include this repo's other worktrees, including deleted ones
+opencode-sandbox prune --all # All managed workspaces AND ALL machine-wide MSB images/runtime caches
 opencode-sandbox --help # Show launch options
 opencode-sandbox config default # Print documented launcher defaults
 opencode-sandbox secret set github # Store/replace a keyring secret (hidden input; config unchanged)

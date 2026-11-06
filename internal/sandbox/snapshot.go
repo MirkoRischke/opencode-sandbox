@@ -510,7 +510,7 @@ func restoredWorktreePatch(root string, secrets []Secret) m.ModifyOptions {
 	patch := m.ModifyOptions{
 		Policy: m.ModificationPolicyNextStart, Workdir: root,
 		Env:     map[string]string{"OPENCODE_DB": openCodeDatabase},
-		Labels:  map[string]string{"opencode-sandbox": ""},
+		Labels:  map[string]string{"opencode-sandbox": "", "workspace-id": snapshotIdentity(root).id},
 		Secrets: make(map[string]m.SecretModifySpec, len(secrets)),
 	}
 	for _, secret := range secrets {
