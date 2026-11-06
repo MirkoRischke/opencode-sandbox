@@ -26,7 +26,7 @@ func TestDefaultConfigRoundTripsToRuntimeDefaults(t *testing.T) {
 	require.Empty(t, settings.Secrets, "examples must not enable credentials")
 	require.Empty(t, settings.Files, "examples must not expose host files")
 	require.Empty(t, settings.Network.HostToVM, "examples must not expose VM ports")
-	require.Empty(t, settings.Network.VMToHost.Ports, "defaults must not expose host ports")
+	require.Equal(t, []uint16{4000}, settings.Network.VMToHost.Ports, "only the host gateway is exposed by default")
 	require.Contains(t, out.String(), "additional_allowed_hosts = []")
 	require.Contains(t, out.String(), "diagnostics = false")
 	require.Contains(t, out.String(), "unrestricted = false")

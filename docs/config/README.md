@@ -133,12 +133,13 @@ Allow access to selected host-local TCP services, without publishing or remappin
 
 ```toml
 [network.vm_to_host]
-ports = [5432, 6379]
+ports = [4000, 5432, 6379]
 ```
 
 Connect from the VM to `host.microsandbox.internal:5432`, not `localhost`
 (which refers to the VM itself). Services bound to host `127.0.0.1` are reachable.
-No host service ports are reachable by default, even with `network.unrestricted = true`.
+Only host TCP port 4000 (the shared LLM gateway) is reachable by default.
+`network.unrestricted = true` does not open any additional host ports.
 Only explicitly listed TCP ports are allowed; other host ports and protected
 destinations remain blocked. Microsandbox's internal DNS remains separate from
 host service access.
@@ -714,10 +715,13 @@ every matching subdomain to receive the credential; scope them carefully.
 
 Guests receive placeholders such as `$MSB_GH_TOKEN`, never the source value.
 Microsandbox substitutes values only in the selected headers for the selected
-hosts over verified TLS. Secret scopes never grant network access: the hosts
-must independently be allowed by `[network]`. Configuring `GH_TOKEN` also enables
-GitHub's guest HTTPS Git credential helper. OpenAI subscription authentication
-remains separate and unchanged.
+hosts over verified TLS by default. A per-secret `allow_http = true` explicitly
+permits plaintext HTTP substitution, needed for the trusted host-local
+[LLM gateway](../../llm-gateway/README.md). Do not enable it for public HTTP.
+Secret scopes never grant network access: the destination must independently be
+allowed by `[network]`, including `vm_to_host.ports` for host services.
+Configuring `GH_TOKEN` also enables GitHub's guest HTTPS Git credential helper.
+Subscription authentication stays in the host gateway, not the VM.
 
 Real values persist in Microsandbox's **host-side VM configuration**. Never log
 resolved secrets or commit credential files. Keyring storage protects the source

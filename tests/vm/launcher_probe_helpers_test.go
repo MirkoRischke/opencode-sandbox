@@ -38,6 +38,15 @@ printf 'exit "$(cat "$PWD/launcher-probe-status")"\n' > /root/.bashrc`)
 
 func runLauncherProbe(t *testing.T, s *sandbox.Sandbox, env map[string]string, probe string, flags ...string) error {
 	t.Helper()
+	// These probes exercise launcher/guest behavior, not the shared host gateway.
+	// Keep ordinary VM tests independent of a developer's Compose installation.
+	bin := t.TempDir()
+	docker, err := exec.LookPath("docker")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "docker"), []byte(fmt.Sprintf(`#!/bin/sh
+if [ "$1" = compose ]; then printf 'litellm healthy\ndb healthy\n'; exit 0; fi
+exec %q "$@"
+`, docker)), 0700))
 	require.NoError(t, os.WriteFile(filepath.Join(s.Worktree, "launcher-probe.sh"), []byte(probe), 0600))
 	args := append([]string{buildLauncher(t)}, flags...)
 	var scriptArgs []string
@@ -58,6 +67,7 @@ func runLauncherProbe(t *testing.T, s *sandbox.Sandbox, env map[string]string, p
 	command := exec.CommandContext(ctx, "script", scriptArgs...)
 	command.Dir = s.Worktree
 	command.Env = os.Environ()
+	command.Env = append(command.Env, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"), "XDG_DATA_HOME="+t.TempDir())
 	for key, value := range env {
 		command.Env = append(command.Env, key+"="+value)
 	}

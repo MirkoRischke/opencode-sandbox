@@ -41,7 +41,7 @@ func TestInvalidPortConfiguration(t *testing.T) {
 
 func TestVMToHostConfigurationLayers(t *testing.T) {
 	t.Parallel()
-	require.Empty(t, DefaultSettings().Network.VMToHost.Ports)
+	require.Equal(t, []uint16{4000}, DefaultSettings().Network.VMToHost.Ports)
 	settings, err := mergeSettings(DefaultSettings(), []byte("[network.vm_to_host]\nports = [5432, 6379]"), "/global")
 	require.NoError(t, err)
 	require.Equal(t, []uint16{5432, 6379}, settings.Network.VMToHost.Ports)

@@ -58,6 +58,23 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 	if err != nil {
 		return err
 	}
+	gateway, err := hostGateway()
+	if err != nil {
+		return err
+	}
+	// VM/snapshot preparation overlaps gateway startup. Join the worker on every
+	// exit; cancellation never tears down the shared Compose project.
+	gatewayCtx, cancelGateway := context.WithCancel(ctx)
+	gatewayReady := make(chan struct{})
+	var gatewayErr error
+	go func() {
+		defer close(gatewayReady)
+		gatewayErr = gateway.Ensure(gatewayCtx, os.Stderr)
+	}()
+	defer func() {
+		cancelGateway()
+		<-gatewayReady
+	}()
 	s, err := sandbox.PrepareWorkspace(ctx, w, secrets, settings, sandbox.DiagnosticsOptions{StateDir: stateDir})
 	if err != nil {
 		return err
@@ -72,6 +89,10 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 		return err
 	}
 	defer stopAWS()
+	<-gatewayReady
+	if gatewayErr != nil {
+		return gatewayErr
+	}
 	return s.Open(ctx)
 }
 

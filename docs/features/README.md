@@ -17,7 +17,9 @@
 - **Network allowlist:** allow common development services over HTTPS by default;
   customize allowed hosts or deny all application internet access.
 - **Custom credentials:** configure file- or OS-keyring-backed secrets, injected into
-  HTTPS headers by the host proxy without storing their values in the guest.
+  HTTP headers by the host proxy without storing their values in the guest.
+  Verified TLS is required unless a secret explicitly opts into HTTP, as for the
+  [host LLM gateway](../../llm-gateway/README.md).
   [Snapshot restore limitations](../config/README.md#workspace-snapshots) apply to header selection.
 - **Workspace configuration:** override global settings with a directory-local
   `.opencode-sandbox.toml`; new or changed configs require approval.
@@ -37,7 +39,8 @@
   explicit loopback-only [TCP port mappings](../config/README.md#directional-port-access).
 - **Host service access:** reach explicitly allowed host TCP ports from inside the
   VM at `host.microsandbox.internal:<port>` (for example,
-  `http://host.microsandbox.internal:3000`). No host service ports are reachable by
-  default. See [directional port access](../config/README.md#directional-port-access).
+  `http://host.microsandbox.internal:3000`). Only TCP port 4000 (the shared LLM
+  gateway) is reachable by default. See
+  [directional port access](../config/README.md#directional-port-access).
 - **Prepared workspace snapshots:** warm tools, dependency caches, and Docker images
   once; recreated VMs restore the directory's baseline, with or without Git.

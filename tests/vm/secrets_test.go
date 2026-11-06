@@ -4,6 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,6 +18,44 @@ import (
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestHostHTTPGatewaySubstitutesOnlyAuthorization(t *testing.T) {
+	t.Parallel()
+	headers := make(chan http.Header, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		headers <- r.Header.Clone()
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(server.Close)
+	settings := testSettings(t)
+	address, ok := server.Listener.Addr().(*net.TCPAddr)
+	require.True(t, ok)
+	settings.Network.VMToHost.Ports = []uint16{uint16(address.Port)}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "gateway-key")
+	require.NoError(t, os.Chmod(dir, 0700))
+	require.NoError(t, os.WriteFile(path, []byte("FAKE_GATEWAY_KEY"), 0600))
+	settings.Secrets = map[string]launcherconfig.SecretSettings{
+		"gateway": {File: path, Env: "GATEWAY_KEY", AllowedHosts: []string{"host.microsandbox.internal"}, Headers: []string{"authorization"}, AllowHTTP: true},
+	}
+	secrets, err := sandbox.LoadSecrets(settings)
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	s, err := sandbox.Prepare(ctx, newWorktree(t), secrets, settings)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, s.Remove(context.Background())) })
+	execInSandbox(t, s, "curl", "--noproxy", "*", "--fail", "--silent", "--show-error", "--max-time", "10",
+		"-H", "Authorization: Bearer $MSB_GATEWAY_KEY", "-H", "X-Untrusted: $MSB_GATEWAY_KEY",
+		fmt.Sprintf("http://host.microsandbox.internal:%d/v1/models", settings.Network.VMToHost.Ports[0]))
+	select {
+	case got := <-headers:
+		require.Equal(t, "Bearer FAKE_GATEWAY_KEY", got.Get("Authorization"))
+		require.Equal(t, "$MSB_GATEWAY_KEY", got.Get("X-Untrusted"))
+	case <-ctx.Done():
+		t.Fatal("host gateway did not receive the request")
+	}
+}
 
 func TestUnconfiguredSecretsAreNotLoadedOrInjected(t *testing.T) {
 	t.Parallel()

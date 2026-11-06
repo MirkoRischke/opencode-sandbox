@@ -9,7 +9,7 @@ includes = ["llm-gateway/tasks.toml"]
 
 [tasks.lint]
 description = "Lint Go code and the Dockerfile"
-run = ["golangci-lint run ./...", "hadolint Dockerfile"]
+run = ["golangci-lint run --build-tags live ./...", "hadolint Dockerfile"]
 
 [tasks.verify]
 description = "Run linting and the standard test suite"
@@ -69,14 +69,14 @@ run = [
 
 [tasks."test:unit"]
 description = "Run fast tests without VMs or external services"
-run = "go test -count=1 -timeout 10s ./internal/... ./scripts/..."
+run = "go test -count=1 -timeout 10s ./internal/... ./llm-gateway ./scripts/..."
 
 [tasks."test:non-vm"]
 description = "Run all tests without Microsandbox or host credentials; Docker required"
 depends = ["build"]
 run = [
   "mkdir -p /tmp/opencode",
-  "go test -race -count=1 -v -timeout 2m ./internal/... ./scripts/... ./tests/cli ./tests/image",
+  "go test -race -count=1 -v -timeout 2m ./internal/... ./llm-gateway ./scripts/... ./tests/cli ./tests/image",
 ]
 
 [tasks."test:image"]
@@ -88,3 +88,7 @@ run = "go test -count=1 -v -timeout 2m ./tests/image"
 description = "Prepare changed images and run the test suite"
 depends = ["test:prepare"]
 run = "go test -count=1 -v -parallel 4 -timeout 10m ./..."
+
+[tasks."test:live"]
+description = "Send a real VM OpenCode prompt through the authenticated host gateway"
+run = "go test -count=1 -v -tags live -run '^TestOpenCodePromptsThroughHostGateway$' -timeout 6m ./tests/vm"

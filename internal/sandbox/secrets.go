@@ -52,8 +52,10 @@ func loadSecrets(settings config.Settings, get func(string, string) (string, err
 		for i, header := range config.Headers {
 			headers[i] = strings.ToLower(header)
 		}
+		requireTLS := !config.AllowHTTP
 		secrets = append(secrets, Secret{entry: m.Secret.Env(config.Env, value, m.SecretEnvOptions{
 			Allow: hosts, Substitution: m.SecretSubstitution{HeaderFields: headers},
+			RequireTLSIdentity: &requireTLS,
 		})})
 	}
 	return secrets, nil

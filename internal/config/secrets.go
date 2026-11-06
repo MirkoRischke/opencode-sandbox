@@ -12,8 +12,9 @@ type SecretSettings struct {
 	File         string           `toml:"file" description:"Host credential file; relative to the config supplying this field. Use directory mode 700 and file mode 600. Do not commit credentials."`
 	Keyring      *KeyringSettings `toml:"keyring,omitempty" description:"Use the OS keyring instead of file. An empty table uses service opencode-sandbox and the secret name as account; optional service/account fields override these defaults."`
 	Env          string           `toml:"env" description:"Unique guest environment variable receiving a placeholder, not the real credential."`
-	AllowedHosts []string         `toml:"allowed_hosts" description:"HTTPS hosts permitted to receive this credential: example.com matches exactly; *.example.com includes the base domain and all subdomains. Passed unchanged to Microsandbox. Network access must be allowed separately."`
+	AllowedHosts []string         `toml:"allowed_hosts" description:"Hosts permitted to receive this credential: example.com matches exactly; *.example.com includes the base domain and all subdomains. Passed unchanged to Microsandbox. Network access must be allowed separately."`
 	Headers      []string         `toml:"headers" description:"HTTP headers in which the host proxy may substitute the credential."`
+	AllowHTTP    bool             `toml:"allow_http" description:"Allow substitution without verified TLS identity. Default false. Enable only for trusted HTTP routes such as the host-local gateway; credentials are sent in plaintext."`
 }
 
 // KeyringSettings identifies an OS-keyring entry without storing its value.

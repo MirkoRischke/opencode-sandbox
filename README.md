@@ -138,9 +138,14 @@ See the [known limitations](docs/limitations/README.md).
 
 ## Development
 
-Run the standalone host LLM gateway with `mise run gateway:start`; stop it with
-`mise run gateway:stop`. See the [gateway guide](llm-gateway/README.md) for ChatGPT
-authentication. It is not connected to the launcher or VMs.
+The launcher starts the shared host LLM gateway automatically, alongside VM
+preparation, and waits for readiness before opening OpenCode. Docker Compose is
+required. Authenticate once with `opencode-sandbox gateway authenticate`, then
+configure your gateway secret and OpenCode provider using the
+[gateway guide](llm-gateway/README.md). Host TCP port 4000 is allowed by default.
+
+Use `opencode-sandbox gateway start` to start it explicitly. The gateway stays
+running after sandbox exit and is shared by all sandboxes.
 
 See the [development guide](docs/development/README.md) for testing, quality checks,
 and upgrading Microsandbox.

@@ -20,7 +20,7 @@
 #
 # [[files]]
 # source = "~/.config/opencode-sandbox/opencode.json"
-# target = "/etc/opencode/opencode.json"
+# target = "/root/.config/opencode/opencode.json"
 #
 # [[files]]
 # source = "~/.config/opencode/cli.json"
@@ -42,6 +42,14 @@ file = "creds/github-token"
 env = "GH_TOKEN"
 allowed_hosts = ["github.com", "api.github.com"]
 headers = ["authorization"]
+
+# Host LLM gateway example (see llm-gateway/README.md for matching OpenCode JSON):
+# [secrets.llm_gateway]
+# file = "creds/llm-gateway-key"
+# env = "LLM_GATEWAY_KEY"
+# allowed_hosts = ["host.microsandbox.internal"]
+# headers = ["authorization"] # Replaces the placeholder in Authorization: Bearer ...
+# allow_http = true # Explicit opt-in: the host-local gateway uses HTTP, not TLS.
 
 [logging]
 # Minimum stderr severity; overridden by --console-log-level. File logs stay Debug+.
@@ -108,12 +116,12 @@ allowed_hosts = [
 # host_port = 3000
 # vm_port = 8080
 
-# VM → host: no access by default, even with unrestricted = true.
+# VM → host: port 4000 allows the shared host LLM gateway by default.
 # Connect to host.microsandbox.internal:<port>, not the VM's localhost.
 # TCP only. Workspace lists replace global lists; [] clears inherited access.
 # Recreate the VM after changes.
 [network.vm_to_host]
-ports = [] # Example opt-in: [5432, 6379]
+ports = [4000] # [] denies all host services; [4000, 5432] also allows PostgreSQL.
 
 # Optional directory-local .opencode-sandbox.toml additions to the global baseline above:
 # [network]

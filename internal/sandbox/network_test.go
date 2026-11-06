@@ -57,6 +57,7 @@ func TestUnrestrictedNetworkAllowsOnlyPublicDestinationsAndIgnoresHostLists(t *t
 	t.Parallel()
 	settings := config.DefaultSettings().Network
 	settings.Unrestricted = true
+	settings.VMToHost.Ports = nil
 	policy := networkPolicy(settings)
 	baseline := []m.PolicyRule{m.Rule.AllowDNS()}
 	for _, destination := range []string{"host", "private", "loopback", "link-local", "metadata", "multicast", "0.0.0.0", "::"} {
@@ -137,6 +138,7 @@ func TestVMToHostAllowsOnlyExplicitTCPPortsBeforeProtectedDenies(t *testing.T) {
 	for _, unrestricted := range []bool{false, true} {
 		settings := config.DefaultSettings().Network
 		settings.Unrestricted = unrestricted
+		settings.VMToHost.Ports = nil
 		baseline := networkPolicy(settings)
 		settings.VMToHost.Ports = []uint16{5432, 443}
 		policy := networkPolicy(settings)
