@@ -12,8 +12,73 @@ This is an independent project, not built by or affiliated with the OpenCode tea
 > - I do not provide support or accept feature requests, bug reports, or pull requests. If something is missing or does not work as you need, please fork the project and adapt it yourself.
 
 Run OpenCode in an isolated VM for your current directory, powered by
-[Microsandbox](https://microsandbox.dev) under the hood. VMs stop on exit and
-retain installed tools and guest files for the next launch.
+[Microsandbox](https://microsandbox.dev) under the hood to reduce the risk of damaging files or accessing sensitive information on your host machine.
+
+## Why this tool exists
+
+Here is how I usually work and why I created this tool.
+
+- I work on many different repos
+  - the technology used in each repo differs a lot
+  - many repos start their dependencies as Docker containers
+- I work on multiple tasks in the same repo
+  - I use Git worktrees for that
+  - I use [herdr](https://herdr.dev/tui/) to open a repository and create worktrees for it on demand
+- I use [OpenCode](https://opencode.ai/) as my coding agent
+- I review changes in my favorite code editor that is installed on my host machine
+- I don't run workloads in the cloud
+- I am mindful of security risks but want to have a good balance between security and usability
+  - I don't run agents on my real machine in 'yolo' mode
+  - I think that security should be enforced and not just recommended
+    - Prompts and custom instructions are not enough to enforce security
+- I work on private repositories that contain content that must not be leaked.
+
+When I worked this way with the agent on my machine, I had the following issues
+
+- I configured the tools that my agent may use explicitly instead of allowing anything
+  - I often had to add new commands that were not part of my allow-list yet.
+  - Allowed commands that look safe can be abused for harmful actions
+    - `go test *` looks safe but if the agent is allowed to adjust your code and run this command, it could execute arbitrary commands
+- The agent often created ad-hoc scripts (e.g. long Python commands) that are really hard to review
+  - I tend to accept such scripts without reading every single line. They could include harmful commands
+- The agent only had access to the current working directory but sometimes needed access to other directories
+  - it often asked for read access to a high-level directory. For example, it needed to read the config for a tool it was using and requested access to `~` even when only `~/.gitconfig` would be sufficient. Granting it read access to my whole home directory would give it access to sensitive files.
+- I started tasks for the agent to work on in the background. After some time, I checked its progress only to find that it had asked for permission before even starting to work. That wasted a lot of time.
+- I could not work on multiple repos or multiple worktrees for the same repo at the same time because of port conflicts
+  - repo A and repo B start their own dependencies on the same port -> conflict
+  - running two instances of the same app from different worktrees does not work because they have hard-coded ports
+- The agent had unlimited network access and could exfiltrate my source code
+
+That is why I wanted a tool that:
+
+- Lets me run the agent with unrestricted permissions inside the VM while limiting its access to my host and reducing the impact of harmful commands
+- Prevents port collisions between different repos and different worktrees of the same repo
+- Keeps changes visible on my host so that I can review them using my main editor
+- Reduces the risk for my host machine without sacrificing too much usability
+
+I chose VMs for the additional isolation of a separate kernel and to run Docker inside each environment without sharing my host's Docker socket.
+
+## Accepted risks
+
+This tool reduces risk; it does not eliminate it. I accept the following risks for my own workflow.
+
+- **Repository access:** the agent can read and modify files in the mounted repository, including sensitive content stored there.
+- **Host-side execution:** the workspace and required Git metadata are writable
+  from the guest. The agent can write harmful code, scripts, or configuration that
+  host tools later execute—for example, mise or direnv configuration, Git
+  hooks/configuration, and editor or language-server configuration. Linked
+  worktrees may share affected Git metadata with other checkouts. The VM does not
+  protect against execution triggered by host tools consuming these changes.
+  Review changes before trusting or running them; automatic host tooling may
+  execute them before review.
+- **Data exfiltration:** network restrictions do not guarantee that repository contents cannot be leaked. The agent might abuse allowed domains to exfiltrate data.
+- **Guest-readable credentials:** unlike custom proxy secrets, AWS role
+  credentials and imported OpenAI credentials can be read and used by guest code.
+  - AWS role credentials are temporary. I only use roles with limited permissions
+    that I am willing to delegate to an agent.
+  - Imported OpenAI credentials are stored inside the VM. A host-side process
+    handling LLM provider authentication would be preferable, but this tool does
+    not provide one.
 
 ## Features
 
@@ -31,8 +96,7 @@ retain installed tools and guest files for the next launch.
 - **Sandbox-aware instructions:** OpenCode gets information about the sandbox
   it is running in.
 - **AWS roles:** assume a role on the host and provide automatically refreshed,
-  temporary credentials to the guest. Unlike proxy secrets, these are readable
-  by guest code.
+  temporary credentials to the guest. See [Accepted risks](#accepted-risks).
 - **Guest Docker:** build and run images with Docker Engine, Buildx, and Compose.
   Each VM has its own persistent Docker data disk. Expose development servers to
   your host browser using explicit loopback-only [TCP port mappings](docs/config.md#port-mappings).
@@ -157,14 +221,6 @@ complete -o default -F __start_opencode-sandbox ocs
 
 ## Limitations
 
-- **Host execution through shared files:** the workspace and required Git metadata
-  are writable from the guest. This preserves live host editing and review, but
-  guest code can modify files that host tools later execute—for example, mise or
-  direnv configuration, Git hooks/configuration, and editor or language-server
-  configuration. Linked worktrees may share affected Git metadata with other
-  checkouts. The VM does not protect against execution triggered by host tools
-  consuming these changes. Review changes before trusting or running them;
-  automatic host tooling may execute them before review.
 - **Incomplete network diagnostics after snapshot restore:** with Microsandbox
   v0.7.8, restored VMs lose the HTTP denial responder required to log blocked
   HTTPS destinations when requests bypass DNS. Network blocking and DNS-denial
@@ -176,9 +232,6 @@ complete -o default -F __start_opencode-sandbox ocs
   OpenAI subscription OAuth credential. Other providers aren't explicitly
   blocked, but their authentication isn't set up automatically; a fresh VM
   currently requires the OpenAI import to succeed.
-- **Model credentials are exposed to the guest:** imported OpenAI credentials
-  are stored inside the VM and can be read by sandbox code. They don't use the
-  host-proxy protection provided for custom secrets.
 
 ## Development
 
