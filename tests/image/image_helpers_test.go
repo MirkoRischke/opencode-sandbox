@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	launcherconfig "opencode-sandbox/internal/config"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,7 +20,7 @@ func startImageContainer(t *testing.T) imageContainer {
 	// No network, credentials, host mounts, privileged mode, or Docker socket.
 	id := strings.TrimSpace(docker(t, "run", "--rm", "-d", "--network", "none",
 		"--platform", "linux/amd64", "--workdir", "/tmp/image-smoke",
-		"opencode-sandbox:base", "sleep", "infinity"))
+		launcherconfig.DefaultImage(), "sleep", "infinity"))
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

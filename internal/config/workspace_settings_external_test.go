@@ -151,7 +151,7 @@ headers = ['authorization']
 	})
 	require.NoError(t, err)
 	require.Equal(t, 1, calls)
-	require.Equal(t, launcherconfig.VMSettings{Image: "opencode-sandbox:base", CPUs: 4, MemoryMiB: 8192, RootDiskMiB: 9000, DockerDiskMiB: 20480}, settings.VM)
+	require.Equal(t, launcherconfig.VMSettings{Image: launcherconfig.DefaultImage(), CPUs: 4, MemoryMiB: 8192, RootDiskMiB: 9000, DockerDiskMiB: 20480}, settings.VM)
 	require.Empty(t, settings.Network.AllowedHosts)
 	require.Equal(t, launcherconfig.SecretSettings{
 		File: filepath.Join(root, "creds/repo-github-token"), Env: "GH_TOKEN",

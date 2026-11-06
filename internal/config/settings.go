@@ -70,7 +70,7 @@ func DefaultSettings() Settings {
 	return Settings{
 		Logging: LoggingSettings{ConsoleLevel: "info"},
 		Files:   []FileSettings{},
-		VM:      VMSettings{Image: "opencode-sandbox:base", CPUs: 2, MemoryMiB: 2048, RootDiskMiB: 4096, DockerDiskMiB: 10240},
+		VM:      VMSettings{Image: DefaultImage(), CPUs: 2, MemoryMiB: 2048, RootDiskMiB: 4096, DockerDiskMiB: 10240},
 		Network: NetworkSettings{
 			HostToVM: []PortSettings{},
 			VMToHost: VMToHostSettings{Ports: []uint16{4000}},

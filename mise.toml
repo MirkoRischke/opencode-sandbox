@@ -4,6 +4,9 @@ golangci-lint = "2.15.0"
 hadolint = "2.15.1"
 microsandbox = "0.7.11"
 
+[env]
+SANDBOX_BASE_IMAGE = "{{ read_file(path='internal/config/default-image.txt') | trim }}"
+
 [task_config]
 includes = ["llm-gateway/tasks.toml"]
 
@@ -46,24 +49,24 @@ run = 'go run ./scripts/upgrade-microsandbox --dotfiles "${usage_dotfiles?}" "${
 
 [tasks.build]
 description = "Build the sandbox base image"
-sources = ["Dockerfile", ".dockerignore"]
+sources = ["Dockerfile", ".dockerignore", "internal/config/default-image.txt"]
 outputs = { auto = true }
-run = "docker build -t opencode-sandbox:base ."
+run = 'docker build -t "$SANDBOX_BASE_IMAGE" .'
 
 [tasks.load]
 description = "Build and import the image into Microsandbox"
 depends = ["build"]
-sources = ["Dockerfile", ".dockerignore"]
+sources = ["Dockerfile", ".dockerignore", "internal/config/default-image.txt"]
 outputs = { auto = true }
-run = "bash -o pipefail -c 'docker save opencode-sandbox:base | msb load'"
+run = "bash -o pipefail -c 'docker save \"$SANDBOX_BASE_IMAGE\" | msb load'"
 
 [tasks."test:prepare"]
 description = "Prepare test images when their inputs change"
 depends = ["load"]
-sources = ["tests/fixtures/custom-image/Dockerfile"]
+sources = ["tests/fixtures/custom-image/Dockerfile", "internal/config/default-image.txt"]
 outputs = { auto = true }
 run = [
-  "docker build --pull=false -t opencode-sandbox:test-custom tests/fixtures/custom-image",
+  'docker build --pull=false --build-arg "BASE_IMAGE=$SANDBOX_BASE_IMAGE" -t opencode-sandbox:test-custom tests/fixtures/custom-image',
   "bash -o pipefail -c 'docker save opencode-sandbox:test-custom | msb load'",
 ]
 
