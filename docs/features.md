@@ -1,5 +1,16 @@
 # Features
 
+- **Per-directory environments:** each directory, including Git worktrees, gets
+  its own VM so parallel tasks can use separate dependencies and the same guest
+  ports without conflicts.
+- **Live host editing:** workspace changes are immediately visible on the host,
+  so you can use your usual editor without syncing files.
+- **Persistent environments:** VMs stop when OpenCode exits, but retain installed
+  tools and guest files for the next launch.
+- **Project tools:** automatically install tools declared in the directory's
+  `mise.toml` during workspace snapshot preparation.
+- **Custom VM images:** use a custom Docker/OCI image with your required tools
+  preinstalled. See [custom VM images](config.md#custom-vm-images).
 - **Network allowlist:** allow common development services over HTTPS by default;
   customize allowed hosts or deny all application internet access.
 - **Custom credentials:** configure file- or OS-keyring-backed secrets, injected into
@@ -16,8 +27,9 @@
 - **AWS roles:** assume a role on the host and provide automatically refreshed,
   temporary credentials to the guest. See [Accepted risks](risks.md).
 - **Guest Docker:** build and run images with Docker Engine, Buildx, and Compose.
-  Each VM has its own persistent Docker data disk. Expose development servers to
-  your host browser using explicit loopback-only [TCP port mappings](config.md#port-mappings).
+  Each VM has its own persistent Docker data disk.
   See [Docker configuration](config.md#docker-inside-the-vm).
+- **Port mappings:** access servers running inside the VM from your host using
+  explicit loopback-only [TCP port mappings](config.md#port-mappings).
 - **Prepared workspace snapshots:** warm tools, dependency caches, and Docker images
   once; recreated VMs restore the directory's baseline, with or without Git.
