@@ -1,8 +1,8 @@
 # LLM gateway
 
 The launcher runs a shared LiteLLM gateway on the host using Docker Compose.
-Gateway startup overlaps snapshot/VM preparation; OpenCode starts only after the
-gateway is healthy. Later launches reuse the healthy project. It stays running
+The gateway starts before VM preparation so the launcher can provision its key.
+Later launches reuse the healthy project. It stays running
 after sandbox exit. Requires Docker with the Compose CLI plugin.
 
 ## Initial authentication
@@ -42,38 +42,50 @@ do not alternate independently generated `.env` files against the same database.
 
 ## Gateway API key and sandbox configuration
 
-Provider login and gateway API authentication are separate. At
-<http://localhost:4000/ui>, sign in as `admin` using `LITELLM_MASTER_KEY` from the
-installed `.env`. Create a **virtual API key**, restricted to the desired models
-(for example `chatgpt/gpt-6-luna`). Do not use the administrative master key in a VM.
+Provider login and gateway API authentication are separate. The launcher
+automatically creates one LiteLLM **team per repository** and one **virtual API
+key per worktree/VM**. Linked Git worktrees share a team; independent clones do
+not. Non-Git directories each get their own team. Keys can call every configured
+gateway model, but cannot call management routes.
 
-Store the virtual key in an owner-only file (directory mode `700`, file mode
-`600`) or the OS keyring. The launcher never provisions API keys or edits your
-configuration automatically. For example, in
-`~/.config/opencode-sandbox/config.toml`:
+Keys are reused across VM stops/restarts and deleted when
+`opencode-sandbox remove` (or `remove --all`) removes the VM. Deletion is attempted
+once. If it fails, the command reports the failure; delete that key manually in
+LiteLLM. The local credential is removed either way. Teams are retained for
+historical reporting. Recreating a VM creates a new key.
+
+The gateway manages credentials under
+`$XDG_DATA_HOME/opencode-sandbox/gateway/credentials` (default
+`~/.local/share/opencode-sandbox/gateway/credentials`), using directory mode `700`
+and file mode `600`. Neither the real virtual key nor the master key is copied
+into the guest. No `[secrets.llm_gateway]` entry is needed; the launcher replaces
+that entry, or any secret using `LLM_GATEWAY_KEY`, with its managed credential.
+
+At <http://localhost:4000/ui>, sign in as `admin` using `LITELLM_MASTER_KEY` from
+the installed `.env`. In **Usage → Team Usage**, select the repository team for
+overall usage and drill into its VM keys for individual usage. These team/key
+views are available without Enterprise in the pinned LiteLLM `v1.108.1`.
+Deleted-key history may be less convenient to navigate; deletion does not
+intentionally purge usage logs. With subscription providers, calculated dollar
+costs do not necessarily represent your actual bill or remaining quota.
+
+You still configure your custom OpenCode provider. For example, copy its config
+using `~/.config/opencode-sandbox/config.toml`:
 
 ```toml
 [[files]]
 source = "~/.config/opencode-sandbox/opencode.json"
 target = "/root/.config/opencode/opencode.json"
-
-[secrets.llm_gateway]
-file = "creds/llm-gateway-key"
-env = "LLM_GATEWAY_KEY"
-allowed_hosts = ["host.microsandbox.internal"]
-headers = ["authorization"]
-allow_http = true
 ```
 
-Alternatively replace `file` with `keyring = {}` and store the key using
-`opencode-sandbox secret set llm_gateway`.
-
-`allow_http` explicitly disables the verified-TLS requirement for this secret.
-This is appropriate only for the trusted host-local route, not public HTTP.
-The runtime substitutes the key **only in the `Authorization` header**:
+The launcher supplies `LLM_GATEWAY_KEY` inside the VM as a **placeholder**, not
+the real key. Reference it as `{env:LLM_GATEWAY_KEY}` in your OpenCode provider.
+Microsandbox substitutes the real key **only in the `Authorization` header** on
+requests to `host.microsandbox.internal`:
 `Authorization: Bearer $MSB_LLM_GATEWAY_KEY` becomes
 `Authorization: Bearer <real-gateway-key>` outside the VM.
-Do not store the real key in the OpenCode JSON or pass it into the VM directly.
+HTTP substitution is enabled only for this trusted host-local route. Keep the
+provider's HTTP transport; do not put a literal API key in the OpenCode config.
 
 Create `~/.config/opencode-sandbox/opencode.json`:
 
@@ -120,7 +132,7 @@ leaves the shared gateway running. It does not authenticate interactively or
 silently skip missing setup. `OPENCODE_TEST_MODEL` overrides the gateway model ID
 (default `chatgpt/gpt-6-luna`). Live requests consume provider usage.
 
-The test supplies its own isolated launcher/provider configuration and uses the
-installed `.env` administrative key as a test-only secret (never copied into the
-VM). It doesn't require or change your normal secret configuration or provision
-new API keys. Normal sandbox use should still use a restricted virtual key.
+The test supplies its own isolated launcher/provider configuration and exercises
+automatic team/key provisioning and header substitution. It does not change your
+normal launcher configuration. Cleanup removes its VM and virtual key; the
+repository team and usage history remain.

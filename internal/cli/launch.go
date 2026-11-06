@@ -53,6 +53,12 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 		return err
 	}
 	settings.AWS = awsSettings
+	// Gateway credentials are managed per VM, never loaded from user secrets.
+	for name, secret := range settings.Secrets {
+		if name == "llm_gateway" || secret.Env == "LLM_GATEWAY_KEY" {
+			delete(settings.Secrets, name)
+		}
+	}
 	logger.Debug("Effective configuration", "settings", settings)
 	secrets, err := sandbox.LoadSecrets(settings)
 	if err != nil {
@@ -62,19 +68,18 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 	if err != nil {
 		return err
 	}
-	// VM/snapshot preparation overlaps gateway startup. Join the worker on every
-	// exit; cancellation never tears down the shared Compose project.
-	gatewayCtx, cancelGateway := context.WithCancel(ctx)
-	gatewayReady := make(chan struct{})
-	var gatewayErr error
-	go func() {
-		defer close(gatewayReady)
-		gatewayErr = gateway.Ensure(gatewayCtx, os.Stderr)
-	}()
-	defer func() {
-		cancelGateway()
-		<-gatewayReady
-	}()
+	if err := gateway.Ensure(ctx, os.Stderr); err != nil {
+		return err
+	}
+	teamID, err := gateway.EnsureTeam(ctx, w.RepositoryID(), w.RepositoryName())
+	if err != nil {
+		return err
+	}
+	key, err := gateway.EnsureKey(ctx, teamID, sandbox.Name(w))
+	if err != nil {
+		return err
+	}
+	secrets = append(secrets, sandbox.GatewaySecret(key))
 	s, err := sandbox.PrepareWorkspace(ctx, w, secrets, settings, sandbox.DiagnosticsOptions{StateDir: stateDir})
 	if err != nil {
 		return err
@@ -89,10 +94,6 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 		return err
 	}
 	defer stopAWS()
-	<-gatewayReady
-	if gatewayErr != nil {
-		return gatewayErr
-	}
 	return s.Open(ctx)
 }
 

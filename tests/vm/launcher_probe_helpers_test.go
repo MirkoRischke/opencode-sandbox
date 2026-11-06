@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"opencode-sandbox/internal/sandbox"
+	"opencode-sandbox/internal/workspace"
+	gateway "opencode-sandbox/llm-gateway"
 
 	"github.com/stretchr/testify/require"
 )
@@ -67,7 +69,15 @@ exec %q "$@"
 	command := exec.CommandContext(ctx, "script", scriptArgs...)
 	command.Dir = s.Worktree
 	command.Env = os.Environ()
-	command.Env = append(command.Env, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"), "XDG_DATA_HOME="+t.TempDir())
+	dataDir := t.TempDir()
+	// Preseed reusable credentials so ordinary launcher probes need no LiteLLM.
+	w, err := workspace.Resolve(ctx, s.Worktree)
+	require.NoError(t, err)
+	credentials := filepath.Join(gateway.New(dataDir).Directory(), "credentials")
+	require.NoError(t, os.MkdirAll(credentials, 0700))
+	require.NoError(t, os.WriteFile(filepath.Join(credentials, "team-"+w.RepositoryID()), []byte("test-team"), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(credentials, "key-"+sandbox.Name(w)), []byte("sk-test-placeholder"), 0600))
+	command.Env = append(command.Env, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"), "XDG_DATA_HOME="+dataDir)
 	for key, value := range env {
 		command.Env = append(command.Env, key+"="+value)
 	}

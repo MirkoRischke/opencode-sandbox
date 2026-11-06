@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"text/tabwriter"
 
@@ -49,16 +50,23 @@ func newRemoveCommand() *cobra.Command {
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return logWorkspaceOperation(cmd.Context(), "remove", cmd.ErrOrStderr(), func(ctx context.Context) error {
-				return reportRemovals(cmd.OutOrStdout(), "VM", func(observer sandbox.RemovalObserver) error {
+				gateway, err := hostGateway()
+				if err != nil {
+					return err
+				}
+				var keyErrors []error
+				removeErr := reportRemovals(cmd.OutOrStdout(), "VM", func(observer sandbox.RemovalObserver) error {
 					logged := func(name string, size *uint64) {
 						logging.FromContext(ctx).Info("VM removed", "vm", name)
 						observer(name, size)
+						keyErrors = append(keyErrors, gateway.DeleteKey(ctx, name))
 					}
 					if all {
 						return sandbox.RemoveAll(ctx, logged)
 					}
 					return sandbox.Remove(ctx, ".", logged)
 				})
+				return errors.Join(append(keyErrors, removeErr)...)
 			})
 		},
 	}

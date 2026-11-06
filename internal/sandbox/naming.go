@@ -12,6 +12,9 @@ func sandboxName(w workspace.Workspace) string {
 	return fmt.Sprintf("oc-%s-%s", namePart(filepath.Base(w.Root())), w.ID()[:8])
 }
 
+// Name returns the persistent VM name used for a workspace and its gateway key.
+func Name(w workspace.Workspace) string { return sandboxName(w) }
+
 func namePart(name string) string {
 	parts := strings.FieldsFunc(strings.ToLower(name), func(r rune) bool {
 		return (r < 'a' || r > 'z') && (r < '0' || r > '9')

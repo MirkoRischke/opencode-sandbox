@@ -33,10 +33,10 @@ Authenticate the installed gateway once as shown in the
 the test: the launcher starts it automatically. Tests never stop the shared
 gateway or remove its authentication volumes. `OPENCODE_TEST_MODEL` selects the
 gateway model ID (default `chatgpt/gpt-6-luna`). Missing setup fails the test rather
-than skipping it. It creates isolated secret/provider configuration using the
-installed gateway's existing administrative key, substituted outside the VM;
-normal users should use restricted virtual keys. Ordinary tests use no real
-provider credentials.
+than skipping it. It creates isolated provider configuration and exercises
+automatic virtual-key provisioning; the real key is substituted outside the VM.
+Cleanup removes the test VM and its key. Ordinary tests use no real provider
+credentials.
 
 Quality reports are advisory and saved under `.quality/` (ignored by Git).
 They require Python 3 and the pinned golangci-lint; compare with the same tool

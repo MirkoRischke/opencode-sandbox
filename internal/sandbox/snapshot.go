@@ -189,6 +189,10 @@ func createPreparationVM(ctx context.Context, w workspace.Workspace, name string
 	opts := sandboxOptions(w, snapshotWorktree, preparationSettings)
 	opts = append(opts, m.WithImage(image))
 	for _, secret := range secrets {
+		// Shared snapshots must not retain a particular worktree's gateway key.
+		if secret.entry.EnvVar == "LLM_GATEWAY_KEY" {
+			continue
+		}
 		opts = append(opts, m.WithSecrets(secret.entry))
 	}
 	started := time.Now().UTC()

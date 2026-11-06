@@ -18,6 +18,7 @@ type Workspace interface {
 	ID() string
 	// RepositoryID groups linked Git worktrees; non-Git directories use ID.
 	RepositoryID() string
+	RepositoryName() string
 	Mounts(guestRoot string) []Mount
 }
 
@@ -30,9 +31,10 @@ type base struct {
 	root string
 }
 
-func (b base) Root() string         { return b.root }
-func (b base) ID() string           { return fmt.Sprintf("%x", sha256.Sum256([]byte(b.root))) }
-func (b base) RepositoryID() string { return b.ID() }
+func (b base) Root() string           { return b.root }
+func (b base) ID() string             { return fmt.Sprintf("%x", sha256.Sum256([]byte(b.root))) }
+func (b base) RepositoryID() string   { return b.ID() }
+func (b base) RepositoryName() string { return filepath.Base(b.root) }
 
 // Directory is a workspace without Git metadata at its root.
 type Directory struct{ base }
@@ -59,6 +61,14 @@ func (r GitRepository) RepositoryID() string {
 
 func (w GitWorktree) RepositoryID() string {
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(w.metadata.common)))
+}
+
+func (r GitRepository) RepositoryName() string {
+	return filepath.Base(filepath.Dir(r.metadata.common))
+}
+
+func (w GitWorktree) RepositoryName() string {
+	return filepath.Base(filepath.Dir(w.metadata.common))
 }
 
 func (d Directory) Mounts(guestRoot string) []Mount {

@@ -20,6 +20,16 @@ type Secret struct {
 	entry m.SecretEntry
 }
 
+// GatewaySecret substitutes a VM-specific LiteLLM key outside the guest.
+func GatewaySecret(key string) Secret {
+	requireTLS := false
+	return Secret{entry: m.Secret.Env("LLM_GATEWAY_KEY", key, m.SecretEnvOptions{
+		Allow:              []string{"host.microsandbox.internal"},
+		Substitution:       m.SecretSubstitution{HeaderFields: []string{"authorization"}},
+		RequireTLSIdentity: &requireTLS,
+	})}
+}
+
 // LoadSecrets reads only explicitly configured files or keyring entries. Relative paths
 // are resolved by the settings loader before this function is called.
 // Host environment credentials are ignored.

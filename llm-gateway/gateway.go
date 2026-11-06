@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,11 +23,17 @@ var assets embed.FS
 
 type Gateway struct {
 	directory string
+	baseURL   string
+	client    *http.Client
 }
 
 // New uses the XDG data root, independently of the current source checkout.
 func New(dataDir string) *Gateway {
-	return &Gateway{directory: filepath.Join(dataDir, "opencode-sandbox", "gateway")}
+	return &Gateway{
+		directory: filepath.Join(dataDir, "opencode-sandbox", "gateway"),
+		baseURL:   "http://127.0.0.1:4000",
+		client:    &http.Client{Timeout: 15 * time.Second},
+	}
 }
 
 func (g *Gateway) Directory() string { return g.directory }

@@ -44,6 +44,7 @@ func TestWorkspaceTypesAndMounts(t *testing.T) {
 	require.Equal(t, []Mount{{Source: tree, Target: "/workspace"}, {Source: common, Target: common}}, linked.Mounts("/workspace"))
 	require.NotEqual(t, checkout.ID(), linked.ID())
 	require.Equal(t, checkout.RepositoryID(), linked.RepositoryID())
+	require.Equal(t, checkout.RepositoryName(), linked.RepositoryName())
 	require.NotEqual(t, checkout.ID(), checkout.RepositoryID())
 	require.Equal(t, plain.ID(), plain.RepositoryID())
 	otherRepo := filepath.Join(parent, "other-repo")

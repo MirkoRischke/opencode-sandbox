@@ -13,6 +13,17 @@ import (
 	"github.com/zalando/go-keyring"
 )
 
+func TestGatewaySecretUsesHostSideHeaderSubstitution(t *testing.T) {
+	t.Parallel()
+	secret := GatewaySecret("sk-vm").entry
+	require.Equal(t, "LLM_GATEWAY_KEY", secret.EnvVar)
+	require.Equal(t, "sk-vm", secret.Value)
+	require.Equal(t, []string{"host.microsandbox.internal"}, secret.Allow)
+	require.Equal(t, []string{"authorization"}, secret.Substitution.HeaderFields)
+	require.NotNil(t, secret.RequireTLSIdentity)
+	require.False(t, *secret.RequireTLSIdentity)
+}
+
 func TestLoadSecretsPreservesHostPatterns(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
