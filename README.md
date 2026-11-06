@@ -1,5 +1,14 @@
 # opencode-sandbox
 
+> [!WARNING]
+> This is a personal tool built for my workflow. I published it primarily as a reference and starting point. **Do not rely on this tool for anything important.**
+>
+> - I might abandon this project at any time.
+> - This tool might contain bugs and security issues.
+> - It is heavily vibe-coded. I have not reviewed all the generated code. Do not assume it is correct or secure.
+> - I might introduce breaking changes at any time without advance notice. I do not follow semantic versioning.
+> - I do not provide support or accept feature requests, bug reports, or pull requests. If something is missing or does not work as you need, please fork the project and adapt it yourself.
+
 Run OpenCode in an isolated VM for your current directory, powered by
 [Microsandbox](https://microsandbox.dev) under the hood. VMs stop on exit and
 retain installed tools and guest files for the next launch.
