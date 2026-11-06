@@ -4,8 +4,8 @@
     "config:recommended",
     "customManagers:dockerfileVersions"
   ],
-  "enabledManagers": ["dockerfile", "custom.regex", "gomod", "mise", "github-actions"],
-  "includePaths": ["Dockerfile", "go.mod", "go.sum", "mise.toml", ".github/workflows/**"],
+  "enabledManagers": ["dockerfile", "docker-compose", "custom.regex", "gomod", "mise", "github-actions"],
+  "includePaths": ["Dockerfile", "llm-gateway/compose.yaml", "go.mod", "go.sum", "mise.toml", ".github/workflows/**"],
   "packageRules": [
     {
       "matchManagers": ["gomod"],

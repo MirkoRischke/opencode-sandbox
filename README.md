@@ -138,5 +138,9 @@ See the [known limitations](docs/limitations/README.md).
 
 ## Development
 
+Run the standalone host LLM gateway with `mise run gateway:start`; stop it with
+`mise run gateway:stop`. See the [gateway guide](llm-gateway/README.md) for ChatGPT
+authentication. It is not connected to the launcher or VMs.
+
 See the [development guide](docs/development/README.md) for testing, quality checks,
 and upgrading Microsandbox.

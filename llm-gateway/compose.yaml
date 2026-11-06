@@ -1,0 +1,47 @@
+name: opencode-sandbox-gateway
+
+services:
+  litellm:
+    image: ghcr.io/berriai/litellm:v1.108.1
+    ports:
+      - "127.0.0.1:4000:4000"
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?Run mise run gateway:start first}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?Run mise run gateway:start first}
+      DATABASE_URL: postgresql://litellm:${POSTGRES_PASSWORD:?Run mise run gateway:start first}@db:5432/litellm
+      STORE_MODEL_IN_DB: "True"
+      CHATGPT_TOKEN_DIR: /var/lib/litellm/chatgpt
+      GITHUB_COPILOT_TOKEN_DIR: /var/lib/litellm/github-copilot
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - chatgpt_auth:/var/lib/litellm/chatgpt
+      - copilot_auth:/var/lib/litellm/github-copilot
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/readiness', timeout=5).close()"]
+      interval: 5s
+      timeout: 10s
+      start_period: 60s
+      retries: 24
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run mise run gateway:start first}
+      POSTGRES_DB: litellm
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
+  chatgpt_auth:
+  copilot_auth:

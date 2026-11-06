@@ -1,3 +1,4 @@
 /bin/
 /.quality/
 __pycache__/
+/llm-gateway/.env

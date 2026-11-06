@@ -4,6 +4,9 @@ golangci-lint = "2.15.0"
 hadolint = "2.15.1"
 microsandbox = "0.7.11"
 
+[task_config]
+includes = ["llm-gateway/tasks.toml"]
+
 [tasks.lint]
 description = "Lint Go code and the Dockerfile"
 run = ["golangci-lint run --build-tags live ./...", "hadolint Dockerfile"]
