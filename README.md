@@ -22,49 +22,11 @@ the problems that led to this tool.
 
 ## Accepted risks
 
-This tool reduces risk; it does not eliminate it. I accept the following risks for my own workflow.
-
-- **Repository access:** the agent can read and modify files in the mounted repository, including sensitive content stored there.
-- **Host-side execution:** the workspace and required Git metadata are writable
-  from the guest. The agent can write harmful code, scripts, or configuration that
-  host tools later execute—for example, mise or direnv configuration, Git
-  hooks/configuration, and editor or language-server configuration. Linked
-  worktrees may share affected Git metadata with other checkouts. The VM does not
-  protect against execution triggered by host tools consuming these changes.
-  Review changes before trusting or running them; automatic host tooling may
-  execute them before review.
-- **Data exfiltration:** network restrictions do not guarantee that repository contents cannot be leaked. The agent might abuse allowed domains to exfiltrate data.
-- **Guest-readable credentials:** unlike custom proxy secrets, AWS role
-  credentials and imported OpenAI credentials can be read and used by guest code.
-  - AWS role credentials are temporary. I only use roles with limited permissions
-    that I am willing to delegate to an agent.
-  - Imported OpenAI credentials are stored inside the VM. A host-side process
-    handling LLM provider authentication would be preferable, but this tool does
-    not provide one.
+Read the [accepted risks](docs/risks.md) before using this tool.
 
 ## Features
 
-- **Network allowlist:** allow common development services over HTTPS by default;
-  customize allowed hosts or deny all application internet access.
-- **Custom credentials:** configure file- or OS-keyring-backed secrets, injected into
-  HTTPS headers by the host proxy without storing their values in the guest.
-  [Snapshot restore limitations](docs/config.md#workspace-snapshots) apply to header selection.
-- **Workspace configuration:** override global settings with a directory-local
-  `.opencode-sandbox.toml`; new or changed configs require approval.
-- **Host file mappings:** explicitly mount selected files or directories read-only,
-  or copy them into writable guest storage on creation and snapshot restore,
-  including OpenCode configuration, instructions, and skills. No extra host files
-  are shared by default. See [`[[files]]` configuration](docs/config.md#read-only-host-mounts).
-- **Sandbox-aware instructions:** OpenCode gets information about the sandbox
-  it is running in.
-- **AWS roles:** assume a role on the host and provide automatically refreshed,
-  temporary credentials to the guest. See [Accepted risks](#accepted-risks).
-- **Guest Docker:** build and run images with Docker Engine, Buildx, and Compose.
-  Each VM has its own persistent Docker data disk. Expose development servers to
-  your host browser using explicit loopback-only [TCP port mappings](docs/config.md#port-mappings).
-  See [Docker configuration](docs/config.md#docker-inside-the-vm).
-- **Prepared workspace snapshots:** warm tools, dependency caches, and Docker images
-  once; recreated VMs restore the directory's baseline, with or without Git.
+See the [feature overview](docs/features.md).
 
 ## How it works
 
@@ -97,24 +59,6 @@ mise install
 mise run install # Install the launcher to ~/.local/bin
 mise run build   # Build the sandbox image; imported automatically on first use
 ```
-
-### Upgrading Microsandbox
-
-Upgrade the SDK and runtime together from this repository:
-
-```sh
-mise run upgrade-microsandbox       # Resolve the latest stable runtime version
-mise run upgrade-microsandbox 0.7.9 # Or select an exact version
-# Dotfiles default to ../dotfiles; override with --dotfiles /path/to/dotfiles
-```
-
-The task updates the SDK dependency and local runtime pin, runs `mise run verify`
-with that runtime, installs the launcher, then updates the Microsandbox pin in
-`home/private_dot_config/mise/config.toml.tmpl` in your dotfiles repository.
-Review both repositories and apply your Mise configuration through Chezmoi to
-select the matching runtime globally. The global pin must be an exact version,
-not `latest`, to prevent unattended upgrades from breaking SDK compatibility.
-Failures leave changes for inspection; the task does not commit or roll back.
 
 ## Usage
 
@@ -183,46 +127,9 @@ complete -o default -F __start_opencode-sandbox ocs
 
 ## Limitations
 
-- **Incomplete network diagnostics after snapshot restore:** with Microsandbox
-  v0.7.8, restored VMs lose the HTTP denial responder required to log blocked
-  HTTPS destinations when requests bypass DNS. Network blocking and DNS-denial
-  diagnostics still work, but those HTTPS-only denials are missing from
-  `diagnostics network`. Denials collected during snapshot
-   preparation remain in the report. Normal workspace VMs always restore a
-   baseline, so this limitation applies to all newly created workspace VMs.
-- **OpenAI-only automatic authentication:** the launcher imports an active host
-  OpenAI subscription OAuth credential. Other providers aren't explicitly
-  blocked, but their authentication isn't set up automatically; a fresh VM
-  currently requires the OpenAI import to succeed.
+See the [known limitations](docs/limitations.md).
 
 ## Development
 
-```sh
-mise run fmt  # Format Go code
-mise run lint
-mise run verify      # Lint + prepare changed images + full standard test suite
-mise run quality baseline # Save local complexity metrics before a refactor
-mise run quality compare  # Show current hotspots and changes from that baseline
-mise run test:unit    # Fast source-adjacent tests; no VMs or external services
-mise run test:non-vm  # Unit/script + CLI + image tests; Docker only, no Microsandbox
-mise run test:image   # Build + offline image smoke tests; Docker only, no VMs
-mise run test:prepare # Prepare images only when image inputs change
-mise run test        # Prepare changed images, then run the full test suite
-mise run test:live   # Opt-in OpenAI smoke test; uses host credentials
-```
-
-Image preparation tracks both Dockerfiles and the base `.dockerignore`.
-Unchanged builds and imports are skipped; tests always run. After deleting
-Docker or Microsandbox images, run `mise run --force test:prepare` to prepare them again.
-
-Source-focused tests live beside their implementation. Higher-level tests are
-split into `tests/cli` (no Microsandbox), `tests/image` (Docker), and `tests/vm`
-(Microsandbox). PR checks run linting, build the launcher, check module consistency,
-compile all tests including the `live` tag, and run `test:non-vm` with race detection.
-Renovate automerges dependency updates, including majors, after checks pass;
-the Microsandbox SDK is excluded because it must be upgraded with its runtime.
-
-Quality reports are advisory and saved under `.quality/` (ignored by Git).
-They require Python 3 and the pinned golangci-lint; compare with the same tool
-version and configuration. See [the readability review rubric](docs/quality-review.md)
-for reviewing implementation and tests alongside the metrics.
+See the [development guide](docs/development.md) for testing, quality checks,
+and upgrading Microsandbox.
