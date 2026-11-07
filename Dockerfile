@@ -1,6 +1,6 @@
 ARG MISE_VERSION=2026.11.3
 # renovate: datasource=npm depName=@opencode/cli
-ARG OPENCODE_VERSION=2.2.5
+ARG OPENCODE_VERSION=2.2.6
 
 FROM ghcr.io/jdx/mise:${MISE_VERSION} AS mise
 
