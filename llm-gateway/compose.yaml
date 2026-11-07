@@ -28,7 +28,7 @@ services:
       retries: 24
 
   db:
-    image: postgres:16
+    image: postgres:18
     environment:
       POSTGRES_USER: litellm
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run mise run gateway:start first}
