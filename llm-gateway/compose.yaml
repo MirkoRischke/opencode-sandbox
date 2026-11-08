@@ -2,7 +2,7 @@ name: opencode-sandbox-gateway
 
 services:
   litellm:
-    image: ghcr.io/berriai/litellm:v1.108.2
+    image: ghcr.io/berriai/litellm:v1.108.3
     ports:
       - "127.0.0.1:4000:4000"
     command: ["--config", "/app/config.yaml", "--port", "4000"]
