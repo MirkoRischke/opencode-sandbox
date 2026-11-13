@@ -314,6 +314,30 @@ command's scope.
   Also recheck forced image removal versus backing retention, and orphaned image
   backing collection after its final sandbox/snapshot owner is removed.
 
+## MSB-12 — Storage ancestors must prevent path substitution
+
+**Status:** confirmed runtime security requirement, not an upstream bug. Observed
+with Go SDK/runtime v0.7.15 during the 2026-11-13 upgrade from v0.7.11.
+
+The existing `~/.microsandbox` directory had mode `0775`. Both `msb load` in
+`mise run verify` and a standalone `msb image list` failed with
+`catalog ancestor /home/mirko/.microsandbox permits path substitution; use a storage root protected from other accounts`.
+The parent directories were not group- or world-writable. Changing only
+`~/.microsandbox` to owner-only mode `0700` made `msb image list` succeed.
+The subsequent `mise run upgrade-microsandbox 0.7.15` completed: lint and the full
+standard suite passed (226.28 seconds overall; 204.96 seconds for the VM package),
+then the launcher was installed and the dotfiles runtime pin updated.
+
+Impact: upgrading an existing installation can block image preparation and all
+catalog operations until storage permissions are secured. Do not bypass the
+check or make catalog storage shared across OS accounts.
+
+- Evidence: the failed upgrade task and standalone CLI reproduction above;
+  [v0.7.15 catalog security documentation](https://github.com/superradcompany/microsandbox/blob/v0.7.15/docs/security/secrets.mdx).
+- Upgrade check: inspect storage-root and ancestor permissions, then verify
+  `msb image list` and image loading with the selected runtime. Keep the storage
+  root private; this observation does not establish the minimum accepted mode.
+
 ## Issues needing verification, not confirmed upstream bugs
 
 ### Intermittent snapshot listing failure after snapshot removal and VM resume
@@ -332,6 +356,11 @@ Three isolated reruns of the unchanged test passed:
 go test -count=3 -parallel 4 -timeout 5m ./tests/vm \
   -run '^TestRemovingSnapshotLeavesExistingVMDisksIntact$'
 ```
+
+The subsequent full `mise run verify` also passed, including this test and the
+new gateway suite (531.53 seconds overall; 510.87 seconds for the VM package).
+The snapshot test was not skipped or weakened; the intermittent cause remains
+unresolved.
 
 Impact: an intermittent failure in the standard VM suite prevents claiming a
 clean full-suite baseline; no snapshot implementation or assertion was changed.

@@ -2,7 +2,7 @@
 go = "1.27.4"
 golangci-lint = "2.15.0"
 hadolint = "2.15.1"
-microsandbox = "0.7.11"
+microsandbox = "0.7.15"
 
 [env]
 SANDBOX_BASE_IMAGE = "{{ read_file(path='internal/config/default-image.txt') | trim }}"
