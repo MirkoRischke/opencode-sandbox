@@ -2,7 +2,6 @@
 package gateway
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"embed"
@@ -55,20 +54,7 @@ func (g *Gateway) Ensure(ctx context.Context, output io.Writer) error {
 	if err := g.materialize(); err != nil {
 		return err
 	}
-	var status bytes.Buffer
-	if err := g.compose(ctx, nil, &status, output, "ps", "--status", "running", "--format", "{{.Service}} {{.Health}}"); err != nil {
-		return fmt.Errorf("inspect LLM gateway (Docker Compose is required): %w", err)
-	}
-	services := map[string]bool{}
-	for _, line := range strings.Split(status.String(), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) == 2 && fields[1] == "healthy" {
-			services[fields[0]] = true
-		}
-	}
-	if services["litellm"] && services["db"] {
-		return nil
-	}
+	// Reconcile even healthy containers so bundled Compose updates take effect.
 	if err := g.compose(ctx, nil, output, output, "up", "--wait", "--wait-timeout", "180"); err != nil {
 		return fmt.Errorf("start LLM gateway: %w", err)
 	}
@@ -154,7 +140,13 @@ func (g *Gateway) materialize() error {
 		if err != nil {
 			return fmt.Errorf("read bundled gateway %s: %w", name, err)
 		}
-		// Stable, user-inspectable assets; don't overwrite an existing installation.
+		// Compose is managed by the installed CLI; preserve user configuration.
+		if name == "compose.yaml" {
+			if err := os.WriteFile(filepath.Join(g.directory, name), data, 0600); err != nil {
+				return fmt.Errorf("write gateway %s: %w", name, err)
+			}
+			continue
+		}
 		if err := writeOnce(filepath.Join(g.directory, name), data); err != nil {
 			return err
 		}

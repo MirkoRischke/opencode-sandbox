@@ -2,7 +2,8 @@
 
 The launcher runs a shared LiteLLM gateway on the host using Docker Compose.
 The gateway starts before VM preparation so the launcher can provision its key.
-Later launches reuse the healthy project. It stays running
+Every launch reconciles the project with the installed CLI's bundled Compose file.
+It stays running
 after sandbox exit. Requires Docker with the Compose CLI plugin.
 
 ## Initial authentication
@@ -21,8 +22,10 @@ authentication again. Readiness checks do not verify provider authentication.
 The binary embeds `compose.yaml` and `config.yaml`; no source checkout is needed.
 On first use it installs these and generates an owner-only `.env` under
 `$XDG_DATA_HOME/opencode-sandbox/gateway` (default
-`~/.local/share/opencode-sandbox/gateway`). Existing installation files are
-preserved. The Compose project is named `opencode-sandbox-gateway`.
+`~/.local/share/opencode-sandbox/gateway`). Every startup refreshes `compose.yaml`
+from the installed CLI and applies it, even when the containers are healthy.
+Existing `config.yaml`, `.env`, and Docker volumes are preserved. The Compose
+project is named `opencode-sandbox-gateway`.
 
 Start explicitly with `opencode-sandbox gateway start`. To stop without deleting
 credentials or usage data:

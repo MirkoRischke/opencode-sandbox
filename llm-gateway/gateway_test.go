@@ -19,7 +19,7 @@ import (
 // requiring Docker or touching the developer's shared gateway.
 //
 //nolint:forbidigo // The external executable seam needs process PATH; these tests run serially and never alter the real gateway.
-func TestEnsureStartsStoppedGatewayAndReusesHealthyProject(t *testing.T) {
+func TestEnsureRefreshesComposeAndReconcilesHealthyProject(t *testing.T) {
 	// PATH is process-local; this test must not run in parallel.
 	bin := t.TempDir()
 	log := filepath.Join(bin, "calls")
@@ -36,15 +36,27 @@ esac
 	t.Setenv("CALL_LOG", log)
 	g := gateway.New(t.TempDir())
 	require.NoError(t, g.Ensure(context.Background(), io.Discard))
+	composePath := filepath.Join(g.Directory(), "compose.yaml")
+	firstCompose, err := os.ReadFile(composePath)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(composePath, []byte("outdated compose"), 0600))
+	configPath := filepath.Join(g.Directory(), "config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte("custom config"), 0600))
 	firstEnv, err := os.ReadFile(filepath.Join(g.Directory(), ".env"))
 	require.NoError(t, err)
 	require.NoError(t, g.Ensure(context.Background(), io.Discard))
+	secondCompose, err := os.ReadFile(composePath)
+	require.NoError(t, err)
+	require.Equal(t, firstCompose, secondCompose, "startup must restore the bundled Compose file")
+	config, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	require.Equal(t, "custom config", string(config), "startup must preserve existing configuration")
 	secondEnv, err := os.ReadFile(filepath.Join(g.Directory(), ".env"))
 	require.NoError(t, err)
 	require.True(t, bytes.Equal(firstEnv, secondEnv), "gateway secrets must survive later launches")
 	calls, err := os.ReadFile(log)
 	require.NoError(t, err)
-	require.Equal(t, 1, strings.Count(string(calls), "up --wait --wait-timeout 180"))
+	require.Equal(t, 2, strings.Count(string(calls), "up --wait --wait-timeout 180"))
 	env, err := os.Stat(filepath.Join(g.Directory(), ".env"))
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0600), env.Mode().Perm())
@@ -56,7 +68,7 @@ esac
 	require.NoError(t, g.Ensure(context.Background(), io.Discard))
 	calls, err = os.ReadFile(log)
 	require.NoError(t, err)
-	require.Equal(t, 2, strings.Count(string(calls), "up --wait --wait-timeout 180"))
+	require.Equal(t, 3, strings.Count(string(calls), "up --wait --wait-timeout 180"))
 	require.Contains(t, string(calls), " stop\n")
 	require.NotContains(t, string(calls), " down")
 }
@@ -93,13 +105,18 @@ case "$*" in *" exec "*) echo 'Complete device login in your browser';; esac
 }
 
 //nolint:forbidigo // Serial test owns PATH; concurrent callers still exercise cross-process-compatible file locking.
-func TestConcurrentLaunchersStartGatewayOnce(t *testing.T) {
+func TestConcurrentLaunchersSerializeGatewayReconciliation(t *testing.T) {
 	bin := t.TempDir()
 	log := filepath.Join(bin, "calls")
 	require.NoError(t, os.WriteFile(filepath.Join(bin, "docker"), []byte(`#!/bin/sh
 case "$*" in
   *" ps "*) if test -f ready; then printf 'litellm healthy\ndb healthy\n'; fi ;;
-  *" up "*) echo up >> "$CALL_LOG"; sleep 0.1; touch ready ;;
+  *" up "*)
+    mkdir reconciling || exit 1
+    echo up >> "$CALL_LOG"
+    sleep 0.1
+    touch ready
+    rmdir reconciling ;;
 esac
 `), 0700))
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -117,7 +134,7 @@ esac
 	}
 	calls, err := os.ReadFile(log)
 	require.NoError(t, err)
-	require.Equal(t, "up\n", string(calls))
+	require.Equal(t, strings.Repeat("up\n", 4), string(calls))
 }
 
 //nolint:forbidigo // Serial PATH override isolates Compose failure from the developer's Docker installation.
