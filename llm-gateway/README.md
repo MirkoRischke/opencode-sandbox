@@ -27,6 +27,14 @@ from the installed CLI and applies it, even when the containers are healthy.
 Existing `config.yaml`, `.env`, and Docker volumes are preserved. The Compose
 project is named `opencode-sandbox-gateway`.
 
+For an isolated gateway, set `OPENCODE_SANDBOX_GATEWAY_PROJECT` and
+`OPENCODE_SANDBOX_GATEWAY_PORT` (defaults: `opencode-sandbox-gateway` and `4000`),
+plus a separate `XDG_DATA_HOME` for its configuration and credentials. The port
+also controls the CLI's gateway API client; the listener remains loopback-only.
+Standalone Compose tasks accept the same port variable and Compose's `-p` /
+`COMPOSE_PROJECT_NAME` override. Custom ports do not change VM networking or
+OpenCode provider settings automatically.
+
 Start explicitly with `opencode-sandbox gateway start`. To stop without deleting
 credentials or usage data:
 

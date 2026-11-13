@@ -9,8 +9,9 @@ mise run verify      # Lint + prepare changed images + full standard test suite
 mise run quality baseline # Save local complexity metrics before a refactor
 mise run quality compare  # Show current hotspots and changes from that baseline
 mise run test:unit    # Fast source-adjacent tests; no VMs or external services
-mise run test:non-vm  # Unit/script + CLI + image tests; Docker only, no Microsandbox
+mise run test:non-vm  # Unit/script + CLI + image + gateway tests; Docker only
 mise run test:image   # Build + offline image smoke tests; Docker only, no VMs
+mise run test:gateway # Real PostgreSQL/LiteLLM stack; no VMs or provider credentials
 mise run test:prepare # Prepare changed images only when image inputs change
 mise run test        # Prepare changed images, then run the full test suite
 mise run test:live   # Real VM prompt via gateway; requires persisted provider auth
@@ -21,11 +22,22 @@ Unchanged builds and imports are skipped; tests always run. After deleting
 Docker or Microsandbox images, run `mise run --force test:prepare` to prepare them again.
 
 Source-focused tests live beside their implementation. Higher-level tests are
-split into `tests/cli` (no Microsandbox), `tests/image` (Docker), and `tests/vm`
+split into `tests/cli` (no Microsandbox), `tests/image` (Docker),
+`tests/gateway` (real Docker Compose gateway), and `tests/vm`
 (Microsandbox). PR checks run linting, build the launcher, check module consistency,
 compile all tests including the `live` tag, and run `test:non-vm` with race detection.
 Renovate automerges dependency updates, including majors, after checks pass;
 the Microsandbox SDK is excluded because it must be upgraded with its runtime.
+
+Gateway integration tests start the built CLI with the bundled Compose/config
+files, a temporary data directory, a unique project name, and an unused loopback
+port. They verify readiness, team/key provisioning, authentication and permissions,
+key persistence across container recreation, and deletion. One stack is shared
+across focused, sequential scenarios to avoid repeated initialization; each
+scenario provisions its own credentials. Cleanup removes only that project's
+containers and volumes.
+Failures include redacted container logs. Image downloads on the first run add
+network-dependent time; later runs reuse cached images.
 
 The opt-in live test uses the real launcher and OpenCode inside a disposable VM.
 Authenticate the installed gateway once as shown in the

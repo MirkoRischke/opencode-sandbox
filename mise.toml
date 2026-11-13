@@ -79,8 +79,12 @@ description = "Run all tests without Microsandbox or host credentials; Docker re
 depends = ["build"]
 run = [
   "mkdir -p /tmp/opencode",
-  "go test -race -count=1 -v -timeout 2m ./internal/... ./llm-gateway ./scripts/... ./tests/cli ./tests/image",
+  "go test -race -count=1 -v -timeout 5m ./internal/... ./llm-gateway ./scripts/... ./tests/cli ./tests/image ./tests/gateway",
 ]
+
+[tasks."test:gateway"]
+description = "Test the real gateway stack without VMs or provider credentials; Docker required"
+run = "go test -race -count=1 -v -timeout 5m ./tests/gateway"
 
 [tasks."test:image"]
 description = "Build and smoke-test the Docker image without VMs or credentials"

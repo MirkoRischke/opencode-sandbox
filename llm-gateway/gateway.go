@@ -21,17 +21,39 @@ import (
 var assets embed.FS
 
 type Gateway struct {
-	directory string
-	baseURL   string
-	client    *http.Client
+	directory   string
+	projectName string
+	port        uint16
+	baseURL     string
+	client      *http.Client
+}
+
+// Options isolates a gateway's Compose resources and host listener. Zero values
+// retain the shared project name and port 4000.
+type Options struct {
+	ProjectName string
+	Port        uint16
 }
 
 // New uses the XDG data root, independently of the current source checkout.
 func New(dataDir string) *Gateway {
+	return NewWithOptions(dataDir, Options{})
+}
+
+// NewWithOptions configures an independent Compose project and gateway API port.
+func NewWithOptions(dataDir string, options Options) *Gateway {
+	if options.ProjectName == "" {
+		options.ProjectName = "opencode-sandbox-gateway"
+	}
+	if options.Port == 0 {
+		options.Port = 4000
+	}
 	return &Gateway{
-		directory: filepath.Join(dataDir, "opencode-sandbox", "gateway"),
-		baseURL:   "http://127.0.0.1:4000",
-		client:    &http.Client{Timeout: 15 * time.Second},
+		directory:   filepath.Join(dataDir, "opencode-sandbox", "gateway"),
+		projectName: options.ProjectName,
+		port:        options.Port,
+		baseURL:     fmt.Sprintf("http://127.0.0.1:%d", options.Port),
+		client:      &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
@@ -104,10 +126,11 @@ func (g *Gateway) Authenticate(ctx context.Context, provider string, input io.Re
 
 func (g *Gateway) compose(ctx context.Context, input io.Reader, output, stderr io.Writer, args ...string) error {
 	command := exec.CommandContext(ctx, "docker", append([]string{
-		"compose", "--project-directory", g.directory, "--project-name", "opencode-sandbox-gateway",
+		"compose", "--project-directory", g.directory, "--project-name", g.projectName,
 		"--file", filepath.Join(g.directory, "compose.yaml"), "--env-file", filepath.Join(g.directory, ".env"),
 	}, args...)...)
 	command.Dir = g.directory
+	command.Env = append(os.Environ(), fmt.Sprintf("OPENCODE_SANDBOX_GATEWAY_PORT=%d", g.port))
 	command.Stdin, command.Stdout, command.Stderr = input, output, stderr
 	return command.Run()
 }

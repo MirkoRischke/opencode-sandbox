@@ -316,6 +316,32 @@ command's scope.
 
 ## Issues needing verification, not confirmed upstream bugs
 
+### Intermittent snapshot listing failure after snapshot removal and VM resume
+
+**Status:** observed once with Go SDK/runtime v0.7.11 on 2026-11-13;
+upstream cause unconfirmed.
+
+The pre-change gateway-test baseline (`mise run test`, four parallel VM tests)
+failed `TestRemovingSnapshotLeavesExistingVMDisksIntact` at its final
+`sandbox.ListSnapshots` call: a native snapshot metadata lookup returned
+`snapshot not found` / `No such file or directory`. Earlier assertions confirmed
+snapshot removal, an empty listing, and successful resume of the existing VM.
+Three isolated reruns of the unchanged test passed:
+
+```sh
+go test -count=3 -parallel 4 -timeout 5m ./tests/vm \
+  -run '^TestRemovingSnapshotLeavesExistingVMDisksIntact$'
+```
+
+Impact: an intermittent failure in the standard VM suite prevents claiming a
+clean full-suite baseline; no snapshot implementation or assertion was changed.
+This is not proof of an upstream defect rather than a tool/runtime interaction.
+
+- Project reference: `tests/vm/snapshot_test.go`.
+- Upgrade check: rerun the isolated test and the concurrent full VM suite;
+  removing a snapshot and resuming an existing VM must leave snapshot listing
+  empty without looking up removed metadata.
+
 ### Restored root-disk metadata reports `SizeMiB = 0`
 
 The automatic-snapshot implementation reported a failing metadata assertion in

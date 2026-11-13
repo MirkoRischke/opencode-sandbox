@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	gateway "opencode-sandbox/llm-gateway"
 
@@ -19,7 +20,18 @@ func hostGateway() (*gateway.Gateway, error) {
 		}
 		dataDir = filepath.Join(home, ".local", "share")
 	}
-	return gateway.New(dataDir), nil
+	options := gateway.Options{ProjectName: os.Getenv("OPENCODE_SANDBOX_GATEWAY_PROJECT")}
+	if value := os.Getenv("OPENCODE_SANDBOX_GATEWAY_PORT"); value != "" {
+		port, err := strconv.ParseUint(value, 10, 16)
+		if err != nil {
+			return nil, fmt.Errorf("parse OPENCODE_SANDBOX_GATEWAY_PORT: %w", err)
+		}
+		if port == 0 {
+			return nil, fmt.Errorf("OPENCODE_SANDBOX_GATEWAY_PORT must be between 1 and 65535")
+		}
+		options.Port = uint16(port)
+	}
+	return gateway.NewWithOptions(dataDir, options), nil
 }
 
 func newGatewayCommand() *cobra.Command {

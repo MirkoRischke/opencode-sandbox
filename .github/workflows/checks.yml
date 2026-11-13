@@ -34,5 +34,5 @@ jobs:
         run: go mod tidy -diff
       - name: Compile all tests, including live tests
         run: go test -tags live -run '^$' ./...
-      - name: Run non-VM tests, including image smoke tests
+      - name: Run non-VM tests, including image and gateway integration tests
         run: mise run test:non-vm
