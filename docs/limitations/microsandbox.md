@@ -338,6 +338,54 @@ check or make catalog storage shared across OS accounts.
   `msb image list` and image loading with the selected runtime. Keep the storage
   root private; this observation does not establish the minimum accepted mode.
 
+## MSB-14 — Nested virtualization is lost on disk snapshot restore
+
+**Nested virtualization works in fresh VMs but is lost on disk snapshot restore.**
+Because opencode-sandbox restores workspace VMs from disk baselines, its guests
+cannot currently run this repository's VM tests or full `mise run verify`.
+Unit tests and Docker-only tests do not require nesting. We are waiting for an
+upstream restore fix before adding nesting support to this tool.
+
+**Status:** behavior reproduced with Go SDK/runtime v0.7.15 on Linux x86-64
+(AMD KVM), 2026-11-13. Reproduced independently through the MSB CLI; precise
+upstream cause unconfirmed.
+
+Fresh creation with `--nested-virt` exposes `/dev/kvm` and the `svm` CPU flag in
+the guest. Stopping that VM, capturing a default disk snapshot, and restoring it
+into another VM loses `/dev/kvm`. The fresh VM's inspected
+`resources.nested_virt` is `true`; the launcher's restored workspace configuration
+omits it. The CLI-only reproduction fails before any launcher credential/TLS
+enrichment or post-restore restart, so that cycle is not required to trigger it.
+Full snapshots were not tested.
+
+Impact: an experimental launcher integration using `WithNestedVirt(true)`
+enabled nesting in fresh preparation VMs, but the automatic disk-baseline path
+produced a workspace VM unable to run `tests/vm` inside it.
+Larger CPU/memory/disk settings do not fix this. The Go `RestoreConfig` and
+`ModifyOptions` expose no nesting override. The project will wait for an upstream
+fix rather than introduce a fresh-VM lifecycle workaround. The experimental
+configuration/launcher changes were reverted; no nesting setting is exposed by
+this tool.
+
+Evidence (using an already imported image, v0.7.15):
+
+```sh
+msb create <loaded-image> --name nesting-source --nested-virt --pull never
+msb exec nesting-source -- test -c /dev/kvm # exit 0
+msb stop nesting-source
+msb snapshot create nesting-probe --sandbox nesting-source
+msb snapshot restore nesting-source:nesting-probe --name nesting-restored
+msb exec nesting-restored -- test -c /dev/kvm # exit 1
+```
+
+- Project reference: `internal/sandbox/snapshot.go` (`createPreparationVM`,
+  `restoreWorktree`).
+- Upgrade check: repeat the CLI reproduction; verify nesting remains enabled
+  after disk restore and stop/resume. Then recreate a launcher baseline/workspace
+  and run `mise run verify` inside it with the normal four-way VM parallelism.
+  The full nested suite was not run during this investigation because the
+  restored guest failed the KVM prerequisite.
+
 ## Issues needing verification, not confirmed upstream bugs
 
 ### Intermittent snapshot listing failure after snapshot removal and VM resume
