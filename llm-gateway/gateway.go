@@ -49,7 +49,7 @@ func NewWithOptions(dataDir string, options Options) *Gateway {
 		options.Port = 4000
 	}
 	return &Gateway{
-		directory:   filepath.Join(dataDir, "opencode-sandbox", "gateway"),
+		directory:   filepath.Join(dataDir, "opencode-sandbox", "llm-gateway"),
 		projectName: options.ProjectName,
 		port:        options.Port,
 		baseURL:     fmt.Sprintf("http://127.0.0.1:%d", options.Port),

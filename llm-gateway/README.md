@@ -21,8 +21,8 @@ authentication again. Readiness checks do not verify provider authentication.
 
 The binary embeds `compose.yaml` and `config.yaml`; no source checkout is needed.
 On first use it installs these and generates an owner-only `.env` under
-`$XDG_DATA_HOME/opencode-sandbox/gateway` (default
-`~/.local/share/opencode-sandbox/gateway`). Every startup refreshes `compose.yaml`
+`$XDG_DATA_HOME/opencode-sandbox/llm-gateway` (default
+`~/.local/share/opencode-sandbox/llm-gateway`). Every startup refreshes `compose.yaml`
 from the installed CLI and applies it, even when the containers are healthy.
 Existing `config.yaml`, `.env`, and Docker volumes are preserved. The Compose
 project is named `opencode-sandbox-gateway`.
@@ -66,8 +66,8 @@ LiteLLM. The local credential is removed either way. Teams are retained for
 historical reporting. Recreating a VM creates a new key.
 
 The gateway manages credentials under
-`$XDG_DATA_HOME/opencode-sandbox/gateway/credentials` (default
-`~/.local/share/opencode-sandbox/gateway/credentials`), using directory mode `700`
+`$XDG_DATA_HOME/opencode-sandbox/llm-gateway/credentials` (default
+`~/.local/share/opencode-sandbox/llm-gateway/credentials`), using directory mode `700`
 and file mode `600`. Neither the real virtual key nor the master key is copied
 into the guest. No `[secrets.llm_gateway]` entry is needed; the launcher replaces
 that entry, or any secret using `LLM_GATEWAY_KEY`, with its managed credential.

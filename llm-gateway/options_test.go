@@ -43,3 +43,9 @@ printf '%s\n%s\n' "$*" "$OPENCODE_SANDBOX_GATEWAY_PORT" > "$CALL_LOG"
 		})
 	}
 }
+
+func TestDirectoryUsesLLMGatewayDataDirectory(t *testing.T) {
+	t.Parallel()
+	dataDir := t.TempDir()
+	require.Equal(t, filepath.Join(dataDir, "opencode-sandbox", "llm-gateway"), gateway.New(dataDir).Directory())
+}
