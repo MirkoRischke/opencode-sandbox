@@ -41,7 +41,7 @@ func TestOpenCodePromptsThroughHostGateway(t *testing.T) {
 	require.NoError(t, err, "authenticate once with 'opencode-sandbox gateway authenticate' first")
 	model := os.Getenv("OPENCODE_TEST_MODEL")
 	if model == "" {
-		model = "chatgpt/gpt-6-luna"
+		model = "gpt-6-luna"
 	}
 	worktree := newWorktree(t)
 	w, err := workspace.Resolve(context.Background(), worktree)
@@ -52,6 +52,21 @@ func TestOpenCodePromptsThroughHostGateway(t *testing.T) {
 	})
 	dir := t.TempDir()
 	require.NoError(t, os.Chmod(dir, 0700))
+	// Isolate launcher settings, but preserve the shared gateway's optional model
+	// configuration when the child process uses a different XDG_CONFIG_HOME.
+	configDir := os.Getenv("XDG_CONFIG_HOME")
+	if configDir == "" {
+		home, err := os.UserHomeDir()
+		require.NoError(t, err)
+		configDir = filepath.Join(home, ".config")
+	}
+	gatewayConfig := filepath.Join("opencode-sandbox", "llm-gateway", "config.yaml")
+	if data, err := os.ReadFile(filepath.Join(configDir, gatewayConfig)); !os.IsNotExist(err) {
+		require.NoError(t, err)
+		destination := filepath.Join(dir, gatewayConfig)
+		require.NoError(t, os.MkdirAll(filepath.Dir(destination), 0700))
+		require.NoError(t, os.WriteFile(destination, data, 0600))
+	}
 	provider := map[string]any{
 		"$schema": "https://opencode.ai/config.json",
 		"model":   "gateway/smoke",
@@ -90,6 +105,15 @@ printf 'exit "$(cat "$PWD/gateway-status")"\n' > /root/.bashrc
 	require.NoError(t, toml.NewEncoder(&encoded).Encode(settings))
 	writeSettingsAt(t, dir, encoded.String())
 	binary := buildLauncher(t)
+	t.Cleanup(func() {
+		// Do not leave the shared container bound to a soon-to-be-deleted test
+		// config. Reconcile once using the normal host environment/config path.
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+		defer cancel()
+		command := exec.CommandContext(ctx, binary, "--console-log-level", "warn", "gateway", "start")
+		command.Env = os.Environ()
+		require.NoError(t, command.Run(), "restore shared gateway configuration")
+	})
 	var args []string
 	switch runtime.GOOS {
 	case "linux":

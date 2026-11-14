@@ -4,6 +4,7 @@ package gateway
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"embed"
 	"errors"
 	"fmt"
@@ -17,7 +18,7 @@ import (
 	"time"
 )
 
-//go:embed compose.yaml config.yaml
+//go:embed compose.yaml compose.config.yaml
 var assets embed.FS
 
 type Gateway struct {
@@ -26,6 +27,7 @@ type Gateway struct {
 	port        uint16
 	baseURL     string
 	client      *http.Client
+	configFile  string
 }
 
 // Options isolates a gateway's Compose resources and host listener. Zero values
@@ -33,6 +35,9 @@ type Gateway struct {
 type Options struct {
 	ProjectName string
 	Port        uint16
+	// ConfigFile optionally supplies a user-managed LiteLLM configuration.
+	// An empty path or a missing file starts the gateway without a config file.
+	ConfigFile string
 }
 
 // New uses the XDG data root, independently of the current source checkout.
@@ -54,6 +59,7 @@ func NewWithOptions(dataDir string, options Options) *Gateway {
 		port:        options.Port,
 		baseURL:     fmt.Sprintf("http://127.0.0.1:%d", options.Port),
 		client:      &http.Client{Timeout: 15 * time.Second},
+		configFile:  options.ConfigFile,
 	}
 }
 
@@ -76,8 +82,12 @@ func (g *Gateway) Ensure(ctx context.Context, output io.Writer) error {
 	if err := g.materialize(); err != nil {
 		return err
 	}
+	config, err := g.loadConfig()
+	if err != nil {
+		return err
+	}
 	// Reconcile even healthy containers so bundled Compose updates take effect.
-	if err := g.compose(ctx, nil, output, output, "up", "--wait", "--wait-timeout", "180"); err != nil {
+	if err := g.compose(ctx, config, nil, output, output, "up", "--wait", "--wait-timeout", "180"); err != nil {
 		return fmt.Errorf("start LLM gateway: %w", err)
 	}
 	return nil
@@ -97,7 +107,7 @@ func (g *Gateway) Stop(ctx context.Context, output io.Writer) error {
 	if err := acquire(ctx, lock); err != nil {
 		return err
 	}
-	if err := g.compose(ctx, nil, output, output, "stop"); err != nil {
+	if err := g.compose(ctx, nil, nil, output, output, "stop"); err != nil {
 		return fmt.Errorf("stop LLM gateway: %w", err)
 	}
 	return nil
@@ -118,19 +128,56 @@ func (g *Gateway) Authenticate(ctx context.Context, provider string, input io.Re
 	if err := g.Ensure(ctx, stderr); err != nil {
 		return err
 	}
-	if err := g.compose(ctx, input, output, stderr, "exec", "-T", "litellm", "python", "-u", "-c", command); err != nil {
+	if err := g.compose(ctx, nil, input, output, stderr, "exec", "-T", "litellm", "python", "-u", "-c", command); err != nil {
 		return fmt.Errorf("authenticate gateway with %s: %w", provider, err)
 	}
 	return nil
 }
 
-func (g *Gateway) compose(ctx context.Context, input io.Reader, output, stderr io.Writer, args ...string) error {
-	command := exec.CommandContext(ctx, "docker", append([]string{
+type fileConfig struct {
+	path   string
+	digest string
+}
+
+func (g *Gateway) loadConfig() (*fileConfig, error) {
+	if g.configFile == "" {
+		return nil, nil
+	}
+	path, err := filepath.Abs(g.configFile)
+	if err != nil {
+		return nil, fmt.Errorf("resolve gateway config path: %w", err)
+	}
+	info, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("inspect gateway config %s: %w", path, err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("gateway config %s must be a regular file", path)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read gateway config %s: %w", path, err)
+	}
+	return &fileConfig{path: path, digest: fmt.Sprintf("%x", sha256.Sum256(data))}, nil
+}
+
+func (g *Gateway) compose(ctx context.Context, config *fileConfig, input io.Reader, output, stderr io.Writer, args ...string) error {
+	options := []string{
 		"compose", "--project-directory", g.directory, "--project-name", g.projectName,
 		"--file", filepath.Join(g.directory, "compose.yaml"), "--env-file", filepath.Join(g.directory, ".env"),
-	}, args...)...)
+	}
+	env := append(os.Environ(), fmt.Sprintf("OPENCODE_SANDBOX_GATEWAY_PORT=%d", g.port))
+	if config != nil {
+		options = append(options, "--file", filepath.Join(g.directory, "compose.config.yaml"))
+		env = append(env, "OPENCODE_SANDBOX_GATEWAY_CONFIG="+config.path,
+			"OPENCODE_SANDBOX_GATEWAY_CONFIG_SHA256="+config.digest)
+	}
+	command := exec.CommandContext(ctx, "docker", append(options, args...)...)
 	command.Dir = g.directory
-	command.Env = append(os.Environ(), fmt.Sprintf("OPENCODE_SANDBOX_GATEWAY_PORT=%d", g.port))
+	command.Env = env
 	command.Stdin, command.Stdout, command.Stderr = input, output, stderr
 	return command.Run()
 }
@@ -158,20 +205,13 @@ func acquire(ctx context.Context, file *os.File) error {
 }
 
 func (g *Gateway) materialize() error {
-	for _, name := range []string{"compose.yaml", "config.yaml"} {
+	for _, name := range []string{"compose.yaml", "compose.config.yaml"} {
 		data, err := assets.ReadFile(name)
 		if err != nil {
 			return fmt.Errorf("read bundled gateway %s: %w", name, err)
 		}
-		// Compose is managed by the installed CLI; preserve user configuration.
-		if name == "compose.yaml" {
-			if err := os.WriteFile(filepath.Join(g.directory, name), data, 0600); err != nil {
-				return fmt.Errorf("write gateway %s: %w", name, err)
-			}
-			continue
-		}
-		if err := writeOnce(filepath.Join(g.directory, name), data); err != nil {
-			return err
+		if err := os.WriteFile(filepath.Join(g.directory, name), data, 0600); err != nil {
+			return fmt.Errorf("write gateway %s: %w", name, err)
 		}
 	}
 	path := filepath.Join(g.directory, ".env")

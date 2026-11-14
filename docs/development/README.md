@@ -29,10 +29,12 @@ compile all tests including the `live` tag, and run `test:non-vm` with race dete
 Renovate automerges dependency updates, including majors, after checks pass;
 the Microsandbox SDK is excluded because it must be upgraded with its runtime.
 
-Gateway integration tests start the built CLI with the bundled Compose/config
-files, a temporary data directory, a unique project name, and an unused loopback
-port. They verify readiness, team/key provisioning, authentication and permissions,
-key persistence across container recreation, and deletion. One stack is shared
+Gateway integration tests start the built CLI with the bundled Compose files,
+temporary config/data directories, a unique project name, and an unused loopback
+port. They verify startup without a config, external config reload/removal,
+database-defined models, invalid-config failure, readiness, team/key provisioning,
+authentication and permissions, key persistence across container recreation,
+and deletion. One stack is shared
 across focused, sequential scenarios to avoid repeated initialization; each
 scenario provisions its own credentials. Cleanup removes only that project's
 containers and volumes.
@@ -40,15 +42,16 @@ Failures include redacted container logs. Image downloads on the first run add
 network-dependent time; later runs reuse cached images.
 
 The opt-in live test uses the real launcher and OpenCode inside a disposable VM.
-Authenticate the installed gateway once as shown in the
+Configure a model and authenticate the installed gateway once as shown in the
 [gateway guide](../../llm-gateway/README.md). The gateway may be stopped before
 the test: the launcher starts it automatically. Tests never stop the shared
 gateway or remove its authentication volumes. `OPENCODE_TEST_MODEL` selects the
-gateway model ID (default `chatgpt/gpt-6-luna`). Missing setup fails the test rather
+gateway model ID (default `gpt-6-luna`). Missing setup fails the test rather
 than skipping it. It creates isolated provider configuration and exercises
 automatic virtual-key provisioning; the real key is substituted outside the VM.
-Cleanup removes the test VM and its key. Ordinary tests use no real provider
-credentials.
+It reuses the optional host gateway config, restoring its normal mount path
+after the test. Cleanup removes the test VM and its key. Ordinary tests use no
+real provider credentials.
 
 Quality reports are advisory and saved under `.quality/` (ignored by Git).
 They require Python 3 and the pinned golangci-lint; compare with the same tool

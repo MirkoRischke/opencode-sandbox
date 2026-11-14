@@ -144,8 +144,8 @@ See the [known limitations](docs/limitations/README.md).
 
 The launcher starts the shared host LLM gateway automatically before VM
 preparation and provisions a dedicated key per worktree/VM. Docker Compose is
-required. Authenticate once with `opencode-sandbox gateway authenticate`, then
-configure your OpenCode provider using the
+required. Configure gateway models, authenticate once with
+`opencode-sandbox gateway authenticate`, then configure your OpenCode provider using the
 [gateway guide](llm-gateway/README.md). Host TCP port 4000 is allowed by default.
 
 Use `opencode-sandbox gateway start` to start it explicitly. The gateway stays

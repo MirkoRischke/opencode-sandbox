@@ -26,6 +26,7 @@ type gatewayStack struct {
 	binary  string
 	project string
 	baseURL string
+	config  string
 	env     []string
 	keys    []string
 	client  *http.Client
@@ -47,6 +48,7 @@ func newGatewayStack(t *testing.T) *gatewayStack {
 		binary:  filepath.Join(dir, "launcher"),
 		project: project,
 		baseURL: fmt.Sprintf("http://127.0.0.1:%d", port),
+		config:  filepath.Join(dir, "opencode-sandbox", "llm-gateway", "config.yaml"),
 		client:  &http.Client{Timeout: 15 * time.Second},
 	}
 	// Never inherit real gateway credentials or launcher configuration. Preserve

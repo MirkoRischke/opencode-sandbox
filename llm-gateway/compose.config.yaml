@@ -1,0 +1,13 @@
+services:
+  litellm:
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    labels:
+      # Recreate the container on the next startup when the config contents change.
+      opencode-sandbox.llm-config-sha256: ${OPENCODE_SANDBOX_GATEWAY_CONFIG_SHA256:?Config checksum is required}
+    volumes:
+      - type: bind
+        source: ${OPENCODE_SANDBOX_GATEWAY_CONFIG:?Config path is required}
+        target: /app/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false

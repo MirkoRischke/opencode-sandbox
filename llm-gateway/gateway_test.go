@@ -3,6 +3,8 @@ package gateway_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -40,17 +42,20 @@ esac
 	firstCompose, err := os.ReadFile(composePath)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(composePath, []byte("outdated compose"), 0600))
-	configPath := filepath.Join(g.Directory(), "config.yaml")
-	require.NoError(t, os.WriteFile(configPath, []byte("custom config"), 0600))
+	overridePath := filepath.Join(g.Directory(), "compose.config.yaml")
+	firstOverride, err := os.ReadFile(overridePath)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(overridePath, []byte("outdated override"), 0600))
+	require.NoFileExists(t, filepath.Join(g.Directory(), "config.yaml"))
 	firstEnv, err := os.ReadFile(filepath.Join(g.Directory(), ".env"))
 	require.NoError(t, err)
 	require.NoError(t, g.Ensure(context.Background(), io.Discard))
 	secondCompose, err := os.ReadFile(composePath)
 	require.NoError(t, err)
 	require.Equal(t, firstCompose, secondCompose, "startup must restore the bundled Compose file")
-	config, err := os.ReadFile(configPath)
+	override, err := os.ReadFile(overridePath)
 	require.NoError(t, err)
-	require.Equal(t, "custom config", string(config), "startup must preserve existing configuration")
+	require.Equal(t, firstOverride, override, "startup must restore the bundled Compose override")
 	secondEnv, err := os.ReadFile(filepath.Join(g.Directory(), ".env"))
 	require.NoError(t, err)
 	require.True(t, bytes.Equal(firstEnv, secondEnv), "gateway secrets must survive later launches")
@@ -71,6 +76,62 @@ esac
 	require.Equal(t, 3, strings.Count(string(calls), "up --wait --wait-timeout 180"))
 	require.Contains(t, string(calls), " stop\n")
 	require.NotContains(t, string(calls), " down")
+}
+
+//nolint:forbidigo // Serial PATH override observes Compose arguments and environment without Docker.
+func TestOptionalConfigIsSelectedAndReconciledOnStartup(t *testing.T) {
+	bin := t.TempDir()
+	log := filepath.Join(bin, "calls")
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "docker"), []byte(`#!/bin/sh
+printf '%s\n%s\n%s\n' "$*" "$OPENCODE_SANDBOX_GATEWAY_CONFIG" "$OPENCODE_SANDBOX_GATEWAY_CONFIG_SHA256" >> "$CALL_LOG"
+`), 0700))
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("CALL_LOG", log)
+	t.Setenv("OPENCODE_SANDBOX_GATEWAY_CONFIG", "")
+	t.Setenv("OPENCODE_SANDBOX_GATEWAY_CONFIG_SHA256", "")
+	configPath := filepath.Join(t.TempDir(), "config with spaces.yaml")
+	g := gateway.NewWithOptions(t.TempDir(), gateway.Options{ConfigFile: configPath})
+
+	// A missing optional file must not be created or mounted.
+	require.NoError(t, g.Ensure(t.Context(), io.Discard))
+	calls, err := os.ReadFile(log)
+	require.NoError(t, err)
+	require.NotContains(t, string(calls), "compose.config.yaml")
+	require.NoFileExists(t, configPath)
+
+	for _, config := range []string{"model_list: []\n", "model_list: []\n# changed\n"} {
+		require.NoError(t, os.WriteFile(configPath, []byte(config), 0600))
+		require.NoError(t, os.WriteFile(log, nil, 0600))
+		require.NoError(t, g.Ensure(t.Context(), io.Discard))
+		calls, err = os.ReadFile(log)
+		require.NoError(t, err)
+		require.Contains(t, string(calls), "--file "+filepath.Join(g.Directory(), "compose.config.yaml"))
+		require.Contains(t, string(calls), "\n"+configPath+"\n")
+		require.Contains(t, string(calls), fmt.Sprintf("%x", sha256.Sum256([]byte(config))))
+		data, err := os.ReadFile(configPath)
+		require.NoError(t, err)
+		require.Equal(t, config, string(data), "user config is read, never overwritten")
+	}
+
+	require.NoError(t, os.Remove(configPath))
+	require.NoError(t, os.WriteFile(log, nil, 0600))
+	require.NoError(t, g.Ensure(t.Context(), io.Discard))
+	calls, err = os.ReadFile(log)
+	require.NoError(t, err)
+	require.NotContains(t, string(calls), "compose.config.yaml", "removing the config must remove the override")
+
+	// A bad config path must fail startup, but must not prevent stopping.
+	require.NoError(t, os.Mkdir(configPath, 0700))
+	require.NoError(t, os.WriteFile(log, nil, 0600))
+	require.ErrorContains(t, g.Ensure(t.Context(), io.Discard), "must be a regular file")
+	calls, err = os.ReadFile(log)
+	require.NoError(t, err)
+	require.Empty(t, calls, "invalid config must not invoke Docker")
+	require.NoError(t, g.Stop(t.Context(), io.Discard))
+	calls, err = os.ReadFile(log)
+	require.NoError(t, err)
+	require.Contains(t, string(calls), " stop\n")
+	require.NotContains(t, string(calls), "compose.config.yaml")
 }
 
 func TestStopBeforeFirstStartDoesNotCreateGatewayFiles(t *testing.T) {

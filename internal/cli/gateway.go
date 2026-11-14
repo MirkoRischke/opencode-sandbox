@@ -20,7 +20,14 @@ func hostGateway() (*gateway.Gateway, error) {
 		}
 		dataDir = filepath.Join(home, ".local", "share")
 	}
-	options := gateway.Options{ProjectName: os.Getenv("OPENCODE_SANDBOX_GATEWAY_PROJECT")}
+	configDir, err := hostConfigDir(os.Getenv("XDG_CONFIG_HOME"), os.Getenv("HOME"))
+	if err != nil {
+		return nil, err
+	}
+	options := gateway.Options{
+		ProjectName: os.Getenv("OPENCODE_SANDBOX_GATEWAY_PROJECT"),
+		ConfigFile:  filepath.Join(configDir, "opencode-sandbox", "llm-gateway", "config.yaml"),
+	}
 	if value := os.Getenv("OPENCODE_SANDBOX_GATEWAY_PORT"); value != "" {
 		port, err := strconv.ParseUint(value, 10, 16)
 		if err != nil {

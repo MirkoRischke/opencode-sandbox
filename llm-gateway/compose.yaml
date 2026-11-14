@@ -5,7 +5,7 @@ services:
     image: ghcr.io/berriai/litellm:v1.109.1
     ports:
       - "127.0.0.1:${OPENCODE_SANDBOX_GATEWAY_PORT:-4000}:4000"
-    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    command: ["--port", "4000"]
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?Run mise run gateway:start first}
       LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?Run mise run gateway:start first}
@@ -14,7 +14,6 @@ services:
       CHATGPT_TOKEN_DIR: /var/lib/litellm/chatgpt
       GITHUB_COPILOT_TOKEN_DIR: /var/lib/litellm/github-copilot
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
       - chatgpt_auth:/var/lib/litellm/chatgpt
       - copilot_auth:/var/lib/litellm/github-copilot
     depends_on:

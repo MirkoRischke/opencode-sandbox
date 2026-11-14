@@ -15,5 +15,5 @@ if [[ ! -e .env ]]; then
   )
 fi
 
-docker compose up --wait --wait-timeout 180
+bash compose.sh up --wait --wait-timeout 180
 printf '\nGateway dashboard: http://localhost:4000/ui\nUsername: admin\nPassword: LITELLM_MASTER_KEY in llm-gateway/.env\nChatGPT login: mise run gateway:authenticate\n'
