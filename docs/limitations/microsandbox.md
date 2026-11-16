@@ -11,6 +11,37 @@ Tests were not rerun when writing the original inventory. Source rechecked throu
 are not behavioral verification. Separately attributed parent-session test results
 do not imply every upgrade check was exercised.
 
+### v0.7.15 upgrade recheck (2026-11-13)
+
+Reviewed releases v0.7.12–v0.7.15 and compared relevant versioned source against
+v0.7.11. No existing open limitation was established resolved. The full standard
+suite passed on v0.7.15, including selected-header substitution, snapshot removal,
+restore, resume, owned Docker storage, and published ports. This does not exercise
+every entry's dedicated upgrade check or establish an intermittent bug fixed.
+
+- MSB-01/05: Go modification fields are unchanged; `modify.go` differs only in
+  a documentation comment. Selected-header restoration remains supported;
+  general network-policy modification remains unavailable.
+- MSB-02–04: `sdk/go/restore.go` is byte-identical to v0.7.11. Existing restore
+  configuration adaptations remain necessary.
+- MSB-06: `crates/agentd/lib/tls.rs` is byte-identical; no old-CA removal fix found.
+- MSB-07/08: `crates/network/lib/engine/tls/proxy.rs` is byte-identical. New inbound
+  admission metrics are not a complete policy-denial audit. The controlled
+  valid-IP-SAN check remains outstanding.
+- MSB-09: snapshot `group.rs` is byte-identical; HEAD/deletion constraints remain.
+- MSB-11: public/FFI storage options, runtime cache ownership, and image cleanup
+  source are byte-identical; no ownership/force bypass was added.
+- The root-disk `size_mib: None` restore assignment remains. No identified release
+  change establishes a fix for the intermittent snapshot-listing failure or
+  warrants reverting the identity-addressed DNS test fixture.
+
+Evidence: [v0.7.11 → v0.7.15 comparison](https://github.com/superradcompany/microsandbox/compare/v0.7.11...v0.7.15),
+[v0.7.12](https://github.com/superradcompany/microsandbox/releases/tag/v0.7.12),
+[v0.7.13](https://github.com/superradcompany/microsandbox/releases/tag/v0.7.13),
+[v0.7.14](https://github.com/superradcompany/microsandbox/releases/tag/v0.7.14),
+[v0.7.15](https://github.com/superradcompany/microsandbox/releases/tag/v0.7.15).
+These are source rechecks unless behavior is explicitly attributed above.
+
 Entries distinguish confirmed API gaps, observed behavior, and unverified issues.
 Documenting a security limitation does **not** make it safe or imply acceptance.
 This tracker does not prescribe workarounds. Existing implementation adaptations
@@ -255,6 +286,14 @@ command found.
 **Status:** confirmed source-level limitation, not behaviorally reproduced here.
 Checked Go SDK/runtime v0.7.11 and its pinned `msb_krun` v0.1.41 dependency.
 
+Source rechecked 2026-11-13 at v0.7.15 with `msb_krun` v0.1.45: the
+[Unix backend](https://github.com/superradcompany/microsandbox/blob/v0.7.15/crates/filesystem/lib/backends/passthroughfs/unix/mod.rs#L613-L654)
+still negotiates neither lock capability, and the dependency's
+[locking methods remain ENOSYS stubs](https://github.com/superradcompany/libkrun/blob/344cb2488c0475e644ed21152344a408973d4369/src/devices/src/virtio/fs/filesystem.rs#L1222-L1235).
+The v0.7.15 [descriptor-reuse optimization](https://github.com/superradcompany/microsandbox/pull/2032)
+does not establish shared locking or SQLite WAL safety; no performance benchmark
+or cross-VM lock experiment was run for this recheck.
+
 The Unix passthrough backend does not negotiate `POSIX_LOCKS` or `FLOCK_LOCKS`.
 Its underlying filesystem trait leaves `getlk`, `setlk`, and `setlkw`
 unimplemented. Linux FUSE therefore handles locks locally in each guest kernel,
@@ -319,6 +358,13 @@ command's scope.
 **Status:** confirmed runtime security requirement, not an upstream bug. Observed
 with Go SDK/runtime v0.7.15 during the 2026-11-13 upgrade from v0.7.11.
 
+Introduced in v0.7.12 by the
+[catalog security change](https://github.com/superradcompany/microsandbox/commit/8ff916f38a628390fff21e26339495272f20d782),
+although omitted from its generated release notes. Catalog files/backups are
+restricted to `0600`; unsafe ancestors, foreign ownership, and linked catalog
+files fail closed. Access control does not erase or encrypt historical copies.
+If persisted credentials may have been exposed to other accounts, rotate them.
+
 The existing `~/.microsandbox` directory had mode `0775`. Both `msb load` in
 `mise run verify` and a standalone `msb image list` failed with
 `catalog ancestor /home/mirko/.microsandbox permits path substitution; use a storage root protected from other accounts`.
@@ -337,6 +383,29 @@ check or make catalog storage shared across OS accounts.
 - Upgrade check: inspect storage-root and ancestor permissions, then verify
   `msb image list` and image loading with the selected runtime. Keep the storage
   root private; this observation does not establish the minimum accepted mode.
+
+## MSB-13 — Protected disk state rejects unsafe or legacy layouts
+
+**Status:** confirmed source-level security/compatibility change, introduced in
+v0.7.12; reviewed at Go SDK/runtime v0.7.15 on 2026-11-13. No exploit reproduced.
+
+The [protected-state security change](https://github.com/superradcompany/microsandbox/commit/fc5ba184e1adcba71eb3d67ed8a503ac5254c3bb)
+moves host-managed disk/checkpoint records away from guest-accessible directories
+and rejects journal symlinks, paths outside the sandbox, symlinked layer components,
+and nonregular layer files. Previously, guest-accessible journals could substitute
+another sandbox's writable disk. Older runtimes or legacy storage layouts may now
+be refused. v0.7.14 adds [storage recovery fixes](https://github.com/superradcompany/microsandbox/pull/2022).
+
+Impact: keep SDK/runtime paired. This project permits recreating VMs and baselines;
+no migration implementation is required. The successful v0.7.15 suite verifies
+ordinary fresh preparation, snapshot/restore, stop/resume, and owned Docker storage,
+not legacy-layout recovery or exploit resistance.
+
+- Evidence: the security change above and
+  [versioned storage guide](https://github.com/superradcompany/microsandbox/blob/v0.7.15/docs/migrations/sandbox-storage.mdx).
+- Upgrade check: fresh preparation → snapshot → restore → stop/resume → remove,
+  including owned Docker disks and cleanup after failed preparation/restore.
+  Do not infer a fix for the separate intermittent snapshot-listing failure.
 
 ## MSB-14 — Nested virtualization is lost on disk snapshot restore
 
