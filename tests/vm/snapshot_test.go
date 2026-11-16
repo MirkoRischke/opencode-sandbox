@@ -96,13 +96,14 @@ func TestSnapshotListingIncludesBaselineMetadataAndSeparatesWorkspaces(t *testin
 	require.NoError(t, err)
 	artifact, err := head.Open(f.ctx)
 	require.NoError(t, err)
-	require.Equal(t, "worktree", artifact.Labels()["workspace-name"])
+	repo := filepath.Join(filepath.Dir(f.worktree), "repo")
+	require.Equal(t, "repo", artifact.Labels()["workspace-name"])
 	require.Equal(t, m.SnapshotScopeDisk, artifact.Scope())
 
 	listing, err := sandbox.ListSnapshots(f.ctx, f.worktree)
 	require.NoError(t, err)
 	require.NotNil(t, listing.Current)
-	require.Equal(t, f.worktree, listing.Current.Path)
+	require.Equal(t, repo, listing.Current.Path)
 	require.Len(t, listing.Current.Snapshots, 1)
 	require.Equal(t, f.reference, listing.Current.Snapshots[0].Reference)
 	require.True(t, listing.Current.Snapshots[0].Baseline)
@@ -114,12 +115,13 @@ func TestSnapshotListingIncludesBaselineMetadataAndSeparatesWorkspaces(t *testin
 	listing, err = sandbox.ListSnapshots(f.ctx, second)
 	require.NoError(t, err)
 	require.NotNil(t, listing.Current)
-	require.Empty(t, listing.Current.Snapshots)
+	require.Len(t, listing.Current.Snapshots, 1)
+	require.Equal(t, f.reference, listing.Current.Snapshots[0].Reference)
 	listing, err = sandbox.ListSnapshots(f.ctx, t.TempDir())
 	require.NoError(t, err)
 	require.NotNil(t, listing.Current)
 	require.Empty(t, listing.Current.Snapshots)
-	index := slices.IndexFunc(listing.Workspaces, func(w sandbox.SnapshotWorkspace) bool { return w.Path == f.worktree })
+	index := slices.IndexFunc(listing.Workspaces, func(w sandbox.SnapshotWorkspace) bool { return w.Path == repo })
 	require.NotEqual(t, -1, index, "baseline remains visible in the other-workspaces listing")
 	require.Len(t, listing.Workspaces[index].Snapshots, 1)
 	require.Equal(t, f.reference, listing.Workspaces[index].Snapshots[0].Reference)
@@ -179,7 +181,9 @@ func TestSnapshotReplacementStartsFreshAndKeepsExistingVMs(t *testing.T) {
 	execInSandbox(t, existing, "docker", "volume", "create", "only-a")
 	f.settings.Snapshot.Command = "echo second > /root/generation; test ! -e /root/only-a; test ! -e /root/first-baseline-only"
 
-	replacement, err := sandbox.CreateSnapshot(f.ctx, f.worktree, nil, f.settings)
+	second := filepath.Join(filepath.Dir(f.worktree), "second")
+	runGit(t, "-C", filepath.Join(filepath.Dir(f.worktree), "repo"), "worktree", "add", "-b", "second", second)
+	replacement, err := sandbox.CreateSnapshot(f.ctx, second, nil, f.settings)
 
 	require.NoError(t, err)
 	require.NotEqual(t, f.reference, replacement)
@@ -216,18 +220,33 @@ func TestRemovingSnapshotLeavesExistingVMDisksIntact(t *testing.T) {
 	require.Empty(t, listing.Current.Snapshots, "an existing VM must not recreate a removed snapshot")
 }
 
-func TestSnapshotsAreIsolatedBetweenLinkedWorktreesAndClones(t *testing.T) {
+func TestSnapshotsShareLinkedWorktreesButIsolateClones(t *testing.T) {
 	t.Parallel()
 	f := newSnapshotFixture(t, "touch /root/baseline-proof")
 	second := filepath.Join(filepath.Dir(f.worktree), "second")
 	runGit(t, "-C", filepath.Join(filepath.Dir(f.worktree), "repo"), "worktree", "add", "-b", "second", second)
 
-	f.settings.Snapshot.Command = ""
+	originalImage := f.settings.VM.Image
+	f.settings.Snapshot.Command = "exit 42"
+	f.settings.VM.Image = "127.0.0.1:1/must-not-resolve:shared-baseline"
 	linked := prepareSnapshotChild(t, f.ctx, second, f.settings)
-	clone := prepareSnapshotChild(t, f.ctx, newWorktree(t), f.settings)
+	execInSandbox(t, linked, "test", "-e", "/root/baseline-proof")
+	first := prepareSnapshotChild(t, f.ctx, f.worktree, f.settings)
+	require.NotEqual(t, first.Name, linked.Name)
+	execInSandbox(t, linked, "touch", "/root/linked-only")
+	execInSandbox(t, first, "test", "!", "-e", "/root/linked-only")
 
-	execInSandbox(t, linked, "test", "!", "-e", "/root/baseline-proof")
+	f.settings.Snapshot.Command = ""
+	f.settings.VM.Image = originalImage
+	clone := prepareSnapshotChild(t, f.ctx, newWorktree(t), f.settings)
 	execInSandbox(t, clone, "test", "!", "-e", "/root/baseline-proof")
+
+	require.NoError(t, sandbox.RemoveSnapshot(f.ctx, second))
+	listing, err := sandbox.ListSnapshots(f.ctx, f.worktree)
+	require.NoError(t, err)
+	require.Empty(t, listing.Current.Snapshots, "removal from a sibling removes the shared baseline")
+	execInSandbox(t, first, "test", "-e", "/root/baseline-proof")
+	execInSandbox(t, linked, "test", "-e", "/root/baseline-proof")
 }
 
 func TestFirstLaunchPreparesManagedSnapshotOnlyOnce(t *testing.T) {

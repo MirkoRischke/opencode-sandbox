@@ -3,6 +3,7 @@ package sandbox
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,8 +43,10 @@ func newPruneFixture(t *testing.T) *pruneFixture {
 		f.resources.vms = append(f.resources.vms, pruneVM{
 			name: Name(w), workspaceID: w.ID(), remove: f.remover("VM " + w.ID()),
 		})
+	}
+	for _, w := range []workspace.Workspace{f.current, f.unrelated} {
 		f.resources.snapshots = append(f.resources.snapshots, pruneSnapshot{
-			workspace: snapshotIdentity(w.Root()), remove: f.remover("snapshot " + w.ID()),
+			workspace: repositorySnapshot(w), remove: f.remover("snapshot " + w.RepositoryID()),
 		})
 	}
 	// A preparation VM is selected by its workspace label, not its random name.
@@ -81,10 +84,8 @@ func (f *pruneFixture) assertDeleted(t *testing.T, w workspace.Workspace, delete
 	}
 	if deleted {
 		require.Contains(t, f.removed, "VM "+w.ID())
-		require.Contains(t, f.removed, "snapshot "+w.ID())
 	} else {
 		require.NotContains(t, f.removed, "VM "+w.ID())
-		require.NotContains(t, f.removed, "snapshot "+w.ID())
 	}
 }
 
@@ -111,10 +112,44 @@ func TestPruneWorkspaceScopes(t *testing.T) {
 			f.assertDeleted(t, f.current, true)
 			f.assertDeleted(t, f.deleted, scopeName != "current")
 			f.assertDeleted(t, f.unrelated, scopeName == "all")
+			if scopeName == "current" {
+				require.NotContains(t, f.removed, "snapshot "+f.current.RepositoryID())
+			} else {
+				require.Contains(t, f.removed, "snapshot "+f.current.RepositoryID())
+			}
+			if scopeName == "all" {
+				require.Contains(t, f.removed, "snapshot "+f.unrelated.RepositoryID())
+			} else {
+				require.NotContains(t, f.removed, "snapshot "+f.unrelated.RepositoryID())
+			}
 			require.FileExists(t, trust)
 			require.FileExists(t, source)
 			if scopeName != "current" {
 				require.Contains(t, f.removed, "preparation")
+			}
+		})
+	}
+}
+
+func TestPruneSharedSnapshotFromLinkedWorktree(t *testing.T) {
+	t.Parallel()
+	for _, repository := range []bool{false, true} {
+		t.Run(fmt.Sprintf("repository=%t", repository), func(t *testing.T) {
+			t.Parallel()
+			f := newPruneFixture(t)
+			tree := filepath.Join(t.TempDir(), "sibling")
+			runPruneGit(t, "-C", f.current.Root(), "worktree", "add", "-b", "sibling", tree)
+			scope, err := resolvePruneScope(context.Background(), PruneOptions{
+				Directory: tree, StateDir: f.state, Repository: repository,
+			})
+			require.NoError(t, err)
+			plan, err := planWorkspacePrune(scope, f.resources)
+			require.NoError(t, err)
+			require.NoError(t, plan.Execute(context.Background()))
+			if repository {
+				require.Contains(t, f.removed, "snapshot "+f.current.RepositoryID())
+			} else {
+				require.Empty(t, f.removed, "worktree-only cleanup must preserve the shared baseline")
 			}
 		})
 	}

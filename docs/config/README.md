@@ -29,7 +29,8 @@ also overrides your global values with those defaults.
 Optionally add `.opencode-sandbox.toml` in the current directory. The exact current
 directory is always the workspace, with or without Git. Parent directories and
 their repositories/configs are never discovered or merged. Each canonical
-directory has its own config, approval, VM, and snapshot baseline.
+directory has its own config, approval, and VM. Git checkouts and their linked
+worktrees share a snapshot baseline.
 
 Settings load in this order: built-in defaults, global `config.toml`, then workspace
 config. Tables merge recursively, scalars and arrays replace, and omitted keys
@@ -343,8 +344,9 @@ the AWS CLI. Docker is optional: images without `dockerd` skip daemon startup.
 
 ### Workspace snapshots
 
-Snapshots are prepared disk baselines, automatically created on first launch for a canonical
-directory, including non-Git directories. Linked worktrees have separate baselines.
+Snapshots are prepared disk baselines, automatically created on first launch.
+A Git checkout and its linked worktrees share one baseline. Non-Git directories
+and repository subdirectories use a per-directory baseline.
 Optionally configure an additional shell command globally or in the approved
 directory-local `.opencode-sandbox.toml`:
 
@@ -391,7 +393,7 @@ a temporary VM or an unpublished generation; snapshot removal also cleans up
 managed leftover generations in that workspace's group.
 
 Normal launch first resumes an existing workspace VM. Otherwise it restores the
-directory's baseline if present, or uses the same fresh preparation/publication flow
+repository's shared baseline (or non-Git directory baseline) if present, or uses the same fresh preparation/publication flow
 as `snapshot create` before restoring when none exists. Mise initialization and the
 custom command run only during snapshot preparation, never on normal launches,
 restores, or restarts; Docker startup and GitHub configuration still run each launch.
@@ -413,14 +415,17 @@ are sensitive local state. Host-proxy credential values are not guest files and
 are not copied into the snapshot by substitution alone. Captured system CA trust
 can retain the preparation VM's CA in addition to the destination runtime CA.
 
-The canonical absolute workspace path identifies a baseline. Symlink aliases
-share a group; different directories, including linked worktrees, do not.
-Moving a workspace changes its identity. Native group names are
+The canonical Git common-directory path identifies a repository baseline; outside
+Git, the canonical workspace path is used. Linked worktrees and symlink aliases
+share a group; independent clones do not. The first preparation uses the launching
+worktree's configuration, with no automatic invalidation when another worktree
+has different settings. Moving the Git common directory changes the repository identity.
+Native group names are
 `oc-workspace-<readable-name>-<path-hash>`, with uniquely named `prepared-*` members.
 Labels include `opencode-sandbox`, `kind=workspace-baseline`, `workspace-name`,
 `workspace-id`, and `workspace-path`. Microsandbox stores disks/metadata in its host-local
 snapshot store. Group/head lookup needs no launcher JSON index. Launcher cache
-contains only per-workspace lock files to prevent concurrent create/remove/restore
+contains only per-baseline lock files to prevent concurrent create/remove/restore
 operations; a conflicting operation reports an error rather than racing cleanup.
 
 `snapshot list` shows all managed workspace snapshots, with a dedicated current
@@ -432,7 +437,8 @@ guarantee of disk space reclaimed on deletion. Listing needs no configuration
 approval or credential reads and does not start VMs.
 
 `snapshot remove` needs no configuration approval or credential reads. It deletes
-only that directory's managed snapshot members, old members before the head;
+the repository's shared managed snapshot members (or the non-Git directory's members),
+old members before the head;
 repeat removal is a no-op. Existing restored VMs retain independent writable
 disks and survive snapshot removal/replacement and subsequent cold starts.
 The existing top-level `remove` remains VM-only and does not delete baselines.

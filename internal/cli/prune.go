@@ -39,9 +39,10 @@ func newPruneCommand() *cobra.Command {
 func pruneCommand(inventory func(context.Context, bool, bool) (pruneInventory, error)) *cobra.Command {
 	var flags pruneFlags
 	cmd := &cobra.Command{
-		Use: "prune", Short: "Delete this workspace's VMs, snapshots, history, logs, and diagnostics",
+		Use: "prune", Short: "Delete this workspace's VMs, history, logs, and diagnostics",
 		Long: "Delete all workspace resources, including conversation history. Running VMs are stopped and removed.\n\n" +
-			"Default: current directory/worktree. --repo includes other tracked worktrees, even deleted ones.\n" +
+			"Default: current directory/worktree; shared snapshots are preserved.\n" +
+			"--repo includes other tracked worktrees, even deleted ones, and the shared snapshot.\n" +
 			"--all includes every managed workspace plus ALL Microsandbox images and runtime caches,\n" +
 			"including images used outside this tool. MSB retains backing still owned by unrelated resources.\n" +
 			"Configuration, credentials, the gateway, Docker resources, and workspace source files are preserved.",

@@ -17,7 +17,7 @@ type SnapshotInfo struct {
 	Baseline  bool
 }
 
-// SnapshotWorkspace groups snapshots by canonical directory identity.
+// SnapshotWorkspace groups snapshots by repository identity (directory outside Git).
 type SnapshotWorkspace struct {
 	ID, Name, Path string
 	Snapshots      []SnapshotInfo

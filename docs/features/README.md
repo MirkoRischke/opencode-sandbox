@@ -46,4 +46,5 @@
   gateway) is reachable by default. See
   [directional port access](../config/README.md#directional-port-access).
 - **Prepared workspace snapshots:** warm tools, dependency caches, and Docker images
-  once; recreated VMs restore the directory's baseline, with or without Git.
+  once; linked Git worktrees restore one shared repository baseline into private
+  VMs. Outside Git, baselines belong to individual directories.

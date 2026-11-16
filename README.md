@@ -75,8 +75,8 @@ opencode-sandbox list   # List managed VMs (alias: ls)
 opencode-sandbox remove # Delete this directory's VM without confirmation (alias: rm)
 opencode-sandbox remove --all # Delete ALL managed VMs without confirmation
 opencode-sandbox prune --dry-run # Preview deletion of this worktree's resources
-opencode-sandbox prune # Delete this worktree's VMs, snapshots, history, logs, and diagnostics
-opencode-sandbox prune --repo # Include this repo's other worktrees, including deleted ones
+opencode-sandbox prune # Delete this worktree's VMs, history, logs, and diagnostics; keep snapshots
+opencode-sandbox prune --repo # Include this repo's other worktrees and shared snapshot, including deleted worktrees
 opencode-sandbox prune --all # All managed workspaces AND ALL machine-wide MSB images/runtime caches
 opencode-sandbox --help # Show launch options
 opencode-sandbox config default # Print documented launcher defaults
@@ -85,9 +85,9 @@ opencode-sandbox secret remove github # Remove its keyring entry after confirmat
 opencode-sandbox secret list # List account names in the opencode-sandbox keyring namespace (alias: ls)
 opencode-sandbox diagnostics network # Print saved network diagnostics JSON for this directory
 opencode-sandbox diagnostics logs # Print this workspace's host log directory
-opencode-sandbox snapshot create # Prepare a fresh VM and replace this directory's baseline
+opencode-sandbox snapshot create # Prepare a fresh VM and replace the shared repository baseline
 opencode-sandbox snapshot list   # List all snapshots; current directory gets its own section
-opencode-sandbox snapshot remove # Delete this directory's baseline, leaving VMs untouched
+opencode-sandbox snapshot remove # Delete the shared repository baseline, leaving VMs untouched
 opencode-sandbox snapshot remove --all # Delete ALL managed snapshots without confirmation
 ```
 
@@ -112,8 +112,10 @@ launches or restores. After provisioning configuration changes, run
 `opencode-sandbox snapshot create` to rebuild, then `opencode-sandbox remove` to
 recreate the workspace VM on the next launch. Baselines are not auto-invalidated.
 
-Each canonical directory has its own VM and baseline, including separate linked
-worktrees and repository subdirectories. Symlink aliases share identity.
+Each canonical directory has its own VM. A Git checkout and its linked worktrees
+share one baseline; independent clones, non-Git directories, and repository
+subdirectories remain separate. Symlink aliases share identity. The first
+preparation uses the launching worktree's configuration; refresh explicitly when needed.
 
 See [snapshot configuration and limitations](docs/config/README.md#workspace-snapshots).
 

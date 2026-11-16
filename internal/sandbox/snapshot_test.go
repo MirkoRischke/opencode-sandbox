@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"opencode-sandbox/internal/workspace"
+
 	"github.com/stretchr/testify/require"
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
@@ -27,7 +29,7 @@ func TestSnapshotIdentityIncludesReadableRepositoryAndStableLabels(t *testing.T)
 	require.LessOrEqual(t, len(snapshotIdentity("/projects/"+strings.Repeat("long", 50)).group), 128)
 }
 
-func TestSnapshotDiscoverySeparatesLinkedWorktrees(t *testing.T) {
+func TestSnapshotDiscoverySharesLinkedWorktrees(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	repo, tree := filepath.Join(dir, "repo"), filepath.Join(dir, "tree")
@@ -43,12 +45,27 @@ func TestSnapshotDiscoverySeparatesLinkedWorktrees(t *testing.T) {
 	require.NoError(t, err)
 	second, err := resolveSnapshotWorkspace(context.Background(), tree)
 	require.NoError(t, err)
-	require.NotEqual(t, first.id, second.id)
+	require.Equal(t, first, second, "linked worktrees must select the same baseline and lock")
+	repository, err := workspace.Resolve(context.Background(), repo)
+	require.NoError(t, err)
+	linked, err := workspace.Resolve(context.Background(), tree)
+	require.NoError(t, err)
+	require.NotEqual(t, repository.ID(), linked.ID(), "VM identities must remain worktree-specific")
+	require.NotEqual(t, Name(repository), Name(linked))
+	require.Equal(t, linked.ID(), restoredWorktreePatch(tree, nil).Labels["workspace-id"])
 	alias := filepath.Join(dir, "alias")
 	require.NoError(t, os.Symlink(tree, alias))
 	third, err := resolveSnapshotWorkspace(context.Background(), alias)
 	require.NoError(t, err)
 	require.Equal(t, second, third)
+	unrelated, err := resolveSnapshotWorkspace(context.Background(), t.TempDir())
+	require.NoError(t, err)
+	require.NotEqual(t, first.id, unrelated.id)
+	clone := filepath.Join(dir, "clone")
+	git("clone", repo, clone)
+	independent, err := resolveSnapshotWorkspace(context.Background(), clone)
+	require.NoError(t, err)
+	require.NotEqual(t, first.id, independent.id, "independent clones must not share baselines")
 }
 
 func TestRestoredSecretsKeepValuesHostSideAndRetainDestinationScope(t *testing.T) {

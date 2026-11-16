@@ -49,7 +49,7 @@ func newSnapshotRemoveCommand() *cobra.Command {
 
 func newSnapshotCreateCommand() *cobra.Command {
 	return &cobra.Command{
-		Use: "create", Short: "Prepare a fresh VM and replace this directory's baseline",
+		Use: "create", Short: "Prepare a fresh VM and replace the shared repository baseline",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) (err error) {
 			configDir, err := hostConfigDir(os.Getenv("XDG_CONFIG_HOME"), os.Getenv("HOME"))

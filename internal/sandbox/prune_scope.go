@@ -13,9 +13,10 @@ import (
 
 // Stored canonical roots allow selection without reopening deleted worktrees.
 type pruneScope struct {
-	stateDir   string
-	all        bool
-	workspaces map[string]string // workspace ID -> canonical root
+	stateDir     string
+	all          bool
+	repositoryID string            // Shared baselines are only selected by --repo or --all.
+	workspaces   map[string]string // workspace ID -> canonical root
 }
 
 func resolvePruneScope(ctx context.Context, options PruneOptions) (pruneScope, error) {
@@ -41,6 +42,7 @@ func resolvePruneScope(ctx context.Context, options PruneOptions) (pruneScope, e
 	if _, nonGit := current.(workspace.Directory); nonGit {
 		return scope, fmt.Errorf("--repo requires a Git checkout or worktree root")
 	}
+	scope.repositoryID = current.RepositoryID()
 	records, err := workspace.Records(options.StateDir)
 	if err != nil {
 		return scope, err
@@ -81,7 +83,7 @@ func planWorkspacePrune(scope pruneScope, inventory pruneResources) (*PrunePlan,
 		}
 	}
 	for _, snapshot := range inventory.snapshots {
-		if scope.includesWorkspace(snapshot.workspace.id) {
+		if scope.all || (scope.repositoryID != "" && snapshot.workspace.id == scope.repositoryID) {
 			plan.runtime = append(plan.runtime, pruneStep{name: "snapshots " + snapshot.workspace.group, run: snapshot.remove})
 		}
 	}

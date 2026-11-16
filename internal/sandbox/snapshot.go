@@ -34,7 +34,13 @@ func resolveSnapshotWorkspace(ctx context.Context, directory string) (workspaceS
 	if err != nil {
 		return workspaceSnapshot{}, err
 	}
-	return snapshotIdentity(w.Root()), nil
+	return repositorySnapshot(w), nil
+}
+
+func repositorySnapshot(w workspace.Workspace) workspaceSnapshot {
+	id, name := w.RepositoryID(), w.RepositoryName()
+	return workspaceSnapshot{root: w.RepositoryRoot(), name: name, id: id,
+		group: fmt.Sprintf("oc-workspace-%s-%s", namePart(name), id[:16])}
 }
 
 func snapshotIdentity(root string) workspaceSnapshot {
@@ -98,7 +104,7 @@ func CreateWorkspaceSnapshot(ctx context.Context, w workspace.Workspace, secrets
 	if err != nil {
 		return "", err
 	}
-	repo := snapshotIdentity(w.Root())
+	repo := repositorySnapshot(w)
 	unlock, err := repo.lock()
 	if err != nil {
 		return "", err
@@ -223,7 +229,7 @@ func createPreparationVM(ctx context.Context, w workspace.Workspace, name string
 	return prep, nil
 }
 
-// RemoveSnapshot removes this directory's members, not any restored VMs.
+// RemoveSnapshot removes this repository's shared baseline, not any restored VMs.
 func RemoveSnapshot(ctx context.Context, directory string, observers ...RemovalObserver) error {
 	repo, err := resolveSnapshotWorkspace(ctx, directory)
 	if err != nil {
@@ -390,7 +396,7 @@ func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, s
 	if !m.IsKind(err, m.ErrSandboxNotFound) {
 		return nil, false, fmt.Errorf("find worktree VM: %w", err)
 	}
-	repo := snapshotIdentity(w.Root())
+	repo := repositorySnapshot(w)
 	unlock, err := repo.lock()
 	if err != nil {
 		return nil, false, err
