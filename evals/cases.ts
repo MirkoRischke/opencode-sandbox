@@ -9,14 +9,15 @@ export const cases: TestCase[] = [
     vars: {
       caseID: "create",
       fixture: {},
-      task: "Create this workspace's opencode-sandbox config with VM memory set to 4096 MiB. Only edit .opencode-sandbox.toml. The opencode-sandbox CLI is on PATH. Do not start VMs or edit global configuration. Briefly explain the result.",
+      task: "I want the sandbox to use 1234MB of RAM",
     },
     assert: [
       { type: "javascript", value: expectSkillActivation(true) },
       { type: "javascript", value: (_output, context) => {
         const { config, files } = context.providerResponse!.metadata!;
         assert.deepEqual(files, [".opencode-sandbox.toml"]);
-        assert.equal((parse(config).vm as Record<string, unknown>).memory_mib, 4096);
+        // Treat informal MB as the CLI's MiB resource unit.
+        assert.equal((parse(config).vm as Record<string, unknown>).memory_mib, 1234);
         return true;
       } },
     ],
@@ -26,7 +27,7 @@ export const cases: TestCase[] = [
     vars: {
       caseID: "network",
       fixture: { ".opencode-sandbox.toml": "[vm]\nmemory_mib = 8192\n" },
-      task: "Update this workspace's opencode-sandbox config to also allow registry.npmjs.org, preserving existing settings and inherited default network access. Only edit .opencode-sandbox.toml. The opencode-sandbox CLI is on PATH. Do not start VMs or edit global configuration. Briefly explain the result.",
+      task: "I want to be able to reach registry.npmjs.org from within my sandbox",
     },
     assert: [
       { type: "javascript", value: expectSkillActivation(true) },
