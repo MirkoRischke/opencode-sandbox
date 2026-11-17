@@ -9,7 +9,7 @@ import { performance } from "node:perf_hooks";
 import type { OpenCode } from "@opencode/sdk";
 import { OpenCodeProvider, type Variant } from "./adapter.ts";
 import { cases } from "./cases.ts";
-import { activationFor, configurationFor } from "./assertions.ts";
+import { validConfiguration } from "./assertions.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const configHome = process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config");
@@ -102,28 +102,28 @@ try {
   const { default: promptfoo } = await import("promptfoo");
   const repetitions = Number(process.env.EVAL_REPETITIONS ?? 1);
   if (!Number.isInteger(repetitions) || repetitions < 1) throw new Error("EVAL_REPETITIONS must be a positive integer");
-  const selected = cases.filter(c => !process.env.EVAL_CASE || c.id === process.env.EVAL_CASE);
+  const selected = cases.filter(c => !process.env.EVAL_CASE || c.vars?.caseID === process.env.EVAL_CASE);
   if (!selected.length) throw new Error("EVAL_CASE must name an existing case");
   const suite = await promptfoo.evaluate({
     prompts: ["{{task}}"],
     providers: variants.map((v, i) => new OpenCodeProvider(hosts[i], v, artifacts)),
-    tests: Array.from({ length: repetitions }, (_, repetition) => selected.map(c => ({
-      description: `${c.id} #${repetition + 1}`,
-      vars: { caseID: c.id, task: c.prompt, repetition },
-      assert: [
-        { type: "javascript" as const, value: activationFor(c) },
-        { type: "javascript" as const, value: configurationFor(c) },
-        ...(c.assertions.judge ? [{
-          type: "llm-rubric" as const,
-          value: c.assertions.judge,
-          provider: {
-            id: `openai:chat:${process.env.EVAL_JUDGE_MODEL ?? "gpt-6.1-sol"}`,
-            config: { apiBaseUrl: provider.settings.baseURL, apiKey: process.env.LLM_GATEWAY_KEY },
-          },
-        }] : []),
-      ],
-    }))).flat(),
-  }, { maxConcurrency: Number(process.env.EVAL_CONCURRENCY ?? 9), cache: false });
+    tests: selected,
+    writeLatestResults: true,
+    sharing: false,
+    outputPath: [join(artifacts, "promptfoo.json"), join(artifacts, "report.html")],
+    defaultTest: {
+      assert: [{ type: "javascript", value: validConfiguration }],
+      options: {
+        provider: {
+          id: `openai:chat:${process.env.EVAL_JUDGE_MODEL ?? "gpt-6.1-sol"}`,
+          config: { apiBaseUrl: provider.settings.baseURL, apiKeyEnvar: "LLM_GATEWAY_KEY" },
+        },
+      },
+    },
+  }, {
+    maxConcurrency: Number(process.env.EVAL_CONCURRENCY ?? 9), cache: false,
+    repeat: repetitions,
+  });
   const results = await suite.toEvaluateSummary();
   await Promise.all(hosts.map(host => host.close()));
   hosts.length = 0;

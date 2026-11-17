@@ -5,7 +5,6 @@ import { promisify } from "node:util";
 import type { OpenCode } from "@opencode/sdk";
 import type { SessionMessageInfo } from "@opencode/client";
 import type { ApiProvider, CallApiContextParams, ProviderResponse } from "promptfoo";
-import { cases } from "./cases.ts";
 
 const exec = promisify(execFile);
 export type Variant = { name: string; skillDirectory?: string; revision: string; hash?: string };
@@ -28,12 +27,11 @@ export class OpenCodeProvider implements ApiProvider {
 
   async callApi(prompt: string, context?: CallApiContextParams): Promise<ProviderResponse> {
     const started = performance.now();
-    const fixture = cases.find(c => c.id === context?.vars.caseID);
-    if (!fixture) throw new Error("Unknown fixture case");
-    const trial = await mkdtemp(join(this.artifacts, `${fixture.id}-${this.variant.name}-`));
+    const { caseID, fixture } = context!.vars;
+    const trial = await mkdtemp(join(this.artifacts, `${caseID}-${this.variant.name}-`));
     const workspace = join(trial, "workspace");
     await mkdir(workspace);
-    for (const [file, contents] of Object.entries(fixture.fixture)) {
+    for (const [file, contents] of Object.entries(fixture as Record<string, string>)) {
       await writeFile(join(workspace, file), contents);
     }
     const request = { signal: AbortSignal.timeout(90_000) };
@@ -72,7 +70,7 @@ export class OpenCodeProvider implements ApiProvider {
         validation = { valid: false, output: String(error) };
       }
       const metadata = {
-        variant: this.variant, workspace, caseID: fixture.id,
+        variant: this.variant, workspace, caseID,
         availableSkills: available,
         activatedSkills: [
           ...data.filter(m => m.type === "skill").map(m => m.name),
@@ -80,7 +78,7 @@ export class OpenCodeProvider implements ApiProvider {
             p.type === "tool" && p.name === "skill" && p.state.status === "completed"
               ? [String((p.state.input as { id?: string }).id)] : [])),
         ],
-        config, files, validation, elapsedMs: performance.now() - started,
+        config, files: files.sort(), validation, elapsedMs: performance.now() - started,
       };
       await writeFile(join(trial, "trace.json"), JSON.stringify(messages, null, 2));
       await writeFile(join(trial, "result.json"), JSON.stringify({ answer, ...metadata }, null, 2));

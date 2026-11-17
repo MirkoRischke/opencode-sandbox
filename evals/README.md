@@ -63,29 +63,42 @@ still happen. Dependencies and the CLI are not rebuilt in the eval hot path.
 
 ## Assertions
 
-Add or edit cases in `cases.ts`. Each entry keeps its `id`, `fixture`, `prompt`,
-and `assertions` together. No adapter or runner changes are needed:
+Add or edit native Promptfoo `TestCase` entries in `cases.ts`. Each entry keeps
+fixture, task, and standard assertions together. No adapter or runner changes
+are needed:
 
 ```ts
 {
-  id: "memory",
-  fixture: { ".opencode-sandbox.toml": "[vm]\nmemory_mib = 8192\n" },
-  prompt: "Set workspace sandbox VM memory to 4096 MiB. Only edit the local config.",
-  assertions: {
-    skill: "trigger", // or "do-not-trigger"
-    check({ config, files }) {
+  description: "Change memory while preserving settings",
+  vars: {
+    caseID: "memory",
+    fixture: { ".opencode-sandbox.toml": "[vm]\nmemory_mib = 8192\n" },
+    task: "Set workspace sandbox VM memory to 4096 MiB. Only edit the local config.",
+  },
+  assert: [
+    { type: "javascript", value: expectSkillActivation(true) },
+    { type: "javascript", value: (_output, context) => {
+      const { config, files } = context.providerResponse!.metadata!;
       assert.deepEqual(files, [".opencode-sandbox.toml"]);
       assert.equal((parse(config).vm as Record<string, unknown>).memory_mib, 4096);
+      return true;
+    } },
+    {
+      type: "llm-rubric",
+      value: "The explanation accurately describes the memory change in the config.",
     },
-    // Optional: judges the answer and actual config together.
-    judge: "The explanation accurately describes the memory change in the config.",
-  },
+  ],
 }
 ```
 
-`check` uses ordinary TypeScript/Node assertions: throw to fail, return normally
-to pass. `files` is the sorted workspace inventory. Every case automatically
-requires CLI validation and an existing config before its custom check runs.
+Inline JavaScript assertions use ordinary TypeScript/Node assertions: throw to
+fail and return `true` to pass. `files` is the sorted workspace inventory.
+Shared `defaultTest.assert` requires CLI validation and an existing config for
+every case; these checks and case assertions all must pass (no ordering assumed).
+`expectSkillActivation(false)` checks non-activation; the helper always expects
+non-activation for the no-skill baseline. Optional `llm-rubric` assertions inherit
+the judge provider from `defaultTest.options.provider`. Other Promptfoo assertion
+types can be added directly, without extending a custom schema.
 Use `EVAL_CASE=<id>` to run just the new case across the three variants. Add
 assertion regression tests to `assertions.test.ts` when appropriate.
 
@@ -108,8 +121,12 @@ An SDK plugin registers the candidate using the official skill transform API.
 No personal configuration files are written. This is isolation for reproducibility,
 not a security sandbox; agents run with allowed tool permissions inside the VM.
 
-`results/run-*/summary.json` contains assertion results/timing; per-trial `trace.json`
-contains actual SDK messages/tool calls. Workspaces and isolated state are retained
+`results/run-*/summary.json` contains assertion results/timing. Standard Promptfoo
+exports are `promptfoo.json` and `report.html` (side-by-side results); open the HTML
+on the host. Promptfoo also persists results in the run's isolated HOME, with
+cloud sharing disabled. Judge credentials are referenced by environment variable,
+not embedded in exported config. Per-trial `trace.json` contains actual SDK
+messages/tool calls. Workspaces and isolated state are retained
 for debugging. Exit status is nonzero for failures/errors. Keep results private:
 traces and runtime state can contain sensitive model/provider data.
 
