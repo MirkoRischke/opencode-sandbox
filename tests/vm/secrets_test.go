@@ -36,7 +36,7 @@ func TestHostHTTPGatewaySubstitutesOnlyAuthorization(t *testing.T) {
 	require.NoError(t, os.Chmod(dir, 0700))
 	require.NoError(t, os.WriteFile(path, []byte("FAKE_GATEWAY_KEY"), 0600))
 	settings.Secrets = map[string]launcherconfig.SecretSettings{
-		"gateway": {File: path, Env: "GATEWAY_KEY", AllowedHosts: []string{"host.microsandbox.internal"}, Headers: []string{"authorization"}, AllowHTTP: true},
+		"gateway": {Source: launcherconfig.SecretSourceSettings{File: path}, Guest: launcherconfig.SecretGuestSettings{Env: "GATEWAY_KEY"}, AllowedHosts: []string{"host.microsandbox.internal"}, Headers: []string{"authorization"}, AllowHTTP: true},
 	}
 	secrets, err := sandbox.LoadSecrets(settings)
 	require.NoError(t, err)
@@ -87,13 +87,13 @@ func TestConfiguredSecretsUseRelativeFilesAndSubstituteOnlySelectedHeaders(t *te
 [network]
 allowed_hosts = ['httpbingo.org']
 [secrets.first]
-file = 'creds/github-token'
-env = 'FIRST_TOKEN'
+source.file = 'creds/github-token'
+guest.env = 'FIRST_TOKEN'
 allowed_hosts = ['httpbingo.org']
 headers = ['Authorization']
 [secrets.second]
-file = 'creds/second'
-env = 'SECOND_TOKEN'
+source.file = 'creds/second'
+guest.env = 'SECOND_TOKEN'
 allowed_hosts = ['httpbingo.org']
 headers = ['X-Api-Key']
 `)

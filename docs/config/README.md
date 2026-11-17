@@ -46,8 +46,8 @@ allowed_hosts = []
 additional_allowed_hosts = []
 
 [secrets.github]
-keyring = {}
-env = "GH_TOKEN"
+source.keyring = {}
+guest.env = "GH_TOKEN"
 allowed_hosts = ["api.github.com"]
 headers = ["authorization"]
 ```
@@ -632,21 +632,27 @@ loading and no fallback to host environment variables or host `gh` credentials.
 
 ```toml
 [secrets.github]
-file = "creds/github-token"
-env = "GH_TOKEN"
+source.file = "creds/github-token"
+guest.env = "GH_TOKEN"
 allowed_hosts = ["github.com", "api.github.com"]
 headers = ["authorization"]
 ```
 
 Add other named `[secrets.<name>]` sections in the same form. Each must have a
-unique environment variable name, exactly one source (`file` or a `keyring` table),
+unique `guest.env` environment variable name, exactly one source (`source.file` or a
+`source.keyring` table),
 non-empty host patterns, and non-empty HTTP header names. Relative paths resolve
-against the config directory supplying the `file` field (global or repo);
+against the config directory supplying the `source.file` field (global or repo);
 absolute paths are also accepted. Inline values and environment sources are not
 supported. Use mode `700` on the credential directory and `600` on the file.
 Symlinked paths, oversized files (over 16 KiB), empty values, multiple lines, and
 NUL bytes are rejected. A trailing newline is stripped. Configured files are
 validated on every launch; missing/invalid files fail launch, even for existing VMs.
+
+`source` defines where the host retrieves the real credential. `guest.env` names
+the environment variable inside the VM; it receives only a placeholder, never the
+source value. The root-level `allowed_hosts`, `headers`, and `allow_http` fields
+independently constrain where the host proxy may substitute the credential.
 
 ### OS keyring
 
@@ -654,8 +660,8 @@ Use an empty table to select the host OS keyring with default identifiers:
 
 ```toml
 [secrets.github]
-keyring = {}
-env = "GH_TOKEN"
+source.keyring = {}
+guest.env = "GH_TOKEN"
 allowed_hosts = ["github.com", "api.github.com"]
 headers = ["authorization"]
 ```
@@ -664,13 +670,13 @@ The default service is `opencode-sandbox`; the account is the secret name (`gith
 above). Override either identifier when needed:
 
 ```toml
-keyring = { service = "my-company", account = "work-github" }
+source.keyring = { service = "my-company", account = "work-github" }
 ```
 
 Empty or omitted identifier fields use defaults. Same service/account pairs share
 one entry across projects. Workspace definitions completely replace same-named
 global secrets, including keyring identifiers; defaults apply to the replacement.
-`keyring = true` and configuring both `file` and `keyring` are invalid.
+`source.keyring = true` and configuring both `source.file` and `source.keyring` are invalid.
 
 The launcher uses [zalando/go-keyring](https://github.com/zalando/go-keyring):
 macOS Keychain on macOS, and Secret Service (normally GNOME Keyring) on Ubuntu.
@@ -708,8 +714,8 @@ pinned in `go.mod`, because the latest tagged release lacks enumeration.
 entry without accepting the value as a command argument or printing it.
 `remove` asks for confirmation and warns that the entry may be shared across projects.
 A missing entry is harmless after confirmation. No command prints resolved secrets.
-To use a stored entry on launch, separately configure `keyring = {}` (or the matching
-custom service/account) instead of `file` in the secret definition.
+To use a stored entry on launch, separately configure `source.keyring = {}` (or the matching
+custom service/account) instead of `source.file` in the secret definition.
 
 ### Proxy scope and persistence
 

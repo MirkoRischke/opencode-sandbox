@@ -21,8 +21,8 @@ explicit entry to `config.toml`; the file is never read without it:
 
 ```toml
 [secrets.github]
-file = "creds/github-token"
-env = "GH_TOKEN"
+source.file = "creds/github-token"
+guest.env = "GH_TOKEN"
 allowed_hosts = ["github.com", "api.github.com"]
 headers = ["authorization"]
 ```

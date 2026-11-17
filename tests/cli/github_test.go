@@ -22,7 +22,7 @@ func TestGitHubTokenLoadsOnlyFromDedicatedCredentialFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte("github_pat_FAKE\n"), 0600))
 	settings := launcherconfig.DefaultSettings()
 	settings.Secrets = map[string]launcherconfig.SecretSettings{"github": {
-		File: path, Env: "GH_TOKEN", AllowedHosts: []string{"api.github.com", "github.com"}, Headers: []string{"authorization"},
+		Source: launcherconfig.SecretSourceSettings{File: path}, Guest: launcherconfig.SecretGuestSettings{Env: "GH_TOKEN"}, AllowedHosts: []string{"api.github.com", "github.com"}, Headers: []string{"authorization"},
 	}}
 
 	secrets, err := sandbox.LoadSecrets(settings)
@@ -34,7 +34,7 @@ func TestGitHubTokenLoadsOnlyFromDedicatedCredentialFile(t *testing.T) {
 	require.Error(t, err)
 	// The real launcher must not fall back to GH_TOKEN when its file is missing.
 	dir = t.TempDir()
-	writeSettingsAt(t, dir, "[secrets.github]\nfile = 'missing-token'\nenv = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
+	writeSettingsAt(t, dir, "[secrets.github]\nsource.file = 'missing-token'\nguest.env = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	command := exec.CommandContext(ctx, buildLauncher(t))

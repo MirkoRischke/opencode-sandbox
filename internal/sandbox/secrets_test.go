@@ -33,12 +33,14 @@ func TestLoadSecretsPreservesHostPatterns(t *testing.T) {
 	hosts := []string{"Example.com", "*.Example.com"}
 	settings := config.DefaultSettings()
 	settings.Secrets = map[string]config.SecretSettings{
-		"test": {File: path, Env: "TOKEN", AllowedHosts: hosts, Headers: []string{"authorization"}},
+		"test": {Source: config.SecretSourceSettings{File: path}, Guest: config.SecretGuestSettings{Env: "TOKEN"}, AllowedHosts: hosts, Headers: []string{"authorization"}},
 	}
 	secrets, err := LoadSecrets(settings)
 	require.NoError(t, err)
 	require.Len(t, secrets, 1)
 	require.Equal(t, hosts, secrets[0].entry.Allow)
+	require.Equal(t, "TOKEN", secrets[0].entry.EnvVar)
+	require.Equal(t, "fake-token", secrets[0].entry.Value)
 }
 
 func TestGitHubTokenRejectsUnsafePermissionsAndInvalidContents(t *testing.T) {
@@ -90,7 +92,7 @@ func TestLoadKeyringSecrets(t *testing.T) {
 	for _, ref := range []*config.KeyringSettings{{}, {Service: "company", Account: "work"}} {
 		settings := config.DefaultSettings()
 		settings.Secrets = map[string]config.SecretSettings{
-			"github": {Keyring: ref, Env: "GH_TOKEN", AllowedHosts: []string{"*.Example.com"}, Headers: []string{"Authorization"}},
+			"github": {Source: config.SecretSourceSettings{Keyring: ref}, Guest: config.SecretGuestSettings{Env: "GH_TOKEN"}, AllowedHosts: []string{"*.Example.com"}, Headers: []string{"Authorization"}},
 		}
 		calls := 0
 		secrets, err := loadSecrets(settings, func(service, account string) (string, error) {
@@ -104,13 +106,15 @@ func TestLoadKeyringSecrets(t *testing.T) {
 		require.Equal(t, 1, calls)
 		require.Len(t, secrets, 1)
 		require.Equal(t, []string{"*.Example.com"}, secrets[0].entry.Allow)
+		require.Equal(t, "GH_TOKEN", secrets[0].entry.EnvVar)
+		require.Equal(t, []string{"authorization"}, secrets[0].entry.Substitution.HeaderFields)
 		// File and keyring sources produce the exact same proxy definition.
 		dir := t.TempDir()
 		require.NoError(t, os.Chmod(dir, 0700))
 		path := filepath.Join(dir, "token")
 		require.NoError(t, os.WriteFile(path, []byte("FAKE_TOKEN\n"), 0600))
 		file := settings.Secrets["github"]
-		file.Keyring, file.File = nil, path
+		file.Source.Keyring, file.Source.File = nil, path
 		settings.Secrets["github"] = file
 		fromFile, err := loadSecrets(settings, func(string, string) (string, error) {
 			t.Fatal("file secrets must not access the keyring")
@@ -137,7 +141,7 @@ func TestLoadKeyringSecretsFailsClosed(t *testing.T) {
 	} {
 		settings := config.DefaultSettings()
 		settings.Secrets = map[string]config.SecretSettings{
-			"github": {Keyring: &config.KeyringSettings{}, Env: "GH_TOKEN", AllowedHosts: []string{"github.com"}, Headers: []string{"authorization"}},
+			"github": {Source: config.SecretSourceSettings{Keyring: &config.KeyringSettings{}}, Guest: config.SecretGuestSettings{Env: "GH_TOKEN"}, AllowedHosts: []string{"github.com"}, Headers: []string{"authorization"}},
 		}
 		secrets, err := loadSecrets(settings, func(string, string) (string, error) { return tc.value, tc.err })
 		require.ErrorContains(t, err, tc.message)

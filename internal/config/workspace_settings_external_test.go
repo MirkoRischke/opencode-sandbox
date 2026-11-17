@@ -117,13 +117,13 @@ docker_disk_mib = 20480
 [network]
 allowed_hosts = []
 [secrets.github]
-file = 'creds/repo-github-token'
-env = 'GH_TOKEN'
+source.file = 'creds/repo-github-token'
+guest.env = 'GH_TOKEN'
 allowed_hosts = ['custom.example.com']
 headers = ['x-token']
 [secrets.other]
-file = 'creds/other'
-env = 'OTHER_TOKEN'
+source.file = 'creds/other'
+guest.env = 'OTHER_TOKEN'
 allowed_hosts = ['other.example.com']
 headers = ['authorization']
 `)
@@ -134,8 +134,8 @@ root_disk_mib = 9000
 [network]
 allowed_hosts = ['github.com']
 [secrets.github]
-file = 'creds/github-token'
-env = 'GH_TOKEN'
+source.file = 'creds/github-token'
+guest.env = 'GH_TOKEN'
 allowed_hosts = ['api.github.com']
 headers = ['authorization']
 `)
@@ -154,21 +154,21 @@ headers = ['authorization']
 	require.Equal(t, launcherconfig.VMSettings{Image: launcherconfig.DefaultImage(), CPUs: 4, MemoryMiB: 8192, RootDiskMiB: 9000, DockerDiskMiB: 20480}, settings.VM)
 	require.Empty(t, settings.Network.AllowedHosts)
 	require.Equal(t, launcherconfig.SecretSettings{
-		File: filepath.Join(root, "creds/repo-github-token"), Env: "GH_TOKEN",
+		Source: launcherconfig.SecretSourceSettings{File: filepath.Join(root, "creds/repo-github-token")}, Guest: launcherconfig.SecretGuestSettings{Env: "GH_TOKEN"},
 		AllowedHosts: []string{"custom.example.com"}, Headers: []string{"x-token"},
 	}, settings.Secrets["github"])
-	require.Equal(t, filepath.Join(root, "creds/other"), settings.Secrets["other"].File)
+	require.Equal(t, filepath.Join(root, "creds/other"), settings.Secrets["other"].Source.File)
 	_, err = paths.LoadWorkspaceSettings(root, nil)
 	require.NoError(t, err)
 }
 
 func TestRepoSettingsSecretFileOverrideUsesRepoOrigin(t *testing.T) {
 	t.Parallel()
-	root, _, paths := repoSettingsFixture(t, "[secrets.github]\nfile = 'local-token'\nenv = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
-	writeSettingsAt(t, paths.ConfigDir, "[secrets.github]\nfile = 'global-token'\nenv = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
+	root, _, paths := repoSettingsFixture(t, "[secrets.github]\nsource.file = 'local-token'\nguest.env = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
+	writeSettingsAt(t, paths.ConfigDir, "[secrets.github]\nsource.file = 'global-token'\nguest.env = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
 	settings, err := paths.LoadWorkspaceSettings(root, approveSettings)
 	require.NoError(t, err)
-	require.Equal(t, filepath.Join(root, "local-token"), settings.Secrets["github"].File)
+	require.Equal(t, filepath.Join(root, "local-token"), settings.Secrets["github"].Source.File)
 }
 
 func TestRepoSettingsTrustUsesExactReviewedBytes(t *testing.T) {
@@ -256,7 +256,7 @@ func TestRepoSettingsRejectInvalidBeforeApproval(t *testing.T) {
 		"[network", "[vm]\ncpuz = 4", "[vm]\ncpus = 0", "[vm]\ncpus = 256",
 		"[network]\nallowed_hosts = 'github.com'", "[network]\nallowed_hosts = ['*.github.com']",
 		"[network]\nadditional_allowed_hosts = ['*.github.com']", "[network]\nadditional_allowed_hosts = 'github.com'",
-		"[secrets.test]\nfile = 'token'", "[secrets.test]\nvalue = 'inline'",
+		"[secrets.test]\nsource.file = 'token'", "[secrets.test]\nvalue = 'inline'",
 	} {
 		t.Run(config, func(t *testing.T) {
 			root, _, paths := repoSettingsFixture(t, config)

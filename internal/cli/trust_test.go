@@ -38,7 +38,7 @@ func TestWorkspaceApprovalShowsCredentialAccessWithoutTerminalEscapes(t *testing
 	t.Parallel()
 	settings := launcherconfig.DefaultSettings()
 	settings.Secrets = map[string]launcherconfig.SecretSettings{"github": {
-		File: "creds/token", Env: "GH_TOKEN", AllowedHosts: []string{"api.github.com"}, Headers: []string{"authorization"},
+		Source: launcherconfig.SecretSourceSettings{File: "creds/token"}, Guest: launcherconfig.SecretGuestSettings{Env: "GH_TOKEN"}, AllowedHosts: []string{"api.github.com"}, Headers: []string{"authorization"},
 	}}
 	var output bytes.Buffer
 	err := confirmWorkspaceConfig(strings.NewReader("yes\n"), &output, "/repo/.opencode-sandbox.toml", []byte("# override\n\x1b[2J\n"), settings)

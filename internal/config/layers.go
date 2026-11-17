@@ -71,8 +71,8 @@ func mergeSettings(settings Settings, data []byte, origin string) (Settings, err
 // Resolve only paths supplied by this layer, preserving inherited origins.
 func resolveLayerPaths(partial *Settings, metadata toml.MetaData, origin string) error {
 	for name, secret := range partial.Secrets {
-		if secret.File != "" && !filepath.IsAbs(secret.File) {
-			secret.File = filepath.Join(origin, secret.File)
+		if secret.Source.File != "" && !filepath.IsAbs(secret.Source.File) {
+			secret.Source.File = filepath.Join(origin, secret.Source.File)
 		}
 		partial.Secrets[name] = secret
 	}

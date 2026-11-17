@@ -18,7 +18,7 @@ var configExamples = map[reflect.Type]any{
 		Source: "~/.config/opencode/skills", Target: "/root/.config/opencode/skills", Mode: "mount",
 	},
 	reflect.TypeFor[SecretSettings](): SecretSettings{
-		File: "creds/token", Env: "API_TOKEN",
+		Source: SecretSourceSettings{File: "creds/token"}, Guest: SecretGuestSettings{Env: "API_TOKEN"},
 		AllowedHosts: []string{"api.example.com"}, Headers: []string{"authorization"},
 	},
 }

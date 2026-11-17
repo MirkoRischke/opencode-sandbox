@@ -85,10 +85,10 @@ func TestConfigValidate(t *testing.T) {
 		{name: "invalid logging", workspace: "[logging]\nconsole_level = 'trace'\n", wantError: "logging.console_level"},
 		{name: "aws dependency", workspace: "[aws]\nprofile = 'dev'\n", wantError: "requires aws.role"},
 		{name: "invalid role", workspace: "[aws]\nrole = 'invalid'\n", wantError: "aws.role"},
-		{name: "invalid secret", workspace: "[secrets.test]\nenv = 'TOKEN'\n", wantError: "requires exactly one source"},
+		{name: "invalid secret", workspace: "[secrets.test]\nguest.env = 'TOKEN'\n", wantError: "requires exactly one source"},
 		{name: "overlapping mappings", workspace: "[[files]]\nsource = '.'\ntarget = '/opt/test'\n[[files]]\nsource = '.'\ntarget = '/opt/test/sub'\n", wantError: "overlap"},
 		{name: "missing file source", workspace: "[[files]]\nsource = './missing'\ntarget = '/opt/test'\n", wantError: "files[0].source"},
-		{name: "credentials not read", workspace: "[secrets.test]\nfile = './missing-credentials'\nenv = 'TOKEN'\nallowed_hosts = ['example.com']\nheaders = ['Authorization']\n[secrets.other]\nkeyring = {}\nenv = 'OTHER_TOKEN'\nallowed_hosts = ['example.com']\nheaders = ['Authorization']\n"},
+		{name: "credentials not read", workspace: "[secrets.test]\nsource.file = './missing-credentials'\nguest.env = 'TOKEN'\nallowed_hosts = ['example.com']\nheaders = ['Authorization']\n[secrets.other]\nsource.keyring = {}\nguest.env = 'OTHER_TOKEN'\nallowed_hosts = ['example.com']\nheaders = ['Authorization']\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()

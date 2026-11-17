@@ -9,12 +9,20 @@ import (
 const DefaultKeyringService = "opencode-sandbox"
 
 type SecretSettings struct {
-	File         string           `toml:"file" description:"Host credential file; relative to the config supplying this field. Use directory mode 700 and file mode 600. Do not commit credentials."`
-	Keyring      *KeyringSettings `toml:"keyring,omitempty" description:"Use the OS keyring instead of file. An empty table uses service opencode-sandbox and the secret name as account; optional service/account fields override these defaults."`
-	Env          string           `toml:"env" description:"Unique guest environment variable receiving a placeholder, not the real credential."`
-	AllowedHosts []string         `toml:"allowed_hosts" description:"Hosts permitted to receive this credential: example.com matches exactly; *.example.com includes the base domain and all subdomains. Passed unchanged to Microsandbox. Network access must be allowed separately."`
-	Headers      []string         `toml:"headers" description:"HTTP headers in which the host proxy may substitute the credential."`
-	AllowHTTP    bool             `toml:"allow_http" description:"Allow substitution without verified TLS identity. Default false. Enable only for trusted HTTP routes such as the host-local gateway; credentials are sent in plaintext."`
+	AllowedHosts []string             `toml:"allowed_hosts" description:"Hosts permitted to receive this credential: example.com matches exactly; *.example.com includes the base domain and all subdomains. Passed unchanged to Microsandbox. Network access must be allowed separately."`
+	Headers      []string             `toml:"headers" description:"HTTP headers in which the host proxy may substitute the credential."`
+	AllowHTTP    bool                 `toml:"allow_http" description:"Allow substitution without verified TLS identity. Default false. Enable only for trusted HTTP routes such as the host-local gateway; credentials are sent in plaintext."`
+	Source       SecretSourceSettings `toml:"source" description:"Host credential source; configure exactly one of file or keyring."`
+	Guest        SecretGuestSettings  `toml:"guest" description:"How the secret placeholder is exposed inside the guest."`
+}
+
+type SecretSourceSettings struct {
+	File    string           `toml:"file" description:"Host credential file; relative to the config supplying this field. Use directory mode 700 and file mode 600. Do not commit credentials."`
+	Keyring *KeyringSettings `toml:"keyring,omitempty" description:"Use the OS keyring instead of file. An empty table uses service opencode-sandbox and the secret name as account; optional service/account fields override these defaults."`
+}
+
+type SecretGuestSettings struct {
+	Env string `toml:"env" description:"Unique guest environment variable receiving a placeholder, not the real credential."`
 }
 
 // KeyringSettings identifies an OS-keyring entry without storing its value.
@@ -45,10 +53,10 @@ func ValidateSecrets(secrets map[string]SecretSettings) error {
 		if err := validateSecretSource(name, secret); err != nil {
 			return err
 		}
-		if envs[secret.Env] {
-			return fmt.Errorf("duplicate secret environment variable %q", secret.Env)
+		if envs[secret.Guest.Env] {
+			return fmt.Errorf("duplicate secret environment variable %q", secret.Guest.Env)
 		}
-		envs[secret.Env] = true
+		envs[secret.Guest.Env] = true
 		if err := validateSecretDestinations(name, secret); err != nil {
 			return err
 		}
@@ -57,16 +65,16 @@ func ValidateSecrets(secrets map[string]SecretSettings) error {
 }
 
 func validateSecretSource(name string, secret SecretSettings) error {
-	if (secret.File != "") == (secret.Keyring != nil) {
-		return fmt.Errorf("secret %q requires exactly one source: file or keyring", name)
+	if (secret.Source.File != "") == (secret.Source.Keyring != nil) {
+		return fmt.Errorf("secret %q requires exactly one source: source.file or source.keyring", name)
 	}
-	if !envPattern.MatchString(secret.Env) {
-		return fmt.Errorf("secret %q requires a valid environment variable name", name)
+	if !envPattern.MatchString(secret.Guest.Env) {
+		return fmt.Errorf("secret %q requires a valid guest.env environment variable name", name)
 	}
-	if secret.Keyring == nil {
+	if secret.Source.Keyring == nil {
 		return nil
 	}
-	service, account := secret.Keyring.Reference(name)
+	service, account := secret.Source.Keyring.Reference(name)
 	for _, value := range []string{service, account} {
 		if strings.TrimSpace(value) == "" || strings.ContainsAny(value, "\r\n\x00") {
 			return fmt.Errorf("secret %q: keyring service/account must be non-empty and contain no newlines or NUL bytes", name)

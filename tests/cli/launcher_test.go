@@ -95,8 +95,8 @@ func TestLauncherRejectsInvalidSettingsBeforeStartingVM(t *testing.T) {
 
 func TestLauncherRejectsUntrustedRepoConfigBeforeLoadingSecrets(t *testing.T) {
 	t.Parallel()
-	root, _, paths := repoSettingsFixture(t, "[secrets.github]\nkeyring = {}\nenv = 'GH_TOKEN'\nallowed_hosts = ['other.example.com']\nheaders = ['authorization']\n")
-	writeSettingsAt(t, paths.ConfigDir, "[secrets.github]\nfile = 'missing-token'\nenv = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
+	root, _, paths := repoSettingsFixture(t, "[secrets.github]\nsource.keyring = {}\nguest.env = 'GH_TOKEN'\nallowed_hosts = ['other.example.com']\nheaders = ['authorization']\n")
+	writeSettingsAt(t, paths.ConfigDir, "[secrets.github]\nsource.file = 'missing-token'\nguest.env = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	command := exec.CommandContext(ctx, buildLauncher(t))
@@ -113,7 +113,7 @@ func TestLauncherRejectsUntrustedRepoConfigBeforeLoadingSecrets(t *testing.T) {
 
 func TestSecretCommandsIgnoreConfiguration(t *testing.T) {
 	t.Parallel()
-	root, path, paths := repoSettingsFixture(t, "[secrets.github]\nfile = 'missing-token'\n")
+	root, path, paths := repoSettingsFixture(t, "[secrets.github]\nsource.file = 'missing-token'\n")
 	writeSettingsAt(t, paths.ConfigDir, "invalid TOML [")
 	for _, operation := range []string{"set", "remove", "rm"} {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -136,7 +136,7 @@ func TestSecretCommandsIgnoreConfiguration(t *testing.T) {
 	}
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
-	require.Equal(t, "[secrets.github]\nfile = 'missing-token'\n", string(data))
+	require.Equal(t, "[secrets.github]\nsource.file = 'missing-token'\n", string(data))
 	_, err = os.Stat(filepath.Join(paths.StateDir, "opencode-sandbox", "trust.json"))
 	require.True(t, os.IsNotExist(err))
 }

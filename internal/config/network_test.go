@@ -41,7 +41,7 @@ func TestNetworkHostPatterns(t *testing.T) {
 func TestSecretHostPatterns(t *testing.T) {
 	t.Parallel()
 	for _, host := range []string{"example.com", "*.Example.com", ".example.com", "*", "*.*.example.com", "*.127.0.0.1", "*.example.com:443", "https://example.com"} {
-		secret := SecretSettings{File: "token", Env: "TOKEN", AllowedHosts: []string{host}, Headers: []string{"authorization"}}
+		secret := SecretSettings{Source: SecretSourceSettings{File: "token"}, Guest: SecretGuestSettings{Env: "TOKEN"}, AllowedHosts: []string{host}, Headers: []string{"authorization"}}
 		err := ValidateSecrets(map[string]SecretSettings{"test": secret})
 		if host == "example.com" || host == "*.Example.com" {
 			require.NoError(t, err, host)

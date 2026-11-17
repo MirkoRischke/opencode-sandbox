@@ -58,7 +58,7 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 	settings.AWS = awsSettings
 	// Gateway credentials are managed per VM, never loaded from user secrets.
 	for name, secret := range settings.Secrets {
-		if name == "llm_gateway" || secret.Env == "LLM_GATEWAY_KEY" {
+		if name == "llm_gateway" || secret.Guest.Env == "LLM_GATEWAY_KEY" {
 			delete(settings.Secrets, name)
 		}
 	}

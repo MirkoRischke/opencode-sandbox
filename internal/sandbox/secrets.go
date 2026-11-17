@@ -63,7 +63,7 @@ func loadSecrets(settings config.Settings, get func(string, string) (string, err
 			headers[i] = strings.ToLower(header)
 		}
 		requireTLS := !config.AllowHTTP
-		secrets = append(secrets, Secret{entry: m.Secret.Env(config.Env, value, m.SecretEnvOptions{
+		secrets = append(secrets, Secret{entry: m.Secret.Env(config.Guest.Env, value, m.SecretEnvOptions{
 			Allow: hosts, Substitution: m.SecretSubstitution{HeaderFields: headers},
 			RequireTLSIdentity: &requireTLS,
 		})})
@@ -72,8 +72,8 @@ func loadSecrets(settings config.Settings, get func(string, string) (string, err
 }
 
 func resolveSecretValue(name string, settings config.SecretSettings, get func(string, string) (string, error)) (string, error) {
-	if settings.Keyring != nil {
-		service, account := settings.Keyring.Reference(name)
+	if settings.Source.Keyring != nil {
+		service, account := settings.Source.Keyring.Reference(name)
 		value, err := get(service, account)
 		if errors.Is(err, keyring.ErrNotFound) {
 			return "", fmt.Errorf("secret %q: keyring entry not found; run 'opencode-sandbox secret set %s': %w", name, name, err)
@@ -86,10 +86,10 @@ func resolveSecretValue(name string, settings config.SecretSettings, get func(st
 		}
 		return value, nil
 	}
-	if !filepath.IsAbs(settings.File) {
+	if !filepath.IsAbs(settings.Source.File) {
 		return "", fmt.Errorf("secret %q: credential path must be absolute", name)
 	}
-	value, err := readSecretFile(settings.File)
+	value, err := readSecretFile(settings.Source.File)
 	if err != nil {
 		return "", fmt.Errorf("load secret %q: %w", name, err)
 	}

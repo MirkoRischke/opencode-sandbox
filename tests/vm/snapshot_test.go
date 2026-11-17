@@ -413,7 +413,7 @@ func TestSnapshotRestoreUsesCurrentHostSecrets(t *testing.T) {
 	_, err = sandbox.CreateSnapshot(ctx, worktree, secrets, settings)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, []byte("synthetic-current-credential"), 0600))
-	settings.Secrets["github"] = config.SecretSettings{File: path, Env: "GH_TOKEN", AllowedHosts: []string{"api.github.com"}, Headers: []string{"authorization"}}
+	settings.Secrets["github"] = config.SecretSettings{Source: config.SecretSourceSettings{File: path}, Guest: config.SecretGuestSettings{Env: "GH_TOKEN"}, AllowedHosts: []string{"api.github.com"}, Headers: []string{"authorization"}}
 	secrets, err = sandbox.LoadSecrets(settings)
 	require.NoError(t, err)
 	s := prepareSnapshotChild(t, ctx, worktree, settings, secrets...)

@@ -11,13 +11,13 @@ import (
 func TestSecretSettingsRejectInvalidScopes(t *testing.T) {
 	t.Parallel()
 	for _, fields := range []string{
-		"file = 'creds/token'", // missing environment name and scope
-		"file = 'creds/token'\nenv = 'BAD-NAME'\nallowed_hosts = ['github.com']\nheaders = ['authorization']",
-		"file = 'creds/token'\nenv = 'TOKEN'\nallowed_hosts = []\nheaders = ['authorization']",
-		"file = 'creds/token'\nenv = 'TOKEN'\nallowed_hosts = ['.github.com']\nheaders = ['authorization']",
-		"file = 'creds/token'\nenv = 'TOKEN'\nallowed_hosts = ['github.com']\nheaders = []",
-		"file = 'creds/token'\nenv = 'TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['bad header']",
-		"file = 'creds/token'\nenv = 'TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\nvalue = 'inline-secrets-not-supported'",
+		"source.file = 'creds/token'", // missing environment name and scope
+		"source.file = 'creds/token'\nguest.env = 'BAD-NAME'\nallowed_hosts = ['github.com']\nheaders = ['authorization']",
+		"source.file = 'creds/token'\nguest.env = 'TOKEN'\nallowed_hosts = []\nheaders = ['authorization']",
+		"source.file = 'creds/token'\nguest.env = 'TOKEN'\nallowed_hosts = ['.github.com']\nheaders = ['authorization']",
+		"source.file = 'creds/token'\nguest.env = 'TOKEN'\nallowed_hosts = ['github.com']\nheaders = []",
+		"source.file = 'creds/token'\nguest.env = 'TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['bad header']",
+		"source.file = 'creds/token'\nguest.env = 'TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\nvalue = 'inline-secrets-not-supported'",
 	} {
 		t.Run(fields, func(t *testing.T) {
 			dir := t.TempDir()
@@ -31,7 +31,7 @@ func TestSecretSettingsRejectInvalidScopes(t *testing.T) {
 func TestSecretSettingsRejectDuplicateEnvironmentNames(t *testing.T) {
 	t.Parallel()
 	secret := launcherconfig.SecretSettings{
-		File: "unused", Env: "GH_TOKEN", AllowedHosts: []string{"github.com"}, Headers: []string{"authorization"},
+		Source: launcherconfig.SecretSourceSettings{File: "unused"}, Guest: launcherconfig.SecretGuestSettings{Env: "GH_TOKEN"}, AllowedHosts: []string{"github.com"}, Headers: []string{"authorization"},
 	}
 	err := launcherconfig.ValidateSecrets(map[string]launcherconfig.SecretSettings{"github": secret, "other": secret})
 	require.ErrorContains(t, err, "duplicate secret environment variable")

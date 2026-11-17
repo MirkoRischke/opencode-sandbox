@@ -38,15 +38,15 @@
 # Relative file paths are resolved against this config's directory.
 # The credential directory must be mode 700 and file mode 600.
 [secrets.github]
-file = "creds/github-token"
-env = "GH_TOKEN"
+source.file = "creds/github-token"
+guest.env = "GH_TOKEN"
 allowed_hosts = ["github.com", "api.github.com"]
 headers = ["authorization"]
 
 # Host LLM gateway example (see llm-gateway/README.md for matching OpenCode JSON):
 # [secrets.llm_gateway]
-# file = "creds/llm-gateway-key"
-# env = "LLM_GATEWAY_KEY"
+# source.file = "creds/llm-gateway-key"
+# guest.env = "LLM_GATEWAY_KEY"
 # allowed_hosts = ["host.microsandbox.internal"]
 # headers = ["authorization"] # Replaces the placeholder in Authorization: Bearer ...
 # allow_http = true # Explicit opt-in: the host-local gateway uses HTTP, not TLS.

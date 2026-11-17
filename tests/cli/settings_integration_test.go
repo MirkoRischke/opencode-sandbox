@@ -11,7 +11,7 @@ import (
 
 func TestWorkspaceApprovalDoesNotLoadCredentials(t *testing.T) {
 	t.Parallel()
-	root, _, paths := repoSettingsFixture(t, "[secrets.github]\nfile = 'missing-token'\nenv = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
+	root, _, paths := repoSettingsFixture(t, "[secrets.github]\nsource.file = 'missing-token'\nguest.env = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
 	settings, err := paths.LoadWorkspaceSettings(root, func(string, []byte, launcherconfig.Settings) error { return nil })
 	require.NoError(t, err)
 	// Missing credentials must not prevent reviewing and trusting configuration.

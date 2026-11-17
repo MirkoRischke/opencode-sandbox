@@ -52,7 +52,7 @@ func githubSecretSettings(path string) launcherconfig.Settings {
 	settings := launcherconfig.DefaultSettings()
 	settings.Network = launcherconfig.NetworkSettings{AllowedHosts: []string{}}
 	settings.Secrets = map[string]launcherconfig.SecretSettings{"github": {
-		File: path, Env: "GH_TOKEN", AllowedHosts: []string{"api.github.com", "github.com"}, Headers: []string{"authorization"},
+		Source: launcherconfig.SecretSourceSettings{File: path}, Guest: launcherconfig.SecretGuestSettings{Env: "GH_TOKEN"}, AllowedHosts: []string{"api.github.com", "github.com"}, Headers: []string{"authorization"},
 	}}
 	return settings
 }
