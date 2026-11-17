@@ -2,3 +2,5 @@
 /.quality/
 __pycache__/
 /llm-gateway/.env
+/evals/node_modules/
+/evals/results/

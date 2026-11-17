@@ -1,4 +1,5 @@
 [tools]
+node = "24"
 go = "1.27.4"
 golangci-lint = "2.15.0"
 hadolint = "2.15.1"

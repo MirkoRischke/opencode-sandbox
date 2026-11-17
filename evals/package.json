@@ -1,0 +1,23 @@
+{
+  "name": "opencode-sandbox-evals",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test assertions.test.ts",
+    "eval": "node run.ts",
+    "typecheck": "tsc --noEmit",
+    "build:cli": "go build -o ../bin/opencode-sandbox ../cmd/opencode-sandbox"
+  },
+  "dependencies": {
+    "@opencode/client": "2.3.0",
+    "@opencode/plugin": "2.3.0",
+    "@opencode/sdk": "2.3.0",
+    "promptfoo": "0.125.1",
+    "smol-toml": "1.9.1",
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "typescript": "5.9.3"
+  }
+}
