@@ -68,8 +68,8 @@ func configureConsoleLogging(cmd *cobra.Command, _ []string) error {
 		e.level.Set(level)
 		e.override = true
 	}
-	// Pure documentation/completion commands do not read user configuration.
-	if cmd.Name() == "default" || cmd.Name() == "completion" || cmd.Parent() != nil && cmd.Parent().Name() == "completion" || cmd.Name() == "__complete" {
+	// Documentation/completion and validation bypass trust-dependent logging config.
+	if cmd.Name() == "default" || cmd.CommandPath() == "opencode-sandbox config validate" || cmd.Name() == "completion" || cmd.Parent() != nil && cmd.Parent().Name() == "completion" || cmd.Name() == "__complete" {
 		return nil
 	}
 	if e.override {

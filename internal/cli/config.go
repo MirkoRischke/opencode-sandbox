@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	launcherconfig "opencode-sandbox/internal/config"
@@ -42,6 +43,26 @@ func newConfigCommand() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return launcherconfig.WriteDefaultConfig(cmd.OutOrStdout())
+		},
+	})
+	config.AddCommand(&cobra.Command{
+		Use:   "validate",
+		Short: "Validate global and current-directory configuration without launching or approving it",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			configDir, err := hostConfigDir(os.Getenv("XDG_CONFIG_HOME"), os.Getenv("HOME"))
+			if err != nil {
+				return err
+			}
+			settings, err := (launcherconfig.Paths{ConfigDir: configDir}).ValidateWorkspaceSettings(".")
+			if err != nil {
+				return err
+			}
+			if _, err := resolveAWSSettings(settings.AWS, nil, nil); err != nil {
+				return err
+			}
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Configuration valid.")
+			return err
 		},
 	})
 	return config

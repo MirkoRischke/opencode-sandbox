@@ -30,6 +30,29 @@ func (p Paths) log(message string, args ...any) {
 // Approval is required for each new directory/content pair before credentials are read.
 // approve receives the exact file bytes and the effective settings for review.
 func (p Paths) LoadWorkspaceSettings(directory string, approve func(string, []byte, Settings) error) (Settings, error) {
+	return p.loadWorkspaceSettings(directory, func(path string, data []byte, settings Settings) error {
+		err := trustWorkspaceSettings(p.StateDir, filepath.Dir(path), data, func() error {
+			if approve == nil {
+				return fmt.Errorf("untrusted workspace config %s; launch interactively to approve it", path)
+			}
+			return approve(path, data, settings)
+		})
+		p.log("Workspace configuration trust", "path", path, "accepted", err == nil)
+		return err
+	})
+}
+
+// ValidateWorkspaceSettings checks configuration without reading or changing trust
+// records. File sources are checked using metadata only; credentials are not read.
+func (p Paths) ValidateWorkspaceSettings(directory string) (Settings, error) {
+	settings, err := p.loadWorkspaceSettings(directory, nil)
+	if err != nil {
+		return settings, err
+	}
+	return settings, settings.Validate()
+}
+
+func (p Paths) loadWorkspaceSettings(directory string, afterLoad func(string, []byte, Settings) error) (Settings, error) {
 	settings, err := p.loadGlobalSettings()
 	if err != nil {
 		return settings, err
@@ -58,16 +81,11 @@ func (p Paths) LoadWorkspaceSettings(directory string, approve func(string, []by
 	if err := settings.ValidateFileSources(); err != nil {
 		return settings, fmt.Errorf("workspace settings %s: %w", path, err)
 	}
-	if err := trustWorkspaceSettings(p.StateDir, root, data, func() error {
-		if approve == nil {
-			return fmt.Errorf("untrusted workspace config %s; launch interactively to approve it", path)
+	if afterLoad != nil {
+		if err := afterLoad(path, data, settings); err != nil {
+			return settings, err
 		}
-		return approve(path, data, settings)
-	}); err != nil {
-		p.log("Workspace configuration trust", "path", path, "accepted", false)
-		return settings, err
 	}
-	p.log("Workspace configuration trust", "path", path, "accepted", true)
 	return settings, nil
 }
 

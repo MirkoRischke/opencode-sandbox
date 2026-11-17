@@ -80,6 +80,7 @@ opencode-sandbox prune --repo # Include this repo's other worktrees and shared s
 opencode-sandbox prune --all # All managed workspaces AND ALL machine-wide MSB images/runtime caches
 opencode-sandbox --help # Show launch options
 opencode-sandbox config default # Print documented launcher defaults
+opencode-sandbox config validate # Check global and current-directory config without launching or approving it
 opencode-sandbox secret set github # Store/replace a keyring secret (hidden input; config unchanged)
 opencode-sandbox secret remove github # Remove its keyring entry after confirmation (alias: rm)
 opencode-sandbox secret list # List account names in the opencode-sandbox keyring namespace (alias: ls)

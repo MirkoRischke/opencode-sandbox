@@ -56,7 +56,7 @@ func TestRemoveAllFlag(t *testing.T) {
 
 func TestConfigCommandRejectsInvalidArguments(t *testing.T) {
 	t.Parallel()
-	for _, args := range [][]string{{"config"}, {"config", "show"}, {"config", "default", "extra"}} {
+	for _, args := range [][]string{{"config"}, {"config", "show"}, {"config", "default", "extra"}, {"config", "validate", "extra"}} {
 		t.Run(strings.Join(args, "/"), func(t *testing.T) {
 			_, err := executeCommand(args...)
 			require.Error(t, err)
