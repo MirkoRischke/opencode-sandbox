@@ -76,6 +76,10 @@ sources = ["images/copilot/Dockerfile"]
 outputs = { auto = true }
 run = "docker build --pull=false -f images/copilot/Dockerfile -t opencode-sandbox:copilot ."
 
+[tasks."build:all"]
+description = "Build all coding agent images"
+depends = ["build:opencode", "build:codex", "build:copilot"]
+
 [tasks.load]
 description = "Build and import the default OpenCode image into Microsandbox"
 depends = ["build:opencode"]
