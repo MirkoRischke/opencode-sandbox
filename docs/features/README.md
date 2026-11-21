@@ -1,12 +1,14 @@
 # Features
 
+- **[Works with any coding agent](startup.md):** launch an agent already
+  installed in the VM image. OpenCode remains the default.
 - **Per-directory environments:** each directory, including Git worktrees, gets
   its own VM so parallel tasks can use separate dependencies and the same guest
   ports without conflicts.
 - **Live host editing:** workspace changes are immediately visible on the host,
   so you can use your usual editor without syncing files.
-- **Persistent environments:** VMs stop when OpenCode exits, but retain installed
-  tools and guest files for the next launch.
+- **Persistent environments:** VMs stop when you exit the guest shell, but
+  retain installed tools and guest files for the next launch.
 - **Resource cleanup:** prune the current worktree, a repo, or all managed
   workspaces, including history, snapshots, and logs. Global cleanup also removes
   all MSB images and prunes runtime caches. See [cleanup](cleanup.md).

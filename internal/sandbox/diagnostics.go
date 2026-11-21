@@ -195,7 +195,7 @@ func (d *networkDiagnostics) finish() {
 	d.once.Do(func() { close(d.stop) })
 	<-d.done
 	// The caller has returned from the attached terminal before Stop/Close.
-	// Never let a collector goroutine write into OpenCode's active TUI.
+	// Never let a collector goroutine write into the active guest terminal.
 	d.reportOnce.Do(func() {
 		if d.logger == nil {
 			return

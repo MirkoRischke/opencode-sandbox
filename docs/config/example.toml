@@ -64,6 +64,12 @@ memory_mib = 2048
 root_disk_mib = 4096
 docker_disk_mib = 10240
 
+[startup]
+# Guest executable and literal arguments; interactive Bash opens after it exits.
+command = ["opencode"]
+# Optional Herdr detection hint. HERDR_AGENT overrides it.
+herdr_agent = ""
+
 # Optional command: runs during automatic first-launch snapshot preparation.
 # Rebuild explicitly with `opencode-sandbox snapshot create`, then recreate the VM.
 # Usually put this section in each repo's .opencode-sandbox.toml instead.

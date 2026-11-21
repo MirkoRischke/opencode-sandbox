@@ -271,7 +271,7 @@ func waitCommandInput(ctx context.Context, done <-chan error) error {
 	}
 }
 
-func (s *Sandbox) Open(ctx context.Context) error {
+func (s *Sandbox) Open(ctx context.Context, command []string) error {
 	s.log().Info("Attaching guest terminal")
 	terminalEnv := make(map[string]string)
 	for _, key := range []string{"TERM", "COLORTERM"} {
@@ -279,8 +279,9 @@ func (s *Sandbox) Open(ctx context.Context) error {
 			terminalEnv[key] = value
 		}
 	}
-	// Keep the terminal attached until the guest shell exits, not just OpenCode.
-	code, err := s.vm.AttachWith(ctx, "bash", []string{"-c", "opencode; exec bash -i"},
+	// Pass literal arguments, then keep the terminal attached to interactive Bash.
+	args := append([]string{"-c", `(exec -- "$@"); exec bash -i`, "sandbox-startup"}, command...)
+	code, err := s.vm.AttachWith(ctx, "bash", args,
 		m.WithAttachCwd(s.Worktree), m.WithAttachEnv(terminalEnv))
 	s.log().Info("Guest terminal detached", "exit_code", code, "success", err == nil)
 	if err != nil {

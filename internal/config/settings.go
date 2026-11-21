@@ -17,6 +17,7 @@ type Settings struct {
 	State    []StateSettings           `toml:"state" description:"Opt-in writable directories kept per workspace across VM removal. Workspace lists replace global lists. Recreate the VM after changing mappings."`
 	AWS      AWSSettings               `toml:"aws" description:"Optional AWS role credentials for launches. CLI flags override individual fields; host credentials are never stored here."`
 	VM       VMSettings                `toml:"vm" description:"VM resources. Recreate the VM after changing these settings."`
+	Startup  StartupSettings           `toml:"startup" description:"Command run in the guest workspace when opening the terminal, not when preparing a snapshot. Changes apply on the next launch."`
 	Network  NetworkSettings           `toml:"network" description:"Network access and directional port exposure. Recreate the VM after changes."`
 	Snapshot SnapshotSettings          `toml:"snapshot" description:"Prepared disk baseline shared by linked Git worktrees; per-directory outside Git. Created automatically on first launch; rebuild and remove with the snapshot commands. Rebuild the snapshot and recreate the VM after provisioning changes."`
 	Logging  LoggingSettings           `toml:"logging" description:"Host launcher logging. Console output goes to stderr; JSON logfiles retain Debug and above."`
@@ -43,6 +44,28 @@ type AWSSettings struct {
 
 type SnapshotSettings struct {
 	Command string `toml:"command" description:"Optional shell command run after project initialization in a fresh preparation VM before capture, from the mounted workspace. Empty skips the custom command."`
+}
+
+const DefaultStartupExecutable = "opencode"
+
+type StartupSettings struct {
+	Command    []string `toml:"command" description:"Guest executable followed by literal arguments. Must not be empty. Interactive Bash opens after it exits."`
+	HerdrAgent string   `toml:"herdr_agent" description:"Optional host-side Herdr agent hint. HERDR_AGENT overrides it. Empty uses OpenCode detection only for the default command."`
+}
+
+func (s StartupSettings) validate() error {
+	if len(s.Command) == 0 || strings.TrimSpace(s.Command[0]) == "" {
+		return fmt.Errorf("startup.command must begin with a guest executable")
+	}
+	for i, arg := range s.Command {
+		if strings.ContainsRune(arg, '\x00') {
+			return fmt.Errorf("startup.command[%d] must not contain NUL bytes", i)
+		}
+	}
+	if strings.ContainsRune(s.HerdrAgent, '\x00') {
+		return fmt.Errorf("startup.herdr_agent must not contain NUL bytes")
+	}
+	return nil
 }
 
 type VMSettings struct {
@@ -73,6 +96,7 @@ func DefaultSettings() Settings {
 		Files:   []FileSettings{},
 		State:   []StateSettings{},
 		VM:      VMSettings{Image: DefaultImage(), CPUs: 2, MemoryMiB: 2048, RootDiskMiB: 4096, DockerDiskMiB: 10240},
+		Startup: StartupSettings{Command: []string{DefaultStartupExecutable}},
 		Network: NetworkSettings{
 			HostToVM: []PortSettings{},
 			VMToHost: VMToHostSettings{Ports: []uint16{4000}},
@@ -115,6 +139,9 @@ func (p Paths) loadGlobalSettings() (Settings, error) {
 // Validate rejects invalid launcher settings before runtime preparation.
 func (s Settings) Validate() error {
 	if err := s.Logging.Validate(); err != nil {
+		return err
+	}
+	if err := s.Startup.validate(); err != nil {
 		return err
 	}
 	if strings.ContainsRune(s.Snapshot.Command, '\x00') {

@@ -278,11 +278,6 @@ stops and deletes only the current directory's VM without confirmation. Use
 nonzero if any removal fails. No matches is a successful no-op. Unlabeled VMs
 are excluded. Removal deletes guest-local state, not mounted host directories.
 
-Inside a Herdr pane (`HERDR_ENV=1`), the launcher automatically identifies itself
-as OpenCode for agent detection. No command prefix or Herdr configuration is
-needed. An explicitly set `HERDR_AGENT` takes precedence. The TUI still runs in
-the guest; the guest receives no Herdr socket access.
-
 ```toml
 [vm]
 image = "opencode-sandbox:base"
@@ -337,10 +332,28 @@ Snapshot restores likewise use the captured image. Recreate the VM and, when use
 the snapshot baseline to adopt a changed image.
 
 The supplied `opencode-sandbox:base` image is a base for your own images. Extend it
-with `FROM opencode-sandbox:base`. Custom images need Bash, Git, mise, and OpenCode on
-`PATH`, plus a working system CA trust store for Microsandbox's TLS inspection.
+with `FROM opencode-sandbox:base`. Custom images need Bash, Git, and mise on
+`PATH`, the [configured startup executable](../features/startup.md), and a
+working system CA trust store for Microsandbox's TLS inspection.
 GitHub credential integration additionally requires `gh`; AWS integration requires
 the AWS CLI. Docker is optional: images without `dockerd` skip daemon startup.
+
+### Startup command
+
+```toml
+[startup]
+command = ["opencode"]
+herdr_agent = ""
+```
+
+These are the defaults. `command` replaces the inherited argument list and
+must name a guest executable. The command runs when opening the terminal, not
+during snapshot preparation. It exits into interactive Bash.
+
+`herdr_agent` is an optional host-side detection hint inside Herdr. An explicit
+`HERDR_AGENT` environment variable wins. If both are empty, the launcher hints
+`opencode` only for the default startup command. The guest has no Herdr socket
+access. See [using another coding agent](../features/startup.md) for an example.
 
 ### Workspace snapshots
 

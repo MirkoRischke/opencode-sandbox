@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"opencode-sandbox/internal/config"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -206,7 +208,11 @@ func TestCompletionSuggestions(t *testing.T) {
 func TestIdentifyHerdrAgent(t *testing.T) {
 	t.Parallel()
 	if os.Getenv("OPENCODE_SANDBOX_HERDR_TEST") == "1" {
-		require.NoError(t, identifyHerdrAgent())
+		startup := config.StartupSettings{
+			Command:    []string{os.Getenv("OPENCODE_SANDBOX_TEST_STARTUP")},
+			HerdrAgent: os.Getenv("OPENCODE_SANDBOX_TEST_HERDR_AGENT"),
+		}
+		require.NoError(t, identifyHerdrAgent(startup))
 		// Herdr reads the initial process environment, including after re-exec.
 		environ, err := os.ReadFile("/proc/self/environ")
 		require.NoError(t, err)
@@ -214,13 +220,16 @@ func TestIdentifyHerdrAgent(t *testing.T) {
 		require.Contains(t, bytes.Split(environ, []byte{0}), want)
 		return
 	}
-	for _, tc := range []struct{ name, herdr, agent, want string }{
-		{name: "inside Herdr", herdr: "1", want: "opencode"},
-		{name: "outside Herdr"},
-		{name: "explicit hint", herdr: "1", agent: "custom", want: "custom"},
+	for _, tc := range []struct{ name, herdr, agent, command, hint, want string }{
+		{name: "default inside Herdr", herdr: "1", command: "opencode", want: "opencode"},
+		{name: "outside Herdr", command: "opencode", hint: "configured"},
+		{name: "custom command without hint", herdr: "1", command: "other-agent"},
+		{name: "configured hint", herdr: "1", command: "other-agent", hint: "configured", want: "configured"},
+		{name: "environment overrides configured hint", herdr: "1", agent: "custom", command: "other-agent", hint: "configured", want: "custom"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			runIsolatedCommandTest(t, "TestIdentifyHerdrAgent", "HERDR_ENV="+tc.herdr, "HERDR_AGENT="+tc.agent,
+				"OPENCODE_SANDBOX_TEST_STARTUP="+tc.command, "OPENCODE_SANDBOX_TEST_HERDR_AGENT="+tc.hint,
 				"OPENCODE_SANDBOX_HERDR_TEST=1", "OPENCODE_SANDBOX_EXPECT_AGENT="+tc.want)
 		})
 	}

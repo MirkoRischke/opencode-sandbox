@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"opencode-sandbox/internal/config"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,7 +33,7 @@ chmod 755 /mise/data/shims/opencode`)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	require.NoError(t, s.Open(ctx))
+	require.NoError(t, s.Open(ctx, config.DefaultSettings().Startup.Command))
 
 	require.Equal(t, "xterm-256color\ntruecolor\n\n", execInSandbox(t, s, "cat", s.Worktree+"/terminal-env.txt"))
 }
@@ -62,7 +64,7 @@ printf 'exit %s\n' "$2" >> /root/.bashrc`, "probe", test.opencodeExit, test.shel
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			err := s.Open(ctx)
+			err := s.Open(ctx, config.DefaultSettings().Startup.Command)
 			if test.shellExit == "0" {
 				require.NoError(t, err)
 			} else {
@@ -76,4 +78,28 @@ printf 'exit %s\n' "$2" >> /root/.bashrc`, "probe", test.opencodeExit, test.shel
 			require.NotEmpty(t, lines[2], "fallback shell must be Bash")
 		})
 	}
+}
+
+//nolint:paralleltest // runInTerminal parallelizes the parent only.
+func TestCustomStartupPassesLiteralArgumentsThenOpensBash(t *testing.T) {
+	if runInTerminal(t) {
+		return
+	}
+	s := startSandbox(t)
+	execInSandbox(t, s, "bash", "-eu", "-c", `
+cat > ./startup-probe <<'PROBE'
+#!/bin/bash
+printf '<%s>\n' "$@" > startup-args.txt
+exit 7
+PROBE
+chmod +x ./startup-probe
+cat > /root/.bashrc <<'PROBE'
+[[ $- == *i* && -f startup-args.txt ]] || exit 1
+exit 0
+PROBE`)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	require.NoError(t, s.Open(ctx, []string{"./startup-probe", "--flag", "$HOME; *", ""}))
+	require.Equal(t, "<--flag>\n<$HOME; *>\n<>\n", execInSandbox(t, s, "cat", "startup-args.txt"))
 }

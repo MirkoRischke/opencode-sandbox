@@ -80,6 +80,44 @@ func TestSnapshotCommandConfigMerging(t *testing.T) {
 	require.ErrorContains(t, settings.Validate(), "snapshot.command")
 }
 
+func TestStartupConfigMerging(t *testing.T) {
+	t.Parallel()
+	defaults := DefaultSettings()
+	require.Equal(t, []string{"opencode"}, defaults.Startup.Command)
+	settings, err := mergeSettings(defaults, []byte(`
+[startup]
+command = ["my-agent", "--flag"]
+herdr_agent = "my-agent"
+`), "/project")
+	require.NoError(t, err)
+	settings, err = mergeSettings(settings, []byte(`
+[startup]
+command = ["other-agent", "two words", ""]
+`), "/project")
+	require.NoError(t, err)
+	require.Equal(t, StartupSettings{
+		Command: []string{"other-agent", "two words", ""}, HerdrAgent: "my-agent",
+	}, settings.Startup)
+	settings, err = mergeSettings(settings, []byte("[startup]\nherdr_agent = ''\n"), "/project")
+	require.NoError(t, err)
+	require.Equal(t, StartupSettings{Command: []string{"other-agent", "two words", ""}}, settings.Startup)
+}
+
+func TestStartupConfigRejectsInvalidValues(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ name, setting, want string }{
+		{"empty command", `command = []`, "startup.command"},
+		{"blank executable", `command = [" "]`, "startup.command"},
+		{"NUL in argument", `command = ["agent", "\u0000"]`, "startup.command[1]"},
+		{"NUL in hint", `herdr_agent = "agent\u0000"`, "startup.herdr_agent"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := mergeSettings(DefaultSettings(), []byte("[startup]\n"+tc.setting), "/project")
+			require.ErrorContains(t, err, tc.want)
+		})
+	}
+}
+
 func TestUnrestrictedNetworkConfigMerging(t *testing.T) {
 	t.Parallel()
 	settings := DefaultSettings()

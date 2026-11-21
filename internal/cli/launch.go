@@ -20,9 +20,6 @@ import (
 )
 
 func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
-	if err := identifyHerdrAgent(); err != nil {
-		return err
-	}
 	configDir, err := hostConfigDir(os.Getenv("XDG_CONFIG_HOME"), os.Getenv("HOME"))
 	if err != nil {
 		return err
@@ -46,6 +43,9 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 	logger.Debug("CLI configuration overrides", "aws_role", awsRole, "aws_profile", awsProfile)
 	settings, err := paths.LoadWorkspaceSettings(w.Root(), approveWorkspaceConfig)
 	if err != nil {
+		return err
+	}
+	if err := identifyHerdrAgent(settings.Startup); err != nil {
 		return err
 	}
 	if err := applyConsoleLevel(ctx, settings.Logging.ConsoleLevel); err != nil {
@@ -97,7 +97,7 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 		return err
 	}
 	defer stopAWS()
-	return s.Open(ctx)
+	return s.Open(ctx, settings.Startup.Command)
 }
 
 // Host credential discovery belongs to the CLI; VM lifecycle code receives a client.
@@ -153,19 +153,29 @@ func resolveAWSSettings(settings launcherconfig.AWSSettings, role, profile *stri
 	return settings, nil
 }
 
-func identifyHerdrAgent() error {
+func identifyHerdrAgent(startup launcherconfig.StartupSettings) error {
 	if os.Getenv("HERDR_ENV") != "1" || os.Getenv("HERDR_AGENT") != "" {
+		return nil
+	}
+	agent := startup.HerdrAgent
+	if agent == "" && len(startup.Command) == 1 && startup.Command[0] == launcherconfig.DefaultStartupExecutable {
+		agent = launcherconfig.DefaultStartupExecutable
+	}
+	if agent == "" {
 		return nil
 	}
 	executable, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("identify Herdr agent: %w", err)
 	}
-	if err := os.Setenv("HERDR_AGENT", "opencode"); err != nil {
+	if err := os.Setenv("HERDR_AGENT", agent); err != nil {
 		return fmt.Errorf("identify Herdr agent: %w", err)
 	}
 	// Herdr reads /proc/<pid>/environ on Linux, which exposes the initial
 	// environment rather than later Setenv changes. Exec preserves the PID,
 	// terminal, and arguments while making the hint visible to Herdr.
-	return syscall.Exec(executable, os.Args, os.Environ())
+	if err := syscall.Exec(executable, os.Args, os.Environ()); err != nil {
+		return fmt.Errorf("identify Herdr agent: %w", err)
+	}
+	return nil
 }
