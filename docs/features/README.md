@@ -2,6 +2,8 @@
 
 - **[Works with any coding agent](coding-agents.md):** launch an agent already
   installed in the VM image. OpenCode remains the default.
+- **[Host LLM gateway](llm-gateway.md):** sign in once on the host, keep LLM
+  credentials out of VMs, and track usage by repository and VM.
 - **Per-directory environments:** each directory, including Git worktrees, gets
   its own VM so parallel tasks can use separate dependencies and the same guest
   ports without conflicts.
@@ -23,7 +25,7 @@
 - **Custom credentials:** configure file- or OS-keyring-backed secrets, injected into
   HTTP headers by the host proxy without storing their values in the guest.
   Verified TLS is required unless a secret explicitly opts into HTTP, as for the
-  [host LLM gateway](../../llm-gateway/README.md).
+  [host LLM gateway](llm-gateway.md).
 - **Workspace configuration:** override global settings with a directory-local
   `.opencode-sandbox.toml`; new or changed configs require approval.
 - **Host file mappings:** explicitly mount selected files or directories read-only,
