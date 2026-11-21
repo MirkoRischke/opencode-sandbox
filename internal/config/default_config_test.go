@@ -144,16 +144,18 @@ func TestDefaultConfigSecretExampleIsValid(t *testing.T) {
 	var out bytes.Buffer
 	require.NoError(t, WriteDefaultConfig(&out))
 	lines := strings.Split(out.String(), "\n")
-	for i, line := range lines {
+	start := slices.Index(lines, "# [secrets.example]")
+	require.NotEqual(t, -1, start, "secret example must be present")
+	for i, line := range lines[start:] {
+		if strings.HasPrefix(line, "[") || strings.HasPrefix(line, "# Remove the empty ") {
+			break
+		}
 		if line == "# keyring = {}" {
 			continue // Alternative to the file source, not an additional source.
 		}
-		if strings.HasPrefix(line, "# [[network.host_to_vm]]") || strings.HasPrefix(line, "# host_port =") || strings.HasPrefix(line, "# vm_port =") || strings.HasPrefix(line, "# [[files]]") || strings.HasPrefix(line, "# source =") || strings.HasPrefix(line, "# target =") || strings.HasPrefix(line, "# mode =") {
-			continue
-		}
 		if content, ok := strings.CutPrefix(line, "# "); ok &&
 			(strings.HasPrefix(content, "[") || strings.Contains(content, " = ")) {
-			lines[i] = content
+			lines[start+i] = content
 		}
 	}
 	var settings Settings
@@ -166,13 +168,27 @@ func TestDefaultConfigSecretExampleIsValid(t *testing.T) {
 
 func TestDefaultConfigFileExampleIsValid(t *testing.T) {
 	t.Parallel()
+	settings := loadDefaultArrayExample(t, "files")
+	require.Len(t, settings.Files, 1)
+	require.Equal(t, "/root/.config/opencode/skills", settings.Files[0].Target)
+	require.True(t, filepath.IsAbs(settings.Files[0].Source))
+}
+
+func TestDefaultConfigStateExampleIsValid(t *testing.T) {
+	t.Parallel()
+	settings := loadDefaultArrayExample(t, "state")
+	require.Equal(t, []StateSettings{{Name: "agent-sessions", Target: "/var/lib/agent-sessions"}}, settings.State)
+}
+
+func loadDefaultArrayExample(t *testing.T, name string) Settings {
+	t.Helper()
 	var out bytes.Buffer
 	require.NoError(t, WriteDefaultConfig(&out))
-	lines := strings.Split(strings.Replace(out.String(), "files = []\n", "", 1), "\n")
-	start := slices.Index(lines, "# [[files]]")
-	require.NotEqual(t, -1, start, "file mapping example must be present")
+	lines := strings.Split(strings.Replace(out.String(), name+" = []\n", "", 1), "\n")
+	start := slices.Index(lines, "# [["+name+"]]")
+	require.NotEqual(t, -1, start, "array example must be present")
 	for i, line := range lines[start:] {
-		if strings.HasPrefix(line, "[") {
+		if line == "" {
 			break
 		}
 		content := strings.TrimPrefix(line, "# ")
@@ -182,9 +198,7 @@ func TestDefaultConfigFileExampleIsValid(t *testing.T) {
 	}
 	settings, err := mergeSettings(DefaultSettings(), []byte(strings.Join(lines, "\n")), t.TempDir())
 	require.NoError(t, err)
-	require.Len(t, settings.Files, 1)
-	require.Equal(t, "/root/.config/opencode/skills", settings.Files[0].Target)
-	require.True(t, filepath.IsAbs(settings.Files[0].Source))
+	return settings
 }
 
 func TestDefaultConfigRejectsMissingMetadata(t *testing.T) {

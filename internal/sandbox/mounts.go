@@ -10,7 +10,8 @@ import (
 )
 
 func validateMounts(w workspace.Workspace, settings config.Settings) error {
-	reservedPaths := []string{w.Root(), snapshotWorktree, "/var/lib/docker", openCodeDatabaseDir, "/proc", "/sys", "/dev", sandboxConfigDir}
+	reservedPaths := []string{w.Root(), snapshotWorktree, "/var/lib/docker", "/proc", "/sys", "/dev", sandboxConfigDir,
+		"/run/opencode-sandbox", "/var/run/opencode-sandbox", "/var/log/opencode-sandbox"}
 	for _, mount := range w.Mounts(snapshotWorktree) {
 		reservedPaths = append(reservedPaths, mount.Target)
 	}
@@ -18,6 +19,13 @@ func validateMounts(w workspace.Workspace, settings config.Settings) error {
 		for _, reserved := range reservedPaths {
 			if config.MountTargetsOverlap(mount.Target, reserved) {
 				return fmt.Errorf("files[%d].target %q overlaps launcher/runtime mount %q", i, mount.Target, reserved)
+			}
+		}
+	}
+	for i, entry := range settings.State {
+		for _, reserved := range reservedPaths {
+			if config.MountTargetsOverlap(entry.Target, reserved) {
+				return fmt.Errorf("state[%d].target %q overlaps launcher/runtime mount %q", i, entry.Target, reserved)
 			}
 		}
 	}

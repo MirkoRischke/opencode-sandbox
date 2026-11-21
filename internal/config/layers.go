@@ -35,6 +35,7 @@ func mergeSettings(settings Settings, data []byte, origin string) (Settings, err
 	if metadata.IsDefined("files") {
 		delete(overlay, "files")
 	}
+	delete(overlay, "state") // Preserve strict TOML array-table decoding.
 	if network, ok := overlay["network"].(map[string]any); ok {
 		delete(network, "host_to_vm") // Preserve TOML's strict array-table decoding.
 		delete(network, "vm_to_host")
@@ -64,6 +65,10 @@ func mergeSettings(settings Settings, data []byte, origin string) (Settings, err
 	merged.Files = settings.Files
 	if metadata.IsDefined("files") {
 		merged.Files = partial.Files
+	}
+	merged.State = settings.State
+	if metadata.IsDefined("state") {
+		merged.State = partial.State
 	}
 	return merged, merged.Validate()
 }

@@ -10,9 +10,8 @@
 - **Resource cleanup:** prune the current worktree, a repo, or all managed
   workspaces, including history, snapshots, and logs. Global cleanup also removes
   all MSB images and prunes runtime caches. See [cleanup](cleanup.md).
-- **Persistent OpenCode history (experimental):** each workspace, including
-  each linked Git worktree, has its own host-backed OpenCode database,
-  independent of VM disks and snapshots. See [OpenCode history](opencode-history.md).
+- **[Persistent workspace state](persistent-state.md):** opt in to keeping selected
+  guest directories, such as agent sessions, across VM removal.
 - **Project tools:** automatically install tools declared in the directory's
   `mise.toml` during workspace snapshot preparation.
 - **Custom VM images:** use a custom Docker/OCI image with your required tools
@@ -28,8 +27,8 @@
 - **Host file mappings:** explicitly mount selected files or directories read-only,
   or copy them into writable guest storage on creation and snapshot restore,
   including OpenCode configuration, instructions, and skills. No extra host files
-  are shared by default beyond the workspace, required Git metadata, and managed
-  OpenCode database. See [`[[files]]` configuration](../config/README.md#read-only-host-mounts).
+  are shared by default beyond the workspace and required Git metadata.
+  See [`[[files]]` configuration](../config/README.md#read-only-host-mounts).
 - **[Sandbox instructions](sandbox-instructions.md):** opt in to loading a
   launcher-generated description of the guest environment in your agent.
 - **AWS roles:** assume a role on the host and provide automatically refreshed,

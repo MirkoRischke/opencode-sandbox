@@ -54,10 +54,14 @@ func (f FileSettings) validate(i int) error {
 	if f.Source == "" || strings.ContainsRune(f.Source, '\x00') || !filepath.IsAbs(f.Source) {
 		return fmt.Errorf("files[%d].source: %q must resolve to an absolute host path", i, f.Source)
 	}
-	if !path.IsAbs(f.Target) || strings.ContainsRune(f.Target, '\x00') || path.Clean(f.Target) != f.Target || f.Target == "/" {
+	if !validGuestTarget(f.Target) {
 		return fmt.Errorf("files[%d].target: %q must be a clean absolute guest path other than /", i, f.Target)
 	}
 	return nil
+}
+
+func validGuestTarget(target string) bool {
+	return path.IsAbs(target) && !strings.ContainsRune(target, '\x00') && path.Clean(target) == target && target != "/"
 }
 
 // MountTargetsOverlap compares guest paths at directory boundaries.

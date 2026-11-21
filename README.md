@@ -74,7 +74,7 @@ opencode-sandbox list   # List managed VMs (alias: ls)
 opencode-sandbox remove # Delete this directory's VM without confirmation (alias: rm)
 opencode-sandbox remove --all # Delete ALL managed VMs without confirmation
 opencode-sandbox prune --dry-run # Preview deletion of this worktree's resources
-opencode-sandbox prune # Delete this worktree's VMs, history, logs, and diagnostics; keep snapshots
+opencode-sandbox prune # Delete this worktree's VMs, persistent state, logs, and diagnostics; keep snapshots
 opencode-sandbox prune --repo # Include this repo's other worktrees and shared snapshot, including deleted worktrees
 opencode-sandbox prune --all # All managed workspaces AND ALL machine-wide MSB images/runtime caches
 opencode-sandbox --help # Show launch options

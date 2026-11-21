@@ -100,7 +100,7 @@ func CreateSnapshot(ctx context.Context, directory string, secrets []Secret, set
 
 // CreateWorkspaceSnapshot captures a baseline for an already resolved workspace.
 func CreateWorkspaceSnapshot(ctx context.Context, w workspace.Workspace, secrets []Secret, settings config.Settings, diagnostics ...DiagnosticsOptions) (reference string, err error) {
-	diagnosticOptions, err := validatePreparation(w, settings, diagnostics)
+	diagnosticOptions, _, err := validatePreparation(w, settings, diagnostics)
 	if err != nil {
 		return "", err
 	}
@@ -385,7 +385,7 @@ func (r workspaceSnapshot) removeMembers(ctx context.Context, keepID string, obs
 	return nil
 }
 
-func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, secrets []Secret, settings config.Settings, opts []m.SandboxOption, diagnostics DiagnosticsOptions) (*m.Sandbox, bool, error) {
+func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, secrets []Secret, settings config.Settings, opts []m.SandboxOption, diagnostics DiagnosticsOptions, stateDir string) (*m.Sandbox, bool, error) {
 	logger := logging.FromContext(ctx).With("vm", name)
 	_, err := m.GetSandbox(ctx, name)
 	if err == nil {
@@ -429,15 +429,11 @@ func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, s
 		}
 	}
 	logger.Info("Restoring workspace VM", "snapshot", head.Reference())
-	vm, err := restoreWorktree(ctx, head, name, w, secrets, settings)
+	vm, err := restoreWorktree(ctx, head, name, w, secrets, settings, stateDir)
 	return vm, err == nil, err
 }
 
-func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, w workspace.Workspace, secrets []Secret, settings config.Settings) (*m.Sandbox, error) {
-	databaseDir, err := prepareOpenCodeStorage(w)
-	if err != nil {
-		return nil, err
-	}
+func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, w workspace.Workspace, secrets []Secret, settings config.Settings, stateDir string) (*m.Sandbox, error) {
 	policy := networkPolicy(settings.Network)
 	// Restore accepts host policy only, not HTTP/TLS creation settings.
 	policy.HTTP = nil
@@ -446,7 +442,9 @@ func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, w
 		Volumes: workspaceMounts(w, snapshotWorktree, w.Root()),
 		Ports:   portBindings(settings.Network.HostToVM),
 	}
-	addOpenCodeMount(restore.Volumes, databaseDir)
+	if err := addStateMounts(restore.Volumes, w, settings.State, stateDir); err != nil {
+		return nil, err
+	}
 	addReadOnlyMounts(restore.Volumes, settings)
 	if settings.Network.Diagnostics {
 		restore.LogLevel = m.LogLevelDebug
@@ -515,7 +513,6 @@ func configureRestoredWorktree(ctx context.Context, restored *m.Sandbox, name, r
 func restoredWorktreePatch(root string, secrets []Secret) m.ModifyOptions {
 	patch := m.ModifyOptions{
 		Policy: m.ModificationPolicyNextStart, Workdir: root,
-		Env:     map[string]string{"OPENCODE_DB": openCodeDatabase},
 		Labels:  map[string]string{"opencode-sandbox": "", "workspace-id": snapshotIdentity(root).id},
 		Secrets: make(map[string]m.SecretModifySpec, len(secrets)),
 	}

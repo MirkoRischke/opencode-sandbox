@@ -1,30 +1,35 @@
 package sandbox_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"opencode-sandbox/internal/config"
 	"opencode-sandbox/internal/sandbox"
 	"opencode-sandbox/internal/workspace"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestOpenCodeHistorySurvivesVMRemovalAndIsolatesWorktrees(t *testing.T) {
+func TestOptInOpenCodeHistorySurvivesVMRemoval(t *testing.T) {
 	state := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", state) //nolint:forbidigo // Keep host storage isolated; Setenv prevents parallel execution.
 	root := newWorktree(t)
 	w, err := workspace.Resolve(t.Context(), root)
 	require.NoError(t, err)
-	first := prepareSandbox(t, root)
+	const guestDirectory = "/var/lib/opencode-sandbox/opencode"
 	const guestDatabase = "/var/lib/opencode-sandbox/opencode/opencode.db"
-	require.Equal(t, guestDatabase, strings.TrimSpace(execInSandbox(t, first, "opencode", "debug", "paths", "db")))
+	settings := testSettings(t)
+	settings.State = []config.StateSettings{{Name: "opencode-sessions", Target: guestDirectory}}
+	first := prepareSandboxWithSettings(t, root, settings)
+	runOpenCode := func(s *sandbox.Sandbox, args ...string) string {
+		return execInSandbox(t, s, append([]string{"env", "OPENCODE_DB=" + guestDatabase, "opencode"}, args...)...)
+	}
+	require.Equal(t, guestDatabase, strings.TrimSpace(runOpenCode(first, "debug", "paths", "db")))
 	payload, err := json.Marshal(map[string]any{"title": "Persistent history", "location": map[string]string{"directory": root}})
 	require.NoError(t, err)
 	var created struct {
@@ -32,38 +37,46 @@ func TestOpenCodeHistorySurvivesVMRemovalAndIsolatesWorktrees(t *testing.T) {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	require.NoError(t, json.Unmarshal([]byte(execInSandbox(t, first, "opencode", "api", "post", "/api/session", "--data", string(payload))), &created))
+	require.NoError(t, json.Unmarshal([]byte(runOpenCode(first, "api", "post", "/api/session", "--data", string(payload))), &created))
 	require.NotEmpty(t, created.Data.ID)
-	execInSandbox(t, first, "opencode", "service", "stop")
-	hostDatabase := filepath.Join(state, "opencode-sandbox", "opencode", w.ID(), "opencode.db")
+	runOpenCode(first, "service", "stop")
+	hostDatabase := filepath.Join(state, "opencode-sandbox", "state", w.RepositoryID(), w.ID(), "opencode-sessions", "opencode.db")
 	require.FileExists(t, hostDatabase)
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
 	defer cancel()
 	require.NoError(t, sandbox.Remove(ctx, root))
-	recreated := prepareSandbox(t, root)
-	require.Contains(t, execInSandbox(t, recreated, "opencode", "api", "get", "/api/session/"+created.Data.ID), "Persistent history")
-	execInSandbox(t, recreated, "opencode", "service", "stop")
+	recreated := prepareSandboxWithSettings(t, root, settings)
+	require.Contains(t, runOpenCode(recreated, "api", "get", "/api/session/"+created.Data.ID), "Persistent history")
+	runOpenCode(recreated, "service", "stop")
+}
 
-	// A linked worktree gets a different database, even in the same repository.
+func TestWorkspaceStateIsNotSharedWithLinkedWorktrees(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir()) //nolint:forbidigo // Isolate host state.
+	const target = "/var/lib/test-state"
+	settings := testSettings(t)
+	settings.State = []config.StateSettings{{Name: "sessions", Target: target}}
+	root := newWorktree(t)
+	first := prepareSandboxWithSettings(t, root, settings)
+	execInSandbox(t, first, "touch", target+"/marker")
 	otherRoot := filepath.Join(filepath.Dir(root), "other-worktree")
 	repo := filepath.Join(filepath.Dir(root), "repo")
 	runGit(t, "-C", repo, "worktree", "add", "-b", "other", otherRoot)
-	other := prepareSandbox(t, otherRoot)
-	require.NotEqual(t, recreated.Name, other.Name)
-	var output bytes.Buffer
-	err = other.Exec(ctx, nil, &output, &output, "opencode", "api", "get", "/api/session/"+created.Data.ID)
-	require.Error(t, err)
-	require.Contains(t, output.String(), "Session not found: "+created.Data.ID)
-	otherWorkspace, err := workspace.Resolve(t.Context(), otherRoot)
-	require.NoError(t, err)
-	require.Equal(t, w.RepositoryID(), otherWorkspace.RepositoryID())
-	require.NotEqual(t, w.ID(), otherWorkspace.ID())
-	require.FileExists(t, filepath.Join(state, "opencode-sandbox", "opencode", otherWorkspace.ID(), "opencode.db"))
-	execInSandbox(t, other, "opencode", "service", "stop")
-	require.NoError(t, sandbox.Remove(ctx, otherRoot))
-	require.NoError(t, sandbox.RemoveSnapshot(ctx, otherRoot))
-	require.NoError(t, sandbox.Remove(ctx, root))
-	require.NoError(t, sandbox.RemoveSnapshot(ctx, root))
-	_, err = os.Stat(hostDatabase)
-	require.NoError(t, err, "VM and snapshot removal must preserve host history")
+	other := prepareSandboxWithSettings(t, otherRoot, settings)
+	execInSandbox(t, other, "test", "!", "-e", target+"/marker")
+}
+
+func TestWorkspaceStateIsNotMountedDuringSnapshotPreparation(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir()) //nolint:forbidigo // Isolate host state.
+	const target = "/var/lib/test-state"
+	settings := testSettings(t)
+	settings.State = []config.StateSettings{{Name: "sessions", Target: target}}
+	settings.Snapshot.Command = "test ! -e " + target
+	s := prepareSandboxWithSettings(t, newWorktree(t), settings)
+	execInSandbox(t, s, "test", "-d", target)
+}
+
+func TestOpenCodeStateIsNotEnabledByDefault(t *testing.T) {
+	t.Parallel()
+	s := startSandbox(t)
+	execInSandbox(t, s, "bash", "-eu", "-c", `test -z "${OPENCODE_DB+x}"; test ! -e /var/lib/opencode-sandbox/opencode`)
 }

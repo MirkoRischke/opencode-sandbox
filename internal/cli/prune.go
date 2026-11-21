@@ -39,8 +39,8 @@ func newPruneCommand() *cobra.Command {
 func pruneCommand(inventory func(context.Context, bool, bool) (pruneInventory, error)) *cobra.Command {
 	var flags pruneFlags
 	cmd := &cobra.Command{
-		Use: "prune", Short: "Delete this workspace's VMs, history, logs, and diagnostics",
-		Long: "Delete all workspace resources, including conversation history. Running VMs are stopped and removed.\n\n" +
+		Use: "prune", Short: "Delete this workspace's VMs, persistent state, logs, and diagnostics",
+		Long: "Delete workspace resources, including persistent state. Running VMs are stopped and removed.\n\n" +
 			"Default: current directory/worktree; shared snapshots are preserved.\n" +
 			"--repo includes other tracked worktrees, even deleted ones, and the shared snapshot.\n" +
 			"--all includes every managed workspace plus ALL Microsandbox images and runtime caches,\n" +
@@ -89,7 +89,7 @@ func runPrune(cmd *cobra.Command, plan pruneInventory, flags pruneFlags) error {
 }
 
 func showPruneTargets(cmd *cobra.Command, targets []string, all bool) error {
-	if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Prune targets (conversation history is permanently deleted):"); err != nil {
+	if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Prune targets (persistent state is permanently deleted):"); err != nil {
 		return err
 	}
 	for _, target := range targets {

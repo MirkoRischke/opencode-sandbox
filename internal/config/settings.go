@@ -14,6 +14,7 @@ import (
 // guest JSON configuration. Add new launcher settings as fields or sections.
 type Settings struct {
 	Files    []FileSettings            `toml:"files" description:"Explicit host file/directory mappings. Default mode mount is read-only; copy seeds writable guest files on creation and snapshot restore. Recreate the VM after changing mappings."`
+	State    []StateSettings           `toml:"state" description:"Opt-in writable directories kept per workspace across VM removal. Workspace lists replace global lists. Recreate the VM after changing mappings."`
 	AWS      AWSSettings               `toml:"aws" description:"Optional AWS role credentials for launches. CLI flags override individual fields; host credentials are never stored here."`
 	VM       VMSettings                `toml:"vm" description:"VM resources. Recreate the VM after changing these settings."`
 	Network  NetworkSettings           `toml:"network" description:"Network access and directional port exposure. Recreate the VM after changes."`
@@ -70,6 +71,7 @@ func DefaultSettings() Settings {
 	return Settings{
 		Logging: LoggingSettings{ConsoleLevel: "info"},
 		Files:   []FileSettings{},
+		State:   []StateSettings{},
 		VM:      VMSettings{Image: DefaultImage(), CPUs: 2, MemoryMiB: 2048, RootDiskMiB: 4096, DockerDiskMiB: 10240},
 		Network: NetworkSettings{
 			HostToVM: []PortSettings{},
@@ -137,6 +139,9 @@ func (s Settings) Validate() error {
 		return err
 	}
 	if err := validateFiles(s.Files); err != nil {
+		return err
+	}
+	if err := validateState(s.State, s.Files); err != nil {
 		return err
 	}
 	return ValidateSecrets(s.Secrets)

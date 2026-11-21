@@ -6,8 +6,8 @@ opencode-sandbox prune --repo    # Repo and its other worktrees
 opencode-sandbox prune --all     # All managed workspaces, plus ALL MSB images/caches
 ```
 
-Deletes workspace VMs, snapshots, OpenCode databases (including conversation
-history), host logs, diagnostics, and workspace ownership records. Running target
+Deletes workspace VMs, snapshots, configured persistent workspace state, host
+logs, diagnostics, and workspace ownership records. Running target
 VMs are forcibly stopped and removed; no activity or age filters apply.
 Default worktree cleanup preserves snapshot baselines. `--repo` also removes the
 shared repository baseline; `--all` removes all managed baselines. Explicit

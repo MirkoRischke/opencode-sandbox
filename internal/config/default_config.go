@@ -17,6 +17,7 @@ var configExamples = map[reflect.Type]any{
 	reflect.TypeFor[FileSettings](): FileSettings{
 		Source: "~/.config/opencode/skills", Target: "/root/.config/opencode/skills", Mode: "mount",
 	},
+	reflect.TypeFor[StateSettings](): StateSettings{Name: "agent-sessions", Target: "/var/lib/agent-sessions"},
 	reflect.TypeFor[SecretSettings](): SecretSettings{
 		Source: SecretSourceSettings{File: "creds/token"}, Guest: SecretGuestSettings{Env: "API_TOKEN"},
 		AllowedHosts: []string{"api.example.com"}, Headers: []string{"authorization"},
@@ -42,6 +43,7 @@ type configField struct {
 
 func writeConfigTable(out *bytes.Buffer, value reflect.Value, path string, commented bool) error {
 	typ := value.Type()
+	var arrayExamples []configField
 	for i := 0; i < value.NumField(); i++ {
 		field := typ.Field(i)
 		name := strings.Split(field.Tag.Get("toml"), ",")[0]
@@ -57,7 +59,23 @@ func writeConfigTable(out *bytes.Buffer, value reflect.Value, path string, comme
 			fieldPath = path + "." + name
 		}
 		entry := configField{name: name, path: fieldPath, description: description, value: value.Field(i)}
+		if entry.value.Kind() == reflect.Slice && entry.value.Type().Elem().Kind() == reflect.Struct {
+			prefix := ""
+			if commented {
+				prefix = "# "
+			}
+			fmt.Fprintf(out, "# %s\n%s%s = []\n", description, prefix, name)
+			arrayExamples = append(arrayExamples, entry)
+			continue
+		}
 		if err := entry.write(out, commented); err != nil {
+			return err
+		}
+	}
+	// Array tables change TOML's current scope. Keep optional examples after
+	// all live settings so uncommenting one cannot capture later keys.
+	for _, entry := range arrayExamples {
+		if err := entry.writeExample(out); err != nil {
 			return err
 		}
 	}
@@ -69,9 +87,6 @@ func (f configField) write(out *bytes.Buffer, commented bool) error {
 	if commented {
 		prefix = "# "
 	}
-	if f.value.Kind() == reflect.Slice && f.value.Type().Elem().Kind() == reflect.Struct {
-		return f.writeExample(out, prefix)
-	}
 	switch f.value.Kind() {
 	case reflect.Pointer:
 		fmt.Fprintf(out, "# %s\n# %s = {}\n", f.description, f.name)
@@ -79,7 +94,7 @@ func (f configField) write(out *bytes.Buffer, commented bool) error {
 		fmt.Fprintf(out, "\n# %s\n%s[%s]\n", f.description, prefix, f.path)
 		return writeConfigTable(out, f.value, f.path, commented)
 	case reflect.Map:
-		return f.writeExample(out, prefix)
+		return f.writeExample(out)
 	default:
 		fmt.Fprintf(out, "# %s\n", f.description)
 		var encoded bytes.Buffer
@@ -93,14 +108,14 @@ func (f configField) write(out *bytes.Buffer, commented bool) error {
 	return nil
 }
 
-func (f configField) writeExample(out *bytes.Buffer, prefix string) error {
+func (f configField) writeExample(out *bytes.Buffer) error {
 	example, ok := configExamples[f.value.Type().Elem()]
 	if !ok {
 		return fmt.Errorf("config section %s requires an example", f.path)
 	}
 	path := f.path
 	if f.value.Kind() == reflect.Slice {
-		fmt.Fprintf(out, "# %s\n%s%s = []\n\n# Remove the empty list above to enable this example.\n# [[%s]]\n", f.description, prefix, f.name, path)
+		fmt.Fprintf(out, "\n# Remove the empty %s list to enable this example.\n# [[%s]]\n", f.path, path)
 	} else {
 		path += ".example"
 		fmt.Fprintf(out, "\n# %s\n# [%s]\n", f.description, path)

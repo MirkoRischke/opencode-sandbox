@@ -14,9 +14,9 @@ This tool reduces risk; it does not eliminate it. I accept the following risks f
 - **Data exfiltration:** the agent can send data to allowed destinations. Snapshot
   preparation runs project setup with public internet access regardless of the
   workspace allowlist, so only prepare snapshots from projects you trust.
-- **Persistent OpenCode history:** the guest can read, change, or delete its
-  workspace's host-backed OpenCode database. Linked worktrees have separate
-  databases. See [OpenCode history](features/opencode-history.md).
+- **Persistent workspace state:** when enabled, the guest can read, change, or
+  delete its workspace's host-backed state. Linked worktrees have separate
+  state directories. See [persistent workspace state](features/persistent-state.md).
 - **Credential use:** guest code can read and use temporary AWS role credentials.
   I only use roles with limited permissions that I am willing to delegate to
   an agent. Subscription credentials stay in the [host LLM gateway](../llm-gateway/README.md).

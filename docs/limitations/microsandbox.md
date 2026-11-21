@@ -312,8 +312,8 @@ concern, not a Microsandbox defect.
   [`msb_krun` v0.1.41 source locking stubs](https://github.com/zerocore-ai/libkrun/blob/b35c7e118d7a1e48c8fad103b258e64ff5c49147/src/devices/src/virtio/fs/filesystem.rs#L1222-L1235),
   [Linux FUSE local-lock fallback](https://github.com/torvalds/linux/blob/master/fs/fuse/file.c),
   [SQLite WAL requirements](https://sqlite.org/wal.html).
-- Project references: `internal/sandbox/opencode.go`, `internal/sandbox/snapshot.go`,
-  [OpenCode history](../features/opencode-history.md).
+- Project references: `internal/sandbox/state.go`, `internal/sandbox/snapshot.go`,
+  [persistent workspace state](../features/persistent-state.md).
 - Upgrade check: verify POSIX byte-range locks conflict across two independent
   guests mounting the same host directory, including lock release after guest
   termination. Separately verify WAL shared-memory coherence and crash recovery.

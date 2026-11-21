@@ -45,7 +45,7 @@ func Prepare(ctx context.Context, directory string, secrets []Secret, settings l
 
 // PrepareWorkspace creates or resumes one VM for an already resolved workspace.
 func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secret, settings launcherconfig.Settings, diagnostics ...DiagnosticsOptions) (*Sandbox, error) {
-	diagnosticOptions, err := validatePreparation(w, settings, diagnostics)
+	diagnosticOptions, stateDir, err := validatePreparation(w, settings, diagnostics)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +56,7 @@ func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secr
 	s.log().Info("Preparing VM")
 	started := time.Now().UTC()
 	var created bool
-	s.vm, created, err = connectOrRestore(ctx, s.Name, w, secrets, settings, sandboxOptions(w, w.Root(), settings), diagnosticOptions)
+	s.vm, created, err = connectOrRestore(ctx, s.Name, w, secrets, settings, sandboxOptions(w, w.Root(), settings), diagnosticOptions, stateDir)
 	if err != nil {
 		return nil, fmt.Errorf("prepare sandbox: %w", err)
 	}
@@ -79,21 +79,28 @@ func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secr
 }
 
 // Validate all host inputs before allocating runtime resources.
-func validatePreparation(w workspace.Workspace, settings launcherconfig.Settings, diagnostics []DiagnosticsOptions) (DiagnosticsOptions, error) {
+func validatePreparation(w workspace.Workspace, settings launcherconfig.Settings, diagnostics []DiagnosticsOptions) (DiagnosticsOptions, string, error) {
 	if err := settings.Validate(); err != nil {
-		return DiagnosticsOptions{}, err
+		return DiagnosticsOptions{}, "", err
 	}
 	if err := settings.ValidateFileSources(); err != nil {
-		return DiagnosticsOptions{}, err
+		return DiagnosticsOptions{}, "", err
 	}
 	diagnosticOptions, err := resolveDiagnostics(settings.Network.Diagnostics, diagnostics)
 	if err != nil {
-		return DiagnosticsOptions{}, err
+		return DiagnosticsOptions{}, "", err
 	}
 	if err := validateMounts(w, settings); err != nil {
-		return DiagnosticsOptions{}, err
+		return DiagnosticsOptions{}, "", err
 	}
-	return diagnosticOptions, nil
+	stateDir, err := hostStateDirectory()
+	if err != nil {
+		return DiagnosticsOptions{}, "", err
+	}
+	if err := validateStateLocation(w, stateDir); err != nil {
+		return DiagnosticsOptions{}, "", err
+	}
+	return diagnosticOptions, stateDir, nil
 }
 
 func (s *Sandbox) configureGuest(ctx context.Context, settings launcherconfig.Settings) error {
