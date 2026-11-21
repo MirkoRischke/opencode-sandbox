@@ -29,7 +29,7 @@ func TestMountsCannotOverlapManagedMounts(t *testing.T) {
 	t.Parallel()
 	w, err := workspace.Resolve(context.Background(), t.TempDir())
 	require.NoError(t, err)
-	for _, target := range []string{filepath.Dir(w.Root()), w.Root(), filepath.Join(w.Root(), "subdir"), "/workspace", "/var/lib", "/var/lib/docker/subdir", openCodeDatabaseDir, openCodeDatabase, "/proc/file", "/sys", "/dev", "/etc", "/etc/opencode", systemOpenCodeConfig, "/etc/opencode-sandbox", sandboxInstructions} {
+	for _, target := range []string{filepath.Dir(w.Root()), w.Root(), filepath.Join(w.Root(), "subdir"), "/workspace", "/var/lib", "/var/lib/docker/subdir", openCodeDatabaseDir, openCodeDatabase, "/proc/file", "/sys", "/dev", "/etc", sandboxConfigDir, sandboxInstructions} {
 		t.Run(target, func(t *testing.T) {
 			settings := config.DefaultSettings()
 			settings.Files = []config.FileSettings{{Source: t.TempDir(), Target: target}}
@@ -38,6 +38,15 @@ func TestMountsCannotOverlapManagedMounts(t *testing.T) {
 			require.ErrorContains(t, validateMounts(w, settings), "launcher/runtime mount")
 		})
 	}
+}
+
+func TestMountsAllowUserSuppliedOpenCodeSystemConfig(t *testing.T) {
+	t.Parallel()
+	w, err := workspace.Resolve(t.Context(), t.TempDir())
+	require.NoError(t, err)
+	settings := config.DefaultSettings()
+	settings.Files = []config.FileSettings{{Source: t.TempDir(), Target: "/etc/opencode"}}
+	require.NoError(t, validateMounts(w, settings))
 }
 
 func TestMissingMountFailsBeforeRuntimePreparation(t *testing.T) {

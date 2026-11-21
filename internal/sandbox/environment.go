@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	systemOpenCodeConfig = "/etc/opencode/opencode.json"
-	sandboxInstructions  = "/etc/opencode-sandbox/agent-sandbox-instructions.md"
+	sandboxConfigDir    = "/etc/opencode-sandbox"
+	sandboxInstructions = sandboxConfigDir + "/agent-sandbox-instructions.md"
 )
 
 //go:embed agent-sandbox-instructions.md.tmpl
@@ -52,10 +52,9 @@ func (s *Sandbox) configureEnvironment(ctx context.Context, settings config.Sett
 		return err
 	}
 	err = s.Exec(ctx, bytes.NewReader(contents), nil, nil, "bash", "-eu", "-c", `
-mkdir -p /etc/opencode /etc/opencode-sandbox
-cat > "$1"
-printf '{"$schema":"https://opencode.ai/config.json","instructions":["%s"]}\n' "$1" > "$2"
-`, "sandbox-environment", sandboxInstructions, systemOpenCodeConfig)
+mkdir -p "$1"
+cat > "$2"
+`, "sandbox-environment", sandboxConfigDir, sandboxInstructions)
 	if err != nil {
 		return fmt.Errorf("configure sandbox instructions: %w", err)
 	}

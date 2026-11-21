@@ -253,15 +253,8 @@ Unlike mounts, copies do not consume permanent mount devices.
 OpenCode interprets the mounted paths normally. `/etc/opencode/opencode.json` is
 system configuration and overrides project settings; mount at
 `/root/.config/opencode/opencode.json` instead for user-level configuration.
-For additional sandbox-specific instructions, mount a separate Markdown file
-and reference its **guest path** from your mounted OpenCode configuration:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "instructions": ["/etc/opencode/sandbox-instructions.md"]
-}
-```
+To include the launcher-generated Markdown, see
+[sandbox instructions](../features/sandbox-instructions.md).
 
 The launcher does not load or copy `opencode.json` / `cli.json` implicitly and has
 no `--config` / `--cli-config` flags. Authentication remains separate.

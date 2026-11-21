@@ -44,8 +44,7 @@ On launch, the host launcher:
    (when configured) and the optional snapshot command, then restores the VM from it.
    Existing VMs are reused; otherwise the saved baseline is restored. Snapshot
    preparation has public internet access; restored VMs enforce your network policy.
-3. Configures guest OpenCode, prepares authentication (including optional AWS
-   role credentials), and attaches your terminal to OpenCode.
+3. Starts opencode inside the VM and attaches your terminal to it
 
 **The OpenCode TUI runs inside the guest**, alongside its tools and commands—not
 on the host. Exiting stops the VM without deleting its persistent disk.

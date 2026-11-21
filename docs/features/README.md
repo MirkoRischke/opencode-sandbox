@@ -30,8 +30,8 @@
   including OpenCode configuration, instructions, and skills. No extra host files
   are shared by default beyond the workspace, required Git metadata, and managed
   OpenCode database. See [`[[files]]` configuration](../config/README.md#read-only-host-mounts).
-- **Sandbox-aware instructions:** OpenCode gets information about the sandbox
-  it is running in.
+- **[Sandbox instructions](sandbox-instructions.md):** opt in to loading a
+  launcher-generated description of the guest environment in your agent.
 - **AWS roles:** assume a role on the host and provide automatically refreshed,
   temporary credentials to the guest. See [Accepted risks](../risks.md).
 - **Guest Docker:** build and run images with Docker Engine, Buildx, and Compose.
