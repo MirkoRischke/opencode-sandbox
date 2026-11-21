@@ -125,54 +125,8 @@ Deleted-key history may be less convenient to navigate; deletion does not
 intentionally purge usage logs. With subscription providers, calculated dollar
 costs do not necessarily represent your actual bill or remaining quota.
 
-You still configure your custom OpenCode provider. For example, copy its config
-using `~/.config/opencode-sandbox/config.toml`:
-
-```toml
-[[files]]
-source = "~/.config/opencode-sandbox/opencode.json"
-target = "/root/.config/opencode/opencode.json"
-```
-
-The launcher supplies `LLM_GATEWAY_KEY` inside the VM as a **placeholder**, not
-the real key. Reference it as `{env:LLM_GATEWAY_KEY}` in your OpenCode provider.
-Microsandbox substitutes the real key **only in the `Authorization` header** on
-requests to `host.microsandbox.internal`:
-`Authorization: Bearer $MSB_LLM_GATEWAY_KEY` becomes
-`Authorization: Bearer <real-gateway-key>` outside the VM.
-HTTP substitution is enabled only for this trusted host-local route. Keep the
-provider's HTTP transport; do not put a literal API key in the OpenCode config.
-
-Create `~/.config/opencode-sandbox/opencode.json`:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "model": "gateway/coder",
-  "providers": {
-    "gateway": {
-      "name": "Host LLM gateway",
-      "env": ["LLM_GATEWAY_KEY"],
-      "package": "@opencode/ai/providers/openai-compatible/responses",
-      "settings": {
-        "baseURL": "http://host.microsandbox.internal:4000/v1",
-        "apiKey": "{env:LLM_GATEWAY_KEY}",
-        "transport": "http"
-      },
-      "models": {
-        "coder": { "modelID": "gpt-6-luna" }
-      }
-    }
-  }
-}
-```
-
-Models use the public gateway IDs configured in LiteLLM, such as `gpt-6-luna`
-in the example above. OpenCode's
-custom provider uses the Responses runtime and sends the gateway key as a bearer
-token. Port 4000 is allowed by default. If overriding `[network.vm_to_host]`, keep
-`ports = [4000]` (plus any other needed host ports); `ports = []` blocks it.
-Recreate VMs after changing secret/network/file mappings.
+See the [feature guide](../docs/features/llm-gateway.md#use-the-key-from-inside-the-vm)
+for the `LLM_GATEWAY_KEY` placeholder and the complete OpenCode configuration.
 
 ## Live smoke test
 

@@ -21,5 +21,59 @@ send model requests to the gateway instead of talking directly to the provider.
 The gateway starts automatically on sandbox launch and keeps running after VMs
 exit. Stopping it interrupts model access for all VMs using it.
 
-See the [gateway setup guide](../../llm-gateway/README.md) for prerequisites,
-authentication, model configuration, and an OpenCode example.
+## Use the key from inside the VM
+
+The launcher automatically sets the `LLM_GATEWAY_KEY` environment variable
+inside the VM. It contains a placeholder, not the real API key. No
+`[secrets.llm_gateway]` entry or manual export is needed.
+
+For other tools, set the base URL to `http://host.microsandbox.internal:4000/v1`
+and use the value of `LLM_GATEWAY_KEY` as the bearer token. Use HTTP, not
+WebSocket: Microsandbox substitutes the real key in the HTTP `Authorization`
+header on the host gateway route.
+
+## Configure OpenCode
+
+First [configure a Responses model in LiteLLM and authenticate on the
+host](../../llm-gateway/README.md). Then create
+`~/.config/opencode-sandbox/opencode.json` on the host (or merge these settings
+into your existing file):
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "gateway/coder",
+  "providers": {
+    "gateway": {
+      "name": "Host LLM gateway",
+      "env": ["LLM_GATEWAY_KEY"],
+      "package": "@opencode/ai/providers/openai-compatible/responses",
+      "settings": {
+        "baseURL": "http://host.microsandbox.internal:4000/v1",
+        "apiKey": "{env:LLM_GATEWAY_KEY}",
+        "transport": "http"
+      },
+      "models": {
+        "coder": { "modelID": "gpt-6-luna" }
+      }
+    }
+  }
+}
+```
+
+Replace `gpt-6-luna` with the public `model_name` configured in LiteLLM, not the
+upstream provider's model ID. `gateway/coder` is the name you select in OpenCode.
+OpenCode reads the placeholder from its VM environment at runtime.
+
+Add this mapping to `~/.config/opencode-sandbox/config.toml` on the host so
+OpenCode can read the file inside the VM:
+
+```toml
+[[files]]
+source = "~/.config/opencode-sandbox/opencode.json"
+target = "/root/.config/opencode/opencode.json"
+```
+
+The default network settings allow host port `4000`. If you override
+`[network.vm_to_host]`, include `4000` in `ports`. Recreate an existing VM after
+changing its file or network mappings.
