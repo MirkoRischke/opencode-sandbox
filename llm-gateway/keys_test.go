@@ -1,8 +1,10 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +14,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"opencode-sandbox/internal/logging"
 )
 
 func testGateway(t *testing.T, handler http.HandlerFunc) *Gateway {
@@ -31,8 +35,14 @@ func TestTeamAndVMKeysAreCreatedOnceAndReused(t *testing.T) {
 	var calls []string
 	g := testGateway(t, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "Bearer sk-test-admin", r.Header.Get("Authorization"))
-		assert.Equal(t, http.MethodPost, r.Method)
 		calls = append(calls, r.URL.Path)
+		if r.URL.Path == "/key/list" {
+			assert.Equal(t, http.MethodGet, r.Method)
+			assert.Equal(t, "oc-repo-id", r.URL.Query().Get("team_id"))
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{"keys": []string{}}))
+			return
+		}
+		assert.Equal(t, http.MethodPost, r.Method)
 		var body map[string]any
 		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
 			return
@@ -64,7 +74,7 @@ func TestTeamAndVMKeysAreCreatedOnceAndReused(t *testing.T) {
 			require.Equal(t, "sk-"+vm, key)
 		}
 	}
-	require.Equal(t, []string{"/team/new", "/key/generate", "/key/generate"}, calls)
+	require.Equal(t, []string{"/team/new", "/key/list", "/key/generate", "/key/list", "/key/generate"}, calls)
 	info, err := os.Stat(g.keyPath("oc-main"))
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0600), info.Mode().Perm())
@@ -76,7 +86,11 @@ func TestTeamAndVMKeysAreCreatedOnceAndReused(t *testing.T) {
 func TestConcurrentLaunchesReuseOneKey(t *testing.T) {
 	t.Parallel()
 	var requests int
-	g := testGateway(t, func(w http.ResponseWriter, _ *http.Request) {
+	g := testGateway(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/key/list" {
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{"keys": []string{}}))
+			return
+		}
 		requests++
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]string{"key": "sk-vm"}))
 	})
@@ -96,6 +110,10 @@ func TestRecreatingVMGeneratesANewKey(t *testing.T) {
 	t.Parallel()
 	var generated int
 	g := testGateway(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/key/list" {
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{"keys": []string{}}))
+			return
+		}
 		if r.URL.Path == "/key/generate" {
 			generated++
 			key := "sk-first"
@@ -114,6 +132,54 @@ func TestRecreatingVMGeneratesANewKey(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "sk-recreated", key)
 	require.Equal(t, 2, generated)
+}
+
+func TestEnsureKeyRecreatesMissingLocalCredentialWithSameAlias(t *testing.T) {
+	t.Parallel()
+	const vm = "oc-vm"
+	var calls []string
+	stale := true
+	g := testGateway(t, func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.URL.Path)
+		switch r.URL.Path {
+		case "/key/list":
+			assert.Equal(t, http.MethodGet, r.Method)
+			assert.Equal(t, vm, r.URL.Query().Get("key_alias"))
+			assert.Equal(t, "team", r.URL.Query().Get("team_id"))
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{"keys": []string{"old-hash"}}))
+		case "/key/delete":
+			var body struct {
+				Keys []string `json:"keys"`
+			}
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			assert.Equal(t, []string{"old-hash"}, body.Keys)
+			stale = false
+		case "/key/generate":
+			var body struct {
+				Alias string `json:"key_alias"`
+			}
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			assert.Equal(t, vm, body.Alias)
+			if stale {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]string{"key": "sk-replacement"}))
+		default:
+			t.Errorf("unexpected request %s", r.URL.Path)
+		}
+	})
+	var logs bytes.Buffer
+	ctx := logging.WithLogger(context.Background(), slog.New(slog.NewTextHandler(&logs, nil)))
+	for range 2 {
+		key, err := g.EnsureKey(ctx, "team", vm)
+		require.NoError(t, err)
+		require.Equal(t, "sk-replacement", key)
+	}
+	require.Equal(t, []string{"/key/list", "/key/delete", "/key/generate"}, calls)
+	require.Equal(t, 1, bytes.Count(logs.Bytes(), []byte("Local LiteLLM key missing; creating a new key")))
+	require.Contains(t, logs.String(), "key_alias="+vm)
+	require.NotContains(t, logs.String(), "sk-replacement")
 }
 
 func TestDeleteKeyRemovesRemoteAndLocalCredential(t *testing.T) {
@@ -148,7 +214,11 @@ func TestDeleteKeyRemovesRemoteAndLocalCredential(t *testing.T) {
 
 func TestProvisioningFailureDoesNotStoreOrDiscloseKey(t *testing.T) {
 	t.Parallel()
-	g := testGateway(t, func(w http.ResponseWriter, _ *http.Request) {
+	g := testGateway(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/key/list" {
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{"keys": []string{}}))
+			return
+		}
 		w.WriteHeader(http.StatusForbidden)
 		_, err := w.Write([]byte(`{"error":"sk-sensitive-echo"}`))
 		assert.NoError(t, err)

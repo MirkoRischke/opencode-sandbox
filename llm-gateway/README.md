@@ -107,6 +107,8 @@ Keys are reused across VM stops/restarts and deleted when
 once. If it fails, the command reports the failure; delete that key manually in
 LiteLLM. The local credential is removed either way. Teams are retained for
 historical reporting. Recreating a VM creates a new key.
+If the local credential is missing, the launcher revokes any existing key with
+the VM's alias in its repository team and issues a new key with the same alias.
 
 The gateway manages credentials under
 `$XDG_DATA_HOME/opencode-sandbox/llm-gateway/credentials` (default

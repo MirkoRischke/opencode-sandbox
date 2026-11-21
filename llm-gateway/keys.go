@@ -8,9 +8,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"opencode-sandbox/internal/logging"
 )
 
 // EnsureTeam creates one persistent LiteLLM team per repository. Call Ensure first.
@@ -27,7 +30,7 @@ func (g *Gateway) EnsureTeam(ctx context.Context, repositoryID, name string) (st
 			return fmt.Errorf("read gateway team: %w", err)
 		}
 		teamID = "oc-" + repositoryID
-		if err := g.request(ctx, "/team/new", map[string]any{
+		if err := g.request(ctx, http.MethodPost, "/team/new", nil, map[string]any{
 			"team_id": teamID, "team_alias": name,
 		}, nil); err != nil {
 			return err
@@ -51,10 +54,14 @@ func (g *Gateway) EnsureKey(ctx context.Context, teamID, vmName string) (string,
 		if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("read gateway key: %w", err)
 		}
+		if err := g.revokeMissingKey(ctx, teamID, vmName); err != nil {
+			return err
+		}
+		logging.FromContext(ctx).InfoContext(ctx, "Local LiteLLM key missing; creating a new key", "key_alias", vmName)
 		var response struct {
 			Key string `json:"key"`
 		}
-		if err := g.request(ctx, "/key/generate", map[string]any{
+		if err := g.request(ctx, http.MethodPost, "/key/generate", nil, map[string]any{
 			"team_id": teamID, "key_alias": vmName,
 			"models": []string{"all-proxy-models"}, "key_type": "llm_api",
 		}, &response); err != nil {
@@ -67,6 +74,29 @@ func (g *Gateway) EnsureKey(ctx context.Context, teamID, vmName string) (string,
 		return writeOnce(path, []byte(key))
 	})
 	return key, err
+}
+
+func (g *Gateway) revokeMissingKey(ctx context.Context, teamID, vmName string) error {
+	// LiteLLM returns token hashes by default. Delete by hash so an alias
+	// belonging to another team cannot be revoked by this lookup.
+	query := url.Values{"team_id": {teamID}, "key_alias": {vmName}}
+	var response struct {
+		Keys []string `json:"keys"`
+	}
+	if err := g.request(ctx, http.MethodGet, "/key/list", query, nil, &response); err != nil {
+		return fmt.Errorf("look up gateway key for replacement: %w", err)
+	}
+	switch len(response.Keys) {
+	case 0:
+		return nil
+	case 1:
+		if err := g.deleteRemoteKey(ctx, response.Keys[0]); err != nil {
+			return fmt.Errorf("revoke previous gateway key: %w", err)
+		}
+		return nil
+	default:
+		return fmt.Errorf("multiple gateway keys match the VM alias and repository team")
+	}
 }
 
 // DeleteKey attempts remote deletion once and discards the local credential even
@@ -83,7 +113,7 @@ func (g *Gateway) DeleteKey(ctx context.Context, vmName string) error {
 		if err != nil {
 			return fmt.Errorf("read gateway key for deletion: %w", err)
 		}
-		remoteErr := g.request(ctx, "/key/delete", map[string]any{"keys": []string{string(key)}}, nil)
+		remoteErr := g.deleteRemoteKey(ctx, string(key))
 		if remoteErr != nil {
 			remoteErr = fmt.Errorf("delete gateway key for %s (delete it manually in LiteLLM): %w", vmName, remoteErr)
 		}
@@ -93,6 +123,10 @@ func (g *Gateway) DeleteKey(ctx context.Context, vmName string) error {
 		}
 		return errors.Join(remoteErr, localErr)
 	})
+}
+
+func (g *Gateway) deleteRemoteKey(ctx context.Context, key string) error {
+	return g.request(ctx, http.MethodPost, "/key/delete", nil, map[string]any{"keys": []string{key}}, nil)
 }
 
 func (g *Gateway) keyPath(vmName string) string {
@@ -114,7 +148,7 @@ func (g *Gateway) withCredentialsLock(ctx context.Context, run func() error) err
 	return run()
 }
 
-func (g *Gateway) request(ctx context.Context, endpoint string, payload, result any) error {
+func (g *Gateway) request(ctx context.Context, method, endpoint string, query url.Values, payload, result any) error {
 	env, err := os.ReadFile(filepath.Join(g.directory, ".env"))
 	if err != nil {
 		return fmt.Errorf("read gateway administrative credential: %w", err)
@@ -128,16 +162,23 @@ func (g *Gateway) request(ctx context.Context, endpoint string, payload, result 
 	if masterKey == "" {
 		return fmt.Errorf("gateway .env is missing LITELLM_MASTER_KEY")
 	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("encode gateway request: %w", err)
+	var body io.Reader
+	if payload != nil {
+		data, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("encode gateway request: %w", err)
+		}
+		body = bytes.NewReader(data)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, g.baseURL+endpoint, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, method, g.baseURL+endpoint, body)
 	if err != nil {
 		return fmt.Errorf("create gateway request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+masterKey)
-	req.Header.Set("Content-Type", "application/json")
+	req.URL.RawQuery = query.Encode()
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	response, err := g.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("gateway %s: %w", endpoint, err)

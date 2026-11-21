@@ -86,6 +86,20 @@ func TestGateway(t *testing.T) {
 		require.Equal(t, http.StatusUnauthorized, status)
 	})
 
+	t.Run("MissingLocalKeyIsReplaced", func(t *testing.T) {
+		oldKey := stack.newKey(t)
+		name := strings.ReplaceAll(t.Name(), "/", "-")
+		require.NoError(t, os.Remove(filepath.Join(stack.gateway.Directory(), "credentials", "key-"+name)))
+
+		newKey := stack.newKey(t)
+		if oldKey == newKey {
+			t.Fatal("replacement reused the old key")
+		}
+		stack.requireKeyWorks(t, newKey)
+		status, _ := stack.request(t, http.MethodGet, "/v1/models", oldKey, "")
+		require.Equal(t, http.StatusUnauthorized, status)
+	})
+
 	t.Run("CredentialsSurviveContainerRecreation", func(t *testing.T) {
 		key := stack.newKey(t)
 		stack.requireKeyWorks(t, key)
