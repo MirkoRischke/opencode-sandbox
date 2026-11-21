@@ -10,9 +10,9 @@
 - **Resource cleanup:** prune the current worktree, a repo, or all managed
   workspaces, including history, snapshots, and logs. Global cleanup also removes
   all MSB images and prunes runtime caches. See [cleanup](cleanup.md).
-- **Persistent OpenCode history (experimental):** a checkout and its linked Git
-  worktrees share a host-backed OpenCode database, independent of VM disks and
-  snapshots. See [storage and concurrency risks](opencode-history.md).
+- **Persistent OpenCode history (experimental):** each workspace, including
+  each linked Git worktree, has its own host-backed OpenCode database,
+  independent of VM disks and snapshots. See [OpenCode history](opencode-history.md).
 - **Project tools:** automatically install tools declared in the directory's
   `mise.toml` during workspace snapshot preparation.
 - **Custom VM images:** use a custom Docker/OCI image with your required tools
@@ -23,7 +23,6 @@
   HTTP headers by the host proxy without storing their values in the guest.
   Verified TLS is required unless a secret explicitly opts into HTTP, as for the
   [host LLM gateway](../../llm-gateway/README.md).
-  [Snapshot restore limitations](../config/README.md#workspace-snapshots) apply to header selection.
 - **Workspace configuration:** override global settings with a directory-local
   `.opencode-sandbox.toml`; new or changed configs require approval.
 - **Host file mappings:** explicitly mount selected files or directories read-only,

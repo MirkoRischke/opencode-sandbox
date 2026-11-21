@@ -11,17 +11,14 @@ This tool reduces risk; it does not eliminate it. I accept the following risks f
   protect against execution triggered by host tools consuming these changes.
   Review changes before trusting or running them; automatic host tooling may
   execute them before review.
-- **Data exfiltration:** network restrictions do not guarantee that repository contents cannot be leaked. The agent might abuse allowed domains to exfiltrate data.
-- **Shared OpenCode database (experimental):** linked-worktree VMs can read and
-  modify the same host-backed OpenCode database, including database-resident state
-  beyond session transcripts. Concurrent writers can corrupt or lose history;
-  Microsandbox does not coordinate file locks across VMs. This risk is explicitly
-  accepted for experimentation, not a claim of supported concurrency. See
-  [OpenCode history](features/opencode-history.md).
-- **Guest-readable credentials:** unlike custom proxy secrets, AWS role
-  credentials and imported OpenAI credentials can be read and used by guest code.
-  - AWS role credentials are temporary. I only use roles with limited permissions
-    that I am willing to delegate to an agent.
-  - Imported OpenAI credentials are stored inside the VM. A host-side process
-    handling LLM provider authentication would be preferable, but this tool does
-    not provide one.
+- **Data exfiltration:** the agent can send data to allowed destinations. Snapshot
+  preparation runs project setup with public internet access regardless of the
+  workspace allowlist, so only prepare snapshots from projects you trust.
+- **Persistent OpenCode history:** the guest can read, change, or delete its
+  workspace's host-backed OpenCode database. Linked worktrees have separate
+  databases. See [OpenCode history](features/opencode-history.md).
+- **Credential use:** guest code can read and use temporary AWS role credentials.
+  I only use roles with limited permissions that I am willing to delegate to
+  an agent. Subscription credentials stay in the [host LLM gateway](../llm-gateway/README.md).
+  The guest receives only a placeholder for its gateway key, but can still make
+  requests through the gateway and consume provider usage.

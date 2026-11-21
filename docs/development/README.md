@@ -64,7 +64,7 @@ Upgrade the SDK and runtime together from this repository:
 
 ```sh
 mise run upgrade-microsandbox       # Resolve the latest stable runtime version
-mise run upgrade-microsandbox 0.7.9 # Or select an exact version
+# To select an exact version: mise run upgrade-microsandbox <version>
 # Dotfiles default to ../dotfiles; override with --dotfiles /path/to/dotfiles
 ```
 

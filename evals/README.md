@@ -15,9 +15,8 @@ npm run build:cli
 npm test
 ```
 
-Requires Go with CGO/a C compiler, Node 24, Git, and tar. The SDK currently brings
-an optional TUI dependency whose engine declaration requests Node 26; the embedded
-SDK path is live-tested on Node 24. npm currently reports transitive dependency
+Requires Go with CGO/a C compiler, Node, Git, and tar. Use the toolchain pinned
+in [`mise.toml`](../mise.toml). npm currently reports transitive dependency
 audit findings; this is a local POC, not a hardened service.
 
 The runner reads only `providers.litellm` from your OpenCode JSON config and uses
@@ -26,8 +25,7 @@ instructions, or skills. The judge uses the same provider endpoint directly.
 
 ## Run
 
-No historical skill exists in this repository yet. To demonstrate all three
-variants immediately:
+To demonstrate all three variants without choosing an earlier skill revision:
 
 ```sh
 npm run eval -- --demo-history
@@ -37,8 +35,8 @@ This creates a temporary Git repository with a **synthetic** earlier skill lacki
 the network-extension guidance. It is a plumbing demonstration, not a historical
 quality comparison. It neither commits to nor modifies this repository's history.
 
-Once the skill is committed, select an actual revision containing
-`skills/opencode-sandbox/`:
+For a real comparison, select an earlier revision containing a different
+version of `skills/opencode-sandbox/`:
 
 ```sh
 EVAL_PREVIOUS_REF=<commit-or-tag> npm run eval
@@ -136,8 +134,8 @@ gateway concurrency before extrapolating to 20 cases across three variants.
 
 ## Measured POC results
 
-Live runs on 2026-11-17, Node 24.22.3, OpenCode SDK 2.3.0, the configured LiteLLM
-gateway, agent/judge `gpt-6.1-sol`, Promptfoo agent-result caching disabled:
+Live runs on 2026-11-17 used the tools pinned at the time, the configured LiteLLM
+gateway, agent/judge `gpt-6.1-sol`, and no Promptfoo agent-result caching:
 
 | Workload | Concurrency | Judge calls | Result | Wall time |
 | --- | ---: | ---: | --- | ---: |

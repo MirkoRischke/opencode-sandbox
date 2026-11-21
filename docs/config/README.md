@@ -15,14 +15,19 @@ opencode-sandbox config default > .opencode-sandbox.toml
 This works outside Git and does not load user configuration, trust state, or
 credential files, or start a VM. Values come from the same `DefaultSettings()`
 used at runtime; descriptions come from configuration struct tags. The built-in
-allowlist includes OpenAI, the OpenCode model catalog, Context7 and AWS Knowledge
+allowlist includes the OpenCode model catalog, Context7 and AWS Knowledge
 MCPs, and GitHub Git/API/raw-file access. Tool downloads, package registries,
 source archives, release assets, and container registries are not included;
 snapshot preparation has public internet access. Add project-specific hosts for
 downloads needed while the agent runs.
-Diagnostics and unrestricted access are disabled; no credentials are enabled.
+Diagnostics and unrestricted access are disabled. No AWS roles or custom
+secrets are configured by default; the launcher manages its own gateway key.
 For workspace overrides, keep only settings you want to override: saving all defaults
 also overrides your global values with those defaults.
+
+Run `opencode-sandbox config validate` to check the merged global and
+current-directory settings without approving them, reading credential values,
+or launching a VM.
 
 ## Workspace overrides and trust
 
@@ -168,8 +173,9 @@ at a filesystem root. Explicit read-only mounts and required Git metadata retain
 their separate validation rules. These checks prevent common mistakes, not
 arbitrarily large projects or sensitive files within an otherwise allowed project.
 
-AWS role access is enabled per launch with `--aws-role` and optional
-`--aws-profile`, not with global configuration. See [AWS credentials](../features/aws.md).
+Enable AWS role access with `[aws]` in global or approved workspace config, or
+use `--aws-role` and optional `--aws-profile` to override it for a launch. See
+[AWS credentials](../features/aws.md).
 
 The launcher always stops its VM on exit, including errors and handled termination
 signals. Installed tools and guest files persist for the next launch. A newly
@@ -373,9 +379,10 @@ opencode-sandbox snapshot remove
 configures GitHub integration, trusts/installs project mise tools, and runs the
 custom command if provided. Both manual and automatic snapshot preparation allow
 public internet access regardless of the workspace hostname allowlist. Host,
-private, link-local, and metadata destinations remain blocked; configured proxy
-secrets retain their destination scope. Preparation does not import OpenAI
-subscription credentials or assume a session AWS role. Mise configuration and
+private, link-local, and metadata destinations remain blocked except for
+explicitly allowed host service ports. Configured proxy secrets retain their
+destination scope. Preparation does not receive the managed gateway key or
+assume a session AWS role. Mise configuration and
 setup scripts are trusted: they can access mounted workspace files and send data
 to public destinations during preparation. The preparation VM is stopped before
 capture; restored workspace VMs enforce the configured network policy from boot.
@@ -443,15 +450,15 @@ repeat removal is a no-op. Existing restored VMs retain independent writable
 disks and survive snapshot removal/replacement and subsequent cold starts.
 The existing top-level `remove` remains VM-only and does not delete baselines.
 
-**Microsandbox 0.7.11 restore limitations:** restored VMs require an extra
+**Microsandbox restore behavior:** restored VMs require an extra
 stop/configure/start cycle for labels, working directory and credentials, before
 any project initialization. Restored VMs preserve the configured selected-header
-substitution policy and allowed hosts through the Go secret-modification API
-(available since v0.7.10), just like preparation VMs.
+substitution policy and allowed hosts through the Go secret-modification API,
+just like preparation VMs.
 Restores without secrets still enable verified TLS
 inspection via a temporary non-credential secret, removed before project commands.
-Network diagnostics retain debug logs and cumulative collection. In v0.7.11,
-restored VMs have the HTTP denial responder enabled when diagnostics are configured,
+Network diagnostics retain debug logs and cumulative collection.
+Restored VMs have the HTTP denial responder enabled when diagnostics are configured,
 including hostname evidence for blocked HTTPS without a DNS query. Denied-host
 evidence remains best effort. Ordinary destination restrictions remain
 in effect. No custom SDK bindings or host cache proxy are used.
@@ -488,10 +495,10 @@ listener configured by the supplied image. Compose networks and published
 container ports work inside the VM. To reach them from the host, configure
 an explicit [port mapping](#directional-port-access) in addition to Docker's port publishing.
 
-The built-in defaults and `docs/config/example.toml` allow public Docker Hub and
-Amazon ECR Public pulls, including Docker Hub's authentication and image-download
-hosts. Guest builds and containers still obey the VM network
-policy: package repositories and other download hosts need separate approval.
+Guest builds and containers obey the VM network policy. Docker Hub, Amazon ECR
+Public, and package repositories are not on the default allowlist. To pull
+images in a workspace VM, explicitly allow the registry and any authentication
+and image-download hosts it uses, or pull the images during snapshot preparation.
 Containers do not automatically inherit the guest's injected TLS CA; images that
 make HTTPS requests through the inspected network must trust that CA themselves.
 
@@ -572,8 +579,8 @@ otherwise silent. No upstream connection is allowed by the responder, and
 protected/private destinations remain blocked. Clients must reach the TLS/SNI
 handling path for hostname evidence to be available.
 
-The launcher periodically reads new system-log records, recognizes Microsandbox
-0.7.8 network-policy denial messages, and merges them into one cumulative overview:
+The launcher periodically reads new Microsandbox system-log records and merges
+recognized network-policy denial messages into one cumulative overview:
 
 ```text
 ${XDG_STATE_HOME:-~/.local/state}/opencode-sandbox/diagnostics/<worktree-id>/network.json
@@ -595,11 +602,11 @@ opencode-sandbox diagnostics network
 opencode-sandbox diagnostics network | jq '.denied_targets'
 ```
 
-This read-only command does not start a VM or load credentials. Only logging
-policy and existing workspace approval are read. It works after VM deletion and
-shows the latest saved snapshot, not live logs. Missing history is an error
-reported on stderr with a nonzero exit.
-Running `opencode-sandbox diagnostics` shows usage and the available category.
+This read-only command does not start a VM, load credentials, or check config
+approval. It works after VM deletion and shows the latest saved summary, not
+live logs. Missing history is an error reported on stderr with a nonzero exit.
+Use `opencode-sandbox diagnostics logs` to print the current workspace's host
+launcher log directory.
 
 `denied_targets` contains optional `hostname`, `ip`, `port`, `protocol`, and `reason`,
 plus `observations`, `first_seen`, and `last_seen`. Hostnames group independently of

@@ -43,13 +43,13 @@ guest.env = "GH_TOKEN"
 allowed_hosts = ["github.com", "api.github.com"]
 headers = ["authorization"]
 
-# Host LLM gateway example (see llm-gateway/README.md for matching OpenCode JSON):
-# [secrets.llm_gateway]
-# source.file = "creds/llm-gateway-key"
-# guest.env = "LLM_GATEWAY_KEY"
-# allowed_hosts = ["host.microsandbox.internal"]
-# headers = ["authorization"] # Replaces the placeholder in Authorization: Bearer ...
-# allow_http = true # Explicit opt-in: the host-local gateway uses HTTP, not TLS.
+# The launcher manages the LLM gateway key. See llm-gateway/README.md for
+# OpenCode provider configuration.
+
+# Optional AWS role; launch flags can override each setting.
+# [aws]
+# role = "arn:aws:iam::123456789012:role/SandboxReadOnly"
+# profile = "my-sso-profile"
 
 [logging]
 # Minimum stderr severity; overridden by --console-log-level. File logs stay Debug+.
@@ -57,7 +57,7 @@ console_level = "info" # debug, info, warn, or error
 
 [vm]
 # Applied at VM creation only. Sizes are in MiB.
-# Image must already be loaded into Microsandbox (msb load); no automatic pulls.
+# Uses the local Docker image or pulls it if missing, then imports it automatically.
 image = "opencode-sandbox:base"
 cpus = 2
 memory_mib = 2048

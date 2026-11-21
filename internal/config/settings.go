@@ -18,7 +18,7 @@ type Settings struct {
 	VM       VMSettings                `toml:"vm" description:"VM resources. Recreate the VM after changing these settings."`
 	Network  NetworkSettings           `toml:"network" description:"Network access and directional port exposure. Recreate the VM after changes."`
 	Snapshot SnapshotSettings          `toml:"snapshot" description:"Prepared disk baseline shared by linked Git worktrees; per-directory outside Git. Created automatically on first launch; rebuild and remove with the snapshot commands. Rebuild the snapshot and recreate the VM after provisioning changes."`
-	Logging  LoggingSettings           `toml:"logging" description:"Host launcher logging. Console output goes to stderr; JSON logfiles retain Info and above."`
+	Logging  LoggingSettings           `toml:"logging" description:"Host launcher logging. Console output goes to stderr; JSON logfiles retain Debug and above."`
 	Secrets  map[string]SecretSettings `toml:"secrets" description:"Optional file- or OS-keyring-backed secrets, substituted by the host proxy. Workspace entries replace same-named global entries completely. Uncomment and adjust the example to enable."`
 }
 

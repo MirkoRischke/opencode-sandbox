@@ -117,8 +117,8 @@ that entry, or any secret using `LLM_GATEWAY_KEY`, with its managed credential.
 
 At <http://localhost:4000/ui>, sign in as `admin` using `LITELLM_MASTER_KEY` from
 the installed `.env`. In **Usage → Team Usage**, select the repository team for
-overall usage and drill into its VM keys for individual usage. These team/key
-views are available without Enterprise in the pinned LiteLLM `v1.108.1`.
+overall usage and drill into its VM keys for individual usage. The LiteLLM
+image is pinned in [`compose.yaml`](compose.yaml).
 Deleted-key history may be less convenient to navigate; deletion does not
 intentionally purge usage logs. With subscription providers, calculated dollar
 costs do not necessarily represent your actual bill or remaining quota.
