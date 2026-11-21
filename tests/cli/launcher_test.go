@@ -26,7 +26,7 @@ func TestLauncherPrintsDefaultConfigWithoutLoadingHostState(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	command := exec.CommandContext(ctx, buildLauncher(t), "config", "default")
-	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+configDir, "XDG_STATE_HOME="+stateDir, "HERDR_ENV=1")
+	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+configDir, "XDG_STATE_HOME="+stateDir)
 	command.Dir = t.TempDir() // Printing defaults must work outside Git.
 	output, err := command.CombinedOutput()
 	require.NoError(t, err, "%s", output)
@@ -160,6 +160,7 @@ func TestSecretSetWorksOutsideWorkspaceWithoutHostPaths(t *testing.T) {
 func TestLauncherValidatesAWSFlagsBeforeStartingVM(t *testing.T) {
 	t.Parallel()
 	binary := buildLauncher(t)
+	configDir, stateDir := t.TempDir(), t.TempDir()
 	for _, args := range [][]string{
 		{"--aws-role", "not-a-role"},
 		{"--aws-profile", "sandbox-test"},
@@ -168,6 +169,7 @@ func TestLauncherValidatesAWSFlagsBeforeStartingVM(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		command := exec.CommandContext(ctx, binary, args...)
 		command.Dir = t.TempDir()
+		command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+configDir, "XDG_STATE_HOME="+stateDir)
 		output, err := command.CombinedOutput()
 		cancel()
 		require.Error(t, err)

@@ -25,7 +25,7 @@ func TestAWSIsNotConfiguredGlobally(t *testing.T) {
 	defer cancel()
 	command := exec.CommandContext(ctx, buildLauncher(t))
 	command.Dir = newWorktree(t)
-	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir, "XDG_STATE_HOME="+dir, "HERDR_ENV=")
+	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir, "XDG_STATE_HOME="+dir)
 	output, err := command.CombinedOutput()
 	require.Error(t, err)
 	require.Contains(t, string(output), "unknown launcher setting")

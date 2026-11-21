@@ -49,8 +49,7 @@ type SnapshotSettings struct {
 const DefaultStartupExecutable = "opencode"
 
 type StartupSettings struct {
-	Command    []string `toml:"command" description:"Guest executable followed by literal arguments. Must not be empty. Interactive Bash opens after it exits."`
-	HerdrAgent string   `toml:"herdr_agent" description:"Optional host-side Herdr agent hint. HERDR_AGENT overrides it. Empty uses OpenCode detection only for the default command."`
+	Command []string `toml:"command" description:"Guest executable followed by literal arguments. Must not be empty. Interactive Bash opens after it exits."`
 }
 
 func (s StartupSettings) validate() error {
@@ -61,9 +60,6 @@ func (s StartupSettings) validate() error {
 		if strings.ContainsRune(arg, '\x00') {
 			return fmt.Errorf("startup.command[%d] must not contain NUL bytes", i)
 		}
-	}
-	if strings.ContainsRune(s.HerdrAgent, '\x00') {
-		return fmt.Errorf("startup.herdr_agent must not contain NUL bytes")
 	}
 	return nil
 }

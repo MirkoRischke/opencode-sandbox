@@ -71,7 +71,7 @@ func TestUnconfiguredSecretsAreNotLoadedOrInjected(t *testing.T) {
 	s := prepareLauncherProbe(t)
 	require.NoError(t, runLauncherProbe(t, s, map[string]string{
 		"XDG_CONFIG_HOME": dir, "XDG_STATE_HOME": t.TempDir(),
-		"GH_TOKEN": "host-credential-must-not-be-used", "HERDR_ENV": "",
+		"GH_TOKEN": "host-credential-must-not-be-used",
 	}, `test -z "${GH_TOKEN+x}"`))
 	require.NotContains(t, storedSandboxConfig(t, s), "host-credential-must-not-be-used")
 }

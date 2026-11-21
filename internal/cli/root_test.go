@@ -10,8 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"opencode-sandbox/internal/config"
-
 	"github.com/stretchr/testify/require"
 )
 
@@ -174,7 +172,7 @@ func TestCompletionScriptsWithoutLoadingHostState(t *testing.T) {
 		dir := t.TempDir()
 		require.NoError(t, os.Mkdir(filepath.Join(dir, "opencode-sandbox"), 0700))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "opencode-sandbox", "config.toml"), []byte("invalid TOML ["), 0600))
-		runIsolatedCommandTest(t, t.Name(), "XDG_CONFIG_HOME="+dir, "HERDR_ENV=1", "HERDR_AGENT=", "OPENCODE_SANDBOX_COMPLETION_TEST=1")
+		runIsolatedCommandTest(t, t.Name(), "XDG_CONFIG_HOME="+dir, "OPENCODE_SANDBOX_COMPLETION_TEST=1")
 		return
 	}
 	for _, shell := range []string{"bash", "zsh", "fish", "powershell"} {
@@ -201,36 +199,6 @@ func TestCompletionSuggestions(t *testing.T) {
 			for _, want := range tc.want {
 				require.Contains(t, output, want+"	")
 			}
-		})
-	}
-}
-
-func TestIdentifyHerdrAgent(t *testing.T) {
-	t.Parallel()
-	if os.Getenv("OPENCODE_SANDBOX_HERDR_TEST") == "1" {
-		startup := config.StartupSettings{
-			Command:    []string{os.Getenv("OPENCODE_SANDBOX_TEST_STARTUP")},
-			HerdrAgent: os.Getenv("OPENCODE_SANDBOX_TEST_HERDR_AGENT"),
-		}
-		require.NoError(t, identifyHerdrAgent(startup))
-		// Herdr reads the initial process environment, including after re-exec.
-		environ, err := os.ReadFile("/proc/self/environ")
-		require.NoError(t, err)
-		want := []byte("HERDR_AGENT=" + os.Getenv("OPENCODE_SANDBOX_EXPECT_AGENT"))
-		require.Contains(t, bytes.Split(environ, []byte{0}), want)
-		return
-	}
-	for _, tc := range []struct{ name, herdr, agent, command, hint, want string }{
-		{name: "default inside Herdr", herdr: "1", command: "opencode", want: "opencode"},
-		{name: "outside Herdr", command: "opencode", hint: "configured"},
-		{name: "custom command without hint", herdr: "1", command: "other-agent"},
-		{name: "configured hint", herdr: "1", command: "other-agent", hint: "configured", want: "configured"},
-		{name: "environment overrides configured hint", herdr: "1", agent: "custom", command: "other-agent", hint: "configured", want: "custom"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			runIsolatedCommandTest(t, "TestIdentifyHerdrAgent", "HERDR_ENV="+tc.herdr, "HERDR_AGENT="+tc.agent,
-				"OPENCODE_SANDBOX_TEST_STARTUP="+tc.command, "OPENCODE_SANDBOX_TEST_HERDR_AGENT="+tc.hint,
-				"OPENCODE_SANDBOX_HERDR_TEST=1", "OPENCODE_SANDBOX_EXPECT_AGENT="+tc.want)
 		})
 	}
 }

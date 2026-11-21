@@ -343,17 +343,13 @@ the AWS CLI. Docker is optional: images without `dockerd` skip daemon startup.
 ```toml
 [startup]
 command = ["opencode"]
-herdr_agent = ""
 ```
 
-These are the defaults. `command` replaces the inherited argument list and
+This is the default. `command` replaces the inherited argument list and
 must name a guest executable. The command runs when opening the terminal, not
 during snapshot preparation. It exits into interactive Bash.
 
-`herdr_agent` is an optional host-side detection hint inside Herdr. An explicit
-`HERDR_AGENT` environment variable wins. If both are empty, the launcher hints
-`opencode` only for the default startup command. The guest has no Herdr socket
-access. See [using another coding agent](../features/startup.md) for an example.
+See [using another coding agent](../features/startup.md) for an example.
 
 ### Workspace snapshots
 

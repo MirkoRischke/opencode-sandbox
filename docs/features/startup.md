@@ -10,8 +10,6 @@ image = "my-sandbox-image:latest"
 
 [startup]
 command = ["copilot"]
-# Optional: use the agent name recognized by your Herdr installation.
-# herdr_agent = "copilot"
 ```
 
 Copilot is just an example; the stock image still ships OpenCode. The first
@@ -24,12 +22,20 @@ Startup settings take effect on the next launch, even with an existing VM.
 If you switch images to install the agent, rebuild the snapshot and recreate
 the VM so it gets the new image.
 
-In a Herdr pane, an explicit `HERDR_AGENT` environment variable on the host
-takes precedence over `startup.herdr_agent`. With neither set, the default
-command `["opencode"]` gets the `opencode` hint; other commands get no hint.
-The hint only controls Herdr’s pane detection, not what runs in the VM.
-
 The [LiteLLM gateway](../../llm-gateway/README.md) is still available regardless
 of the startup command. Configure the agent to use the gateway’s guest URL
 (`http://host.microsandbox.internal:4000/v1` by default) and `LLM_GATEWAY_KEY`
 placeholder if it supports an OpenAI-compatible provider.
+
+## Optional: agent detection in Herdr
+
+If Herdr can't detect OpenCode behind the sandbox, set the hint on the host
+when launching it. For interactive use, add this to `~/.zshrc` or `~/.bashrc`:
+
+```sh
+alias opencode-sandbox='HERDR_AGENT=opencode opencode-sandbox'
+```
+
+When launching directly without an interactive shell, use
+`env HERDR_AGENT=opencode opencode-sandbox`. For a different startup agent, use
+the name Herdr recognizes. The hint doesn't change what runs in the VM.

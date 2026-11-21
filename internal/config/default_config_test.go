@@ -87,20 +87,15 @@ func TestStartupConfigMerging(t *testing.T) {
 	settings, err := mergeSettings(defaults, []byte(`
 [startup]
 command = ["my-agent", "--flag"]
-herdr_agent = "my-agent"
 `), "/project")
 	require.NoError(t, err)
+	require.Equal(t, []string{"my-agent", "--flag"}, settings.Startup.Command)
 	settings, err = mergeSettings(settings, []byte(`
 [startup]
 command = ["other-agent", "two words", ""]
 `), "/project")
 	require.NoError(t, err)
-	require.Equal(t, StartupSettings{
-		Command: []string{"other-agent", "two words", ""}, HerdrAgent: "my-agent",
-	}, settings.Startup)
-	settings, err = mergeSettings(settings, []byte("[startup]\nherdr_agent = ''\n"), "/project")
-	require.NoError(t, err)
-	require.Equal(t, StartupSettings{Command: []string{"other-agent", "two words", ""}}, settings.Startup)
+	require.Equal(t, []string{"other-agent", "two words", ""}, settings.Startup.Command)
 }
 
 func TestStartupConfigRejectsInvalidValues(t *testing.T) {
@@ -109,7 +104,6 @@ func TestStartupConfigRejectsInvalidValues(t *testing.T) {
 		{"empty command", `command = []`, "startup.command"},
 		{"blank executable", `command = [" "]`, "startup.command"},
 		{"NUL in argument", `command = ["agent", "\u0000"]`, "startup.command[1]"},
-		{"NUL in hint", `herdr_agent = "agent\u0000"`, "startup.herdr_agent"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := mergeSettings(DefaultSettings(), []byte("[startup]\n"+tc.setting), "/project")

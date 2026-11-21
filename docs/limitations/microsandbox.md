@@ -459,8 +459,8 @@ msb exec nesting-restored -- test -c /dev/kvm # exit 1
 
 ### Intermittent snapshot listing failure after snapshot removal and VM resume
 
-**Status:** observed once with Go SDK/runtime v0.7.11 on 2026-11-13;
-upstream cause unconfirmed.
+**Status:** observed with Go SDK/runtime v0.7.11 on 2026-11-13 and again
+with v0.7.15 on 2026-11-21; upstream cause unconfirmed.
 
 The pre-change gateway-test baseline (`mise run test`, four parallel VM tests)
 failed `TestRemovingSnapshotLeavesExistingVMDisksIntact` at its final
@@ -476,17 +476,20 @@ go test -count=3 -parallel 4 -timeout 5m ./tests/vm \
 
 The subsequent full `mise run verify` also passed, including this test and the
 new gateway suite (531.53 seconds overall; 510.87 seconds for the VM package).
-The snapshot test was not skipped or weakened; the intermittent cause remains
-unresolved.
+
+On v0.7.15, `go test ./...` failed with the same missing metadata error in
+`TestRemovingSnapshotLeavesExistingVMDisksIntact`. The same run also reported
+that error in `TestAutomaticSnapshotStopsOnMiseInstallationFailure` and
+`TestFirstLaunchPreparesManagedSnapshotOnlyOnce`. The tests were not changed.
 
 Impact: an intermittent failure in the standard VM suite prevents claiming a
 clean full-suite baseline; no snapshot implementation or assertion was changed.
 This is not proof of an upstream defect rather than a tool/runtime interaction.
 
 - Project reference: `tests/vm/snapshot_test.go`.
-- Upgrade check: rerun the isolated test and the concurrent full VM suite;
-  removing a snapshot and resuming an existing VM must leave snapshot listing
-  empty without looking up removed metadata.
+- Upgrade check: rerun the affected tests in isolation and in the concurrent
+  full VM suite. Snapshot listing must not look up removed metadata after
+  snapshot removal and VM resume, or during automatic preparation.
 
 ### Restored root-disk metadata reports `SizeMiB = 0`
 

@@ -53,7 +53,7 @@ esac
 	err = runLauncherProbe(t, &sandbox.Sandbox{Worktree: worktree}, map[string]string{
 		"XDG_CONFIG_HOME": dir, "XDG_STATE_HOME": t.TempDir(),
 		"PATH":          bin + string(os.PathListSeparator) + os.Getenv("PATH"),
-		"TEST_WORKTREE": worktree, "HERDR_ENV": "",
+		"TEST_WORKTREE": worktree,
 	}, `test -f gateway-ready; test "$LLM_GATEWAY_KEY" = '$MSB_LLM_GATEWAY_KEY'; touch prompt-started`)
 	require.NoError(t, err)
 	require.FileExists(t, filepath.Join(worktree, "prompt-started"))
@@ -73,7 +73,7 @@ case "$*" in *" up "*) exit 17;; esac
 `, docker)), 0700))
 	err = runLauncherProbe(t, s, map[string]string{
 		"XDG_CONFIG_HOME": dir, "XDG_STATE_HOME": t.TempDir(),
-		"PATH": bin + string(os.PathListSeparator) + os.Getenv("PATH"), "HERDR_ENV": "",
+		"PATH": bin + string(os.PathListSeparator) + os.Getenv("PATH"),
 	}, `touch prompt-started`)
 	require.ErrorContains(t, err, "start LLM gateway")
 	require.NoFileExists(t, filepath.Join(s.Worktree, "prompt-started"))

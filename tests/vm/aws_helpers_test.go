@@ -49,7 +49,6 @@ func fakeAWSHost(t *testing.T, region string, response func(int) (time.Time, boo
 		"AWS_CONFIG_FILE": config, "AWS_SHARED_CREDENTIALS_FILE": credentials,
 		"AWS_EC2_METADATA_DISABLED": "true",
 		"XDG_CONFIG_HOME":           dir, "XDG_STATE_HOME": dir,
-		"HERDR_ENV": "",
 	}
 	requests := make(chan awsRequest, 32)
 	var count atomic.Int32
