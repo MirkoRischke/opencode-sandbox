@@ -5,8 +5,33 @@
     "customManagers:dockerfileVersions"
   ],
   "enabledManagers": ["dockerfile", "docker-compose", "custom.regex", "gomod", "mise", "github-actions"],
-  "includePaths": ["Dockerfile", "llm-gateway/compose.yaml", "go.mod", "go.sum", "mise.toml", ".github/workflows/**"],
+  "includePaths": ["Dockerfile", "images/*/Dockerfile", "llm-gateway/compose.yaml", "go.mod", "go.sum", "mise.toml", ".github/workflows/**"],
   "packageRules": [
+    {
+      "description": "The shared sandbox image is built locally, not pulled from a registry",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["opencode-sandbox"],
+      "enabled": false
+    },
+    {
+      "matchDatasources": ["github-releases"],
+      "matchPackageNames": ["openai/codex"],
+      "extractVersion": "^rust-v(?<version>.*)$",
+      "versioning": "semver",
+      "ignoreUnstable": true
+    },
+    {
+      "matchDatasources": ["github-releases"],
+      "matchPackageNames": ["github/copilot-cli"],
+      "extractVersion": "^v(?<version>.*)$",
+      "versioning": "semver",
+      "ignoreUnstable": true
+    },
+    {
+      "matchDatasources": ["npm"],
+      "matchPackageNames": ["@opencode/cli"],
+      "ignoreUnstable": true
+    },
     {
       "matchManagers": ["gomod"],
       "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],

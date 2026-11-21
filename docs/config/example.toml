@@ -58,7 +58,7 @@ console_level = "info" # debug, info, warn, or error
 [vm]
 # Applied at VM creation only. Sizes are in MiB.
 # Uses the local Docker image or pulls it if missing, then imports it automatically.
-image = "opencode-sandbox:base"
+image = "opencode-sandbox:opencode"
 cpus = 2
 memory_mib = 2048
 root_disk_mib = 4096

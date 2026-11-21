@@ -1,20 +1,29 @@
 # Works with any coding agent
 
-OpenCode starts by default. To use another terminal-based coding agent, make
-sure it’s installed in your [VM image](../config/README.md#custom-vm-images).
-Set the command in `.opencode-sandbox.toml` (or in your global launcher config):
+OpenCode starts by default. Build the image for the agent you want:
+
+| Agent | Build task | Image | Startup command |
+| --- | --- | --- | --- |
+| OpenCode | `mise run build` (or `mise run build:opencode`) | `opencode-sandbox:opencode` | `opencode` |
+| OpenAI Codex CLI | `mise run build:codex` | `opencode-sandbox:codex` | `codex` |
+| GitHub Copilot CLI | `mise run build:copilot` | `opencode-sandbox:copilot` | `copilot` |
+
+The launcher imports the selected image from Docker automatically. To use a
+nondefault agent, set both the image and the command in `.opencode-sandbox.toml`
+or your global launcher config:
 
 ```toml
 [vm]
-image = "my-sandbox-image:latest"
+image = "opencode-sandbox:copilot"
 
 [startup]
 command = ["copilot"]
 ```
 
-Copilot is just an example; the stock image still ships OpenCode. The first
-element of `command` is the executable; subsequent elements are passed as
-literal arguments. The launcher runs it in the guest workspace when you open
+For another terminal-based agent, install it in a
+[custom VM image](../config/README.md#custom-vm-images) and configure it the same
+way. The first element of `command` is the executable; subsequent elements are
+passed as literal arguments. The launcher runs it in the guest workspace when you open
 the terminal. After it exits, you land in interactive Bash in the same
 workspace. Exit Bash to stop the VM.
 

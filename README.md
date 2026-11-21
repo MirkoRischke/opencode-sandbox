@@ -66,7 +66,7 @@ Run from this repository:
 ```sh
 mise install
 mise run install # Install the launcher to ~/.local/bin
-mise run build   # Build the sandbox image; imported automatically on first use
+mise run build   # Build the default OpenCode image; imported automatically on first use
 ```
 
 ## Usage

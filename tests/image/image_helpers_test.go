@@ -7,20 +7,18 @@ import (
 	"testing"
 	"time"
 
-	launcherconfig "opencode-sandbox/internal/config"
-
 	"github.com/stretchr/testify/require"
 )
 
 type imageContainer string
 
-func startImageContainer(t *testing.T) imageContainer {
+func startImageContainer(t *testing.T, image string) imageContainer {
 	t.Helper()
 	// Each test gets an isolated container with fixture files as its working directory.
 	// No network, credentials, host mounts, privileged mode, or Docker socket.
-	id := strings.TrimSpace(docker(t, "run", "--rm", "-d", "--network", "none",
+	id := strings.TrimSpace(docker(t, "run", "--rm", "-d", "--pull=never", "--network", "none",
 		"--platform", "linux/amd64", "--workdir", "/tmp/image-smoke",
-		launcherconfig.DefaultImage(), "sleep", "infinity"))
+		image, "sleep", "infinity"))
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

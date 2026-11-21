@@ -10,14 +10,14 @@ mise run quality baseline # Save local complexity metrics before a refactor
 mise run quality compare  # Show current hotspots and changes from that baseline
 mise run test:unit    # Fast source-adjacent tests; no VMs or external services
 mise run test:non-vm  # Unit/script + CLI + image + gateway tests; Docker only
-mise run test:image   # Build + offline image smoke tests; Docker only, no VMs
+mise run test:image   # Build and smoke-test the base and all agent images; Docker only
 mise run test:gateway # Real PostgreSQL/LiteLLM stack; no VMs or provider credentials
 mise run test:prepare # Prepare changed images only when image inputs change
-mise run test        # Prepare changed images, then run the full test suite
+mise run test        # Prepare changed images, then run the full suite including image tests
 mise run test:live   # Real VM prompt via gateway; requires persisted provider auth
 ```
 
-Image preparation tracks both Dockerfiles and the base `.dockerignore`.
+Image preparation tracks the Dockerfiles and the root `.dockerignore`.
 Unchanged builds and imports are skipped; tests always run. After deleting
 Docker or Microsandbox images, run `mise run --force test:prepare` to prepare them again.
 
@@ -26,7 +26,8 @@ split into `tests/cli` (no Microsandbox), `tests/image` (Docker),
 `tests/gateway` (real Docker Compose gateway), and `tests/vm`
 (Microsandbox). PR checks run linting, build the launcher, check module consistency,
 compile all tests including the `live` tag, and run `test:non-vm` with race detection.
-Renovate automerges dependency updates, including majors, after checks pass;
+Renovate tracks the stable version pins for all three coding agents and
+automerges dependency updates, including majors, after checks pass;
 the Microsandbox SDK is excluded because it must be upgraded with its runtime.
 
 Gateway integration tests start the built CLI with the bundled Compose files,

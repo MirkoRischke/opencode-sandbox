@@ -39,7 +39,7 @@ Set `OPENCODE_DB` **in the guest** to point OpenCode at the mounted directory.
 For example, save this as `Dockerfile.opencode-state`:
 
 ```dockerfile
-FROM opencode-sandbox:base
+FROM opencode-sandbox:opencode
 ENV OPENCODE_DB=/var/lib/opencode-sandbox/opencode/opencode.db
 ```
 

@@ -280,7 +280,7 @@ are excluded. Removal deletes guest-local state, not mounted host directories.
 
 ```toml
 [vm]
-image = "opencode-sandbox:base"
+image = "opencode-sandbox:opencode"
 cpus = 2
 memory_mib = 2048
 root_disk_mib = 4096
@@ -299,7 +299,7 @@ recreate them to apply changes.
 ### Custom VM images
 
 Set `vm.image` in global `config.toml` or workspace `.opencode-sandbox.toml` to select
-your own image. It defaults to `opencode-sandbox:base` and must not be empty.
+your own image. It defaults to `opencode-sandbox:opencode` and must not be empty.
 Docker must be available on the host. For fresh VMs and snapshot preparation, the
 launcher uses the image in your local Docker store whenever present; otherwise it
 runs `docker pull`, using your Docker context and registry credentials. Registry
@@ -331,8 +331,10 @@ Existing VMs resume from their persistent disks without resolving the image.
 Snapshot restores likewise use the captured image. Recreate the VM and, when used,
 the snapshot baseline to adopt a changed image.
 
-The supplied `opencode-sandbox:base` image is a base for your own images. Extend it
-with `FROM opencode-sandbox:base`. Custom images need Bash, Git, and mise on
+Build the shared, agent-free image with `mise run build:base` and extend it with
+`FROM opencode-sandbox:base`, or extend one of the
+[agent images](../features/startup.md) if you want a preinstalled agent.
+Custom images need Bash, Git, and mise on
 `PATH`, the [configured startup executable](../features/startup.md), and a
 working system CA trust store for Microsandbox's TLS inspection.
 GitHub credential integration additionally requires `gh`; AWS integration requires

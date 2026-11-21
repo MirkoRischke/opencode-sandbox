@@ -6,14 +6,14 @@ hadolint = "2.15.1"
 microsandbox = "0.7.15"
 
 [env]
-SANDBOX_BASE_IMAGE = "{{ read_file(path='internal/config/default-image.txt') | trim }}"
+SANDBOX_DEFAULT_IMAGE = "{{ read_file(path='internal/config/default-image.txt') | trim }}"
 
 [task_config]
 includes = ["llm-gateway/tasks.toml"]
 
 [tasks.lint]
-description = "Lint Go code and the Dockerfile"
-run = ["golangci-lint run --build-tags live ./...", "hadolint Dockerfile"]
+description = "Lint Go code and the Dockerfiles"
+run = ["golangci-lint run --build-tags live ./...", "hadolint Dockerfile images/*/Dockerfile"]
 
 [tasks.verify]
 description = "Run linting and the standard test suite"
@@ -48,18 +48,40 @@ flag "--dotfiles <path>" default="../dotfiles"
 '''
 run = 'go run ./scripts/upgrade-microsandbox --dotfiles "${usage_dotfiles?}" "${usage_version?}"'
 
-[tasks.build]
-description = "Build the sandbox base image"
-sources = ["Dockerfile", ".dockerignore", "internal/config/default-image.txt"]
+[tasks."build:base"]
+description = "Build the shared image without a coding agent"
+sources = ["Dockerfile", ".dockerignore"]
 outputs = { auto = true }
-run = 'docker build -t "$SANDBOX_BASE_IMAGE" .'
+run = "docker build -t opencode-sandbox:base ."
+
+[tasks."build:opencode"]
+alias = "build"
+description = "Build the default OpenCode image"
+depends = ["build:base"]
+sources = ["images/opencode/Dockerfile", "internal/config/default-image.txt"]
+outputs = { auto = true }
+run = 'docker build --pull=false -f images/opencode/Dockerfile -t "$SANDBOX_DEFAULT_IMAGE" .'
+
+[tasks."build:codex"]
+description = "Build the Codex image"
+depends = ["build:base"]
+sources = ["images/codex/Dockerfile"]
+outputs = { auto = true }
+run = "docker build --pull=false -f images/codex/Dockerfile -t opencode-sandbox:codex ."
+
+[tasks."build:copilot"]
+description = "Build the GitHub Copilot CLI image"
+depends = ["build:base"]
+sources = ["images/copilot/Dockerfile"]
+outputs = { auto = true }
+run = "docker build --pull=false -f images/copilot/Dockerfile -t opencode-sandbox:copilot ."
 
 [tasks.load]
-description = "Build and import the image into Microsandbox"
-depends = ["build"]
-sources = ["Dockerfile", ".dockerignore", "internal/config/default-image.txt"]
+description = "Build and import the default OpenCode image into Microsandbox"
+depends = ["build:opencode"]
+sources = ["images/opencode/Dockerfile", "internal/config/default-image.txt"]
 outputs = { auto = true }
-run = "bash -o pipefail -c 'docker save \"$SANDBOX_BASE_IMAGE\" | msb load'"
+run = "bash -o pipefail -c 'docker save \"$SANDBOX_DEFAULT_IMAGE\" | msb load'"
 
 [tasks."test:prepare"]
 description = "Prepare test images when their inputs change"
@@ -67,7 +89,7 @@ depends = ["load"]
 sources = ["tests/fixtures/custom-image/Dockerfile", "internal/config/default-image.txt"]
 outputs = { auto = true }
 run = [
-  'docker build --pull=false --build-arg "BASE_IMAGE=$SANDBOX_BASE_IMAGE" -t opencode-sandbox:test-custom tests/fixtures/custom-image',
+  'docker build --pull=false --build-arg "BASE_IMAGE=$SANDBOX_DEFAULT_IMAGE" -t opencode-sandbox:test-custom tests/fixtures/custom-image',
   "bash -o pipefail -c 'docker save opencode-sandbox:test-custom | msb load'",
 ]
 
@@ -77,7 +99,7 @@ run = "go test -count=1 -timeout 10s ./internal/... ./llm-gateway ./scripts/..."
 
 [tasks."test:non-vm"]
 description = "Run all tests without Microsandbox or host credentials; Docker required"
-depends = ["build"]
+depends = ["build:opencode", "build:codex", "build:copilot"]
 run = [
   "mkdir -p /tmp/opencode",
   "go test -race -count=1 -v -timeout 5m ./internal/... ./llm-gateway ./scripts/... ./tests/cli ./tests/image ./tests/gateway",
@@ -88,13 +110,13 @@ description = "Test the real gateway stack without VMs or provider credentials; 
 run = "go test -race -count=1 -v -timeout 5m ./tests/gateway"
 
 [tasks."test:image"]
-description = "Build and smoke-test the Docker image without VMs or credentials"
-depends = ["build"]
+description = "Build and smoke-test the base and agent images without VMs or credentials"
+depends = ["build:opencode", "build:codex", "build:copilot"]
 run = "go test -count=1 -v -timeout 2m ./tests/image"
 
 [tasks.test]
 description = "Prepare changed images and run the test suite"
-depends = ["test:prepare"]
+depends = ["test:prepare", "build:codex", "build:copilot"]
 run = "go test -count=1 -v -parallel 4 -timeout 10m ./..."
 
 [tasks."test:live"]
