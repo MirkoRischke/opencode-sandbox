@@ -2,6 +2,9 @@ module opencode-sandbox
 
 go 1.27.2
 
+// The Node-based evals can contain Go templates from npm dependencies.
+ignore ./evals
+
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/aws/aws-sdk-go-v2 v1.48.0
