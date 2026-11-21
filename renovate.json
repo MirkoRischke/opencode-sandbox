@@ -23,6 +23,14 @@
       "matchManagers": ["mise"],
       "matchDepNames": ["microsandbox"],
       "enabled": false
+    },
+    {
+      "description": "Require manual PostgreSQL major upgrades for the gateway database",
+      "matchManagers": ["docker-compose"],
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["postgres"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
     }
   ],
   "automerge": true,
