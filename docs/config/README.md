@@ -333,9 +333,9 @@ the snapshot baseline to adopt a changed image.
 
 Build the shared, agent-free image with `mise run build:base` and extend it with
 `FROM opencode-sandbox:base`, or extend one of the
-[agent images](../features/startup.md) if you want a preinstalled agent.
+[agent images](../features/coding-agents.md) if you want a preinstalled agent.
 Custom images need Bash, Git, and mise on
-`PATH`, the [configured startup executable](../features/startup.md), and a
+`PATH`, the [configured startup executable](../features/coding-agents.md), and a
 working system CA trust store for Microsandbox's TLS inspection.
 GitHub credential integration additionally requires `gh`; AWS integration requires
 the AWS CLI. Docker is optional: images without `dockerd` skip daemon startup.
@@ -351,7 +351,7 @@ This is the default. `command` replaces the inherited argument list and
 must name a guest executable. The command runs when opening the terminal, not
 during snapshot preparation. It exits into interactive Bash.
 
-See [using another coding agent](../features/startup.md) for an example.
+See [using another coding agent](../features/coding-agents.md) for an example.
 
 ### Workspace snapshots
 

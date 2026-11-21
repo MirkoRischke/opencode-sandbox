@@ -24,30 +24,22 @@ global list; use `state = []` to clear inherited entries.
 
 ## Example: keep OpenCode sessions
 
-Add this to `.opencode-sandbox.toml` (merge `image` into `[vm]` if it already exists):
+Add the state mapping and set the startup command in `.opencode-sandbox.toml`.
+If you already have a `[startup]` section, replace its `command`:
 
 ```toml
-[vm]
-image = "opencode-sandbox:opencode-state"
+[startup]
+command = ["env", "OPENCODE_DB=/var/lib/opencode-sandbox/opencode/opencode.db", "opencode"]
 
 [[state]]
 name = "opencode-sessions"
 target = "/var/lib/opencode-sandbox/opencode"
 ```
 
-Set `OPENCODE_DB` **in the guest** to point OpenCode at the mounted directory.
-For example, save this as `Dockerfile.opencode-state`:
-
-```dockerfile
-FROM opencode-sandbox:opencode
-ENV OPENCODE_DB=/var/lib/opencode-sandbox/opencode/opencode.db
-```
-
-Build the [custom image](../config/README.md#custom-vm-images) and recreate the VM:
+The startup command sets `OPENCODE_DB` in the guest without a custom image.
+If the workspace already has a VM, recreate it to apply the state mapping:
 
 ```sh
-docker build -t opencode-sandbox:opencode-state -f Dockerfile.opencode-state .
-opencode-sandbox snapshot create
 opencode-sandbox remove
 opencode-sandbox
 ```

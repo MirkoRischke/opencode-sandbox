@@ -1,6 +1,6 @@
 # Features
 
-- **[Works with any coding agent](startup.md):** launch an agent already
+- **[Works with any coding agent](coding-agents.md):** launch an agent already
   installed in the VM image. OpenCode remains the default.
 - **Per-directory environments:** each directory, including Git worktrees, gets
   its own VM so parallel tasks can use separate dependencies and the same guest

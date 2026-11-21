@@ -11,7 +11,7 @@ This is an independent project, not built by or affiliated with the OpenCode tea
 > - I might introduce breaking changes at any time without advance notice. I do not follow semantic versioning.
 > - I do not provide support or accept feature requests, bug reports, or pull requests. If something is missing or does not work as you need, please fork the project and adapt it yourself.
 
-Run OpenCode (or [another coding agent](docs/features/startup.md)) in an isolated
+Run OpenCode (or [another coding agent](docs/features/coding-agents.md)) in an isolated
 VM for your current directory. [Microsandbox](https://microsandbox.dev) powers
 the VM to reduce the risk of damaging files or accessing sensitive information
 on your host.
