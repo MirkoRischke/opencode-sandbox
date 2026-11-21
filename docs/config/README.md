@@ -78,8 +78,8 @@ global additions, not append to them. Keep your shared baseline in global
 substitution scope.
 
 Before a new or changed workspace config is used, an interactive launch shows its
-contents and the effective settings, and asks for approval (default: no).
-Credential values are not read during this review. Approval authorizes all
+path and asks for approval (default: no). Review the file in your editor before
+approving. Credential values are not read before approval. Approval authorizes all
 settings, including host credential files and substitution destinations.
 Unapproved configs fail in non-interactive launches. Invalid configs fail before
 approval. An absent workspace config needs no approval.
@@ -93,7 +93,7 @@ aliases of the same directory share approval. The directory uses mode `700`, the
 file mode `600`, and writes replace the file atomically. Malformed trust storage
 fails launch. Delete a workspace's entry (or the trust file) to require approval again.
 
-The launcher uses the same bytes it reviewed, even if the file changes while the
+The launcher uses the config bytes it loaded before prompting, even if the file changes while the
 prompt is open. Approval is checked before loading credentials or starting the VM,
 including when resuming an existing VM. Existing VM policies and credentials still
 require recreation to change, as described below.

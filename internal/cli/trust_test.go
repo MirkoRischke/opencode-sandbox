@@ -17,7 +17,7 @@ func TestConfirmWorkspaceConfigAcceptsExplicitApproval(t *testing.T) {
 	for _, answer := range []string{"y\n", "yes\n", "YES\n"} {
 		t.Run(answer, func(t *testing.T) {
 			t.Parallel()
-			err := confirmWorkspaceConfig(strings.NewReader(answer), &bytes.Buffer{}, "/repo/.opencode-sandbox.toml", nil, launcherconfig.DefaultSettings())
+			err := confirmWorkspaceConfig(strings.NewReader(answer), &bytes.Buffer{}, "/repo/.opencode-sandbox.toml")
 			require.NoError(t, err)
 		})
 	}
@@ -28,27 +28,19 @@ func TestConfirmWorkspaceConfigRejectsMissingApproval(t *testing.T) {
 	for _, answer := range []string{"n\n", "\n", "", "yes"} {
 		t.Run(answer, func(t *testing.T) {
 			t.Parallel()
-			err := confirmWorkspaceConfig(strings.NewReader(answer), &bytes.Buffer{}, "/repo/.opencode-sandbox.toml", nil, launcherconfig.DefaultSettings())
+			err := confirmWorkspaceConfig(strings.NewReader(answer), &bytes.Buffer{}, "/repo/.opencode-sandbox.toml")
 			require.Error(t, err)
 		})
 	}
 }
 
-func TestWorkspaceApprovalShowsCredentialAccessWithoutTerminalEscapes(t *testing.T) {
+func TestWorkspaceApprovalShowsOnlyQuotedPathAndPrompt(t *testing.T) {
 	t.Parallel()
-	settings := launcherconfig.DefaultSettings()
-	settings.Secrets = map[string]launcherconfig.SecretSettings{"github": {
-		Source: launcherconfig.SecretSourceSettings{File: "creds/token"}, Guest: launcherconfig.SecretGuestSettings{Env: "GH_TOKEN"}, AllowedHosts: []string{"api.github.com"}, Headers: []string{"authorization"},
-	}}
 	var output bytes.Buffer
-	err := confirmWorkspaceConfig(strings.NewReader("yes\n"), &output, "/repo/.opencode-sandbox.toml", []byte("# override\n\x1b[2J\n"), settings)
+	err := confirmWorkspaceConfig(strings.NewReader("yes\n"), &output, "/repo\x1b[2J/.opencode-sandbox.toml")
 	require.NoError(t, err)
-	require.Contains(t, output.String(), "# override")
-	require.Contains(t, output.String(), "api.github.com")
-	require.Contains(t, output.String(), "creds/token")
-	require.Contains(t, output.String(), "host credential access")
-	require.Contains(t, output.String(), "\\x1b")
-	require.NotContains(t, output.String(), "\x1b")
+	require.Equal(t, "Workspace config is new or changed: \"/repo\\x1b[2J/.opencode-sandbox.toml\"\n"+
+		"Trust this config? [y/N] ", output.String())
 }
 
 //nolint:paralleltest // Replaces process-wide os.Stdin to exercise the real approval entry point; concurrent stdin users would observe the test pipe.
