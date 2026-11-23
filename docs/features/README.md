@@ -12,6 +12,8 @@
   copy them into writable guest storage.
 - [Sandbox instructions](sandbox-instructions.md): tell your agent about its
   workspace and network restrictions.
+- [Shell completion](shell-completion.md): use Tab to discover launcher commands
+  and flags.
 
 ## Images and storage
 

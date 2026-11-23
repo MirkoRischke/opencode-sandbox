@@ -65,25 +65,6 @@ For more commands and examples, see [configuration](docs/config/README.md),
 [proxied secrets](docs/features/secrets.md), [diagnostics](docs/features/diagnostics.md),
 [snapshots](docs/features/snapshots.md), and [resource cleanup](docs/features/cleanup.md).
 
-### Shell completion
-
-Cobra provides completion scripts for Bash, Zsh, Fish, and PowerShell. Run
-`opencode-sandbox completion <shell> --help` for installation instructions.
-
-For Zsh, add this after completion initialization (`compinit`) in `~/.zshrc`:
-
-```zsh
-source <(opencode-sandbox completion zsh)
-```
-
-Zsh normally also completes a simple alias such as `alias ocs=opencode-sandbox`.
-For Bash, add this to `~/.bashrc` after loading bash-completion and defining the alias:
-
-```bash
-source <(opencode-sandbox completion bash)
-complete -o default -F __start_opencode-sandbox ocs
-```
-
 ## Limitations
 
 See the [known limitations](docs/limitations/README.md).
