@@ -26,6 +26,16 @@ the problems that led to this tool.
 
 Read the [accepted risks](docs/risks.md) before using this tool.
 
+## Quickstart
+
+1. Install [mise](https://mise.jdx.dev) and [Docker with Compose](https://docs.docker.com/compose/install/). Start Docker.
+2. Clone this repo and run `mise install`, `mise run install`, and `mise run build` from the checkout.
+3. Make sure `~/.local/bin` and `msb` are on `PATH` outside the checkout. With [mise activated](https://mise.jdx.dev/shell-setup.html), run `mise use --global microsandbox` (see [mise.toml](mise.toml) for the pinned version).
+4. Add a model to this tool’s [host LLM gateway (LiteLLM)](llm-gateway/README.md#optional-model-configuration).
+5. Authenticate the gateway with your chosen provider: `opencode-sandbox gateway authenticate` for ChatGPT, `opencode-sandbox gateway authenticate copilot` for GitHub Copilot, or see [LiteLLM’s docs for other providers](https://docs.litellm.ai/docs/providers).
+6. [Configure OpenCode and map its config into the VM](docs/features/llm-gateway.md#configure-opencode).
+7. Run `opencode-sandbox` from your project directory.
+
 ## Features
 
 See the [feature overview](docs/features/README.md).
@@ -51,23 +61,6 @@ On launch, the host launcher:
 
 **The agent runs inside the guest**, alongside its tools and commands—not on the
 host. Exiting Bash stops the VM without deleting its persistent disk.
-
-## Prerequisites
-
-- [mise](https://mise.jdx.dev) — manages the pinned development tools and setup tasks.
-- [Docker](https://www.docker.com) — with its daemon running, to build and import sandbox images.
-- [Microsandbox](https://microsandbox.dev) (`msb`) — required on `PATH` when running `opencode-sandbox`,
-  including outside this repository. Use the version pinned in [mise.toml](mise.toml).
-
-## Setup
-
-Run from this repository:
-
-```sh
-mise install
-mise run install # Install the launcher to ~/.local/bin
-mise run build   # Build the default OpenCode image; imported automatically on first use
-```
 
 ## Usage
 
@@ -146,17 +139,6 @@ complete -o default -F __start_opencode-sandbox ocs
 See the [known limitations](docs/limitations/README.md).
 
 ## Development
-
-The launcher starts the shared host LLM gateway automatically before VM
-preparation and provisions a dedicated key per worktree/VM. Docker Compose is
-required. Configure gateway models, authenticate once with
-`opencode-sandbox gateway authenticate`, then configure your OpenCode provider using the
-[gateway guide](llm-gateway/README.md). Host TCP port 4000 is allowed by default.
-
-Use `opencode-sandbox gateway start` to start it explicitly. The gateway stays
-running after sandbox exit and is shared by all sandboxes.
-Stop it with `opencode-sandbox gateway stop`; credentials and data are preserved,
-and the next sandbox launch starts it again.
 
 See the [development guide](docs/development/README.md) for testing, quality checks,
 and upgrading Microsandbox.
