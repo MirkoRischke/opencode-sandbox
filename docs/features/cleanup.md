@@ -1,31 +1,47 @@
 # Resource cleanup
 
+Free disk space or reset an environment without deleting your project files.
+Choose how much to remove:
+
+1. [List and remove VMs](#list-and-remove-vms)
+2. [Remove just the prepared baseline](#remove-a-baseline)
+3. [Prune workspace resources](#prune-workspace-resources)
+
+## List and remove VMs
+
+- Run `opencode-sandbox list` to see managed VMs, including stopped ones.
+- Run `opencode-sandbox remove` from the workspace to delete its VM
+  **without confirmation**. Use this when you need a fresh VM but want to
+  keep the snapshot and host-backed state.
+- `opencode-sandbox remove --all` deletes **all** managed VMs without
+  confirmation.
+
+## Remove a baseline
+
+Use `opencode-sandbox snapshot remove` to delete just the prepared baseline.
+It doesn't change existing VMs. Next time a new VM needs a baseline, it will
+prepare one again. See [snapshot commands](snapshots.md#list-and-remove-snapshots)
+for listing or removing baselines across workspaces.
+
+## Prune workspace resources
+
+Prune removes more than the VM, including saved state and logs. Start with
+a preview:
+
 ```sh
-opencode-sandbox prune           # Current directory/worktree
-opencode-sandbox prune --repo    # Repo and its other worktrees
-opencode-sandbox prune --all     # All managed workspaces, plus ALL MSB images/caches
+opencode-sandbox prune --dry-run   # Preview (works with any scope)
+opencode-sandbox prune            # Current directory or worktree
+opencode-sandbox prune --repo     # Whole repo and its tracked worktrees
+opencode-sandbox prune --all      # All workspaces AND Microsandbox images/caches
 ```
 
-Deletes workspace VMs, snapshots, configured persistent workspace state, host
-logs, diagnostics, and workspace ownership records. Running target
-VMs are forcibly stopped and removed; no activity or age filters apply.
-Default worktree cleanup preserves snapshot baselines. `--repo` also removes the
-shared repository baseline; `--all` removes all managed baselines. Explicit
-`snapshot remove` from any linked worktree removes its shared baseline without
-removing existing VMs.
+Prune stops and deletes target VMs. It keeps your workspace files, config,
+credentials, gateway, and host Docker resources. It keeps the baseline unless
+you use `--repo` or `--all`.
 
-Targets are shown before confirmation. `--yes` (`-y`) skips confirmation;
-`--dry-run` previews without deleting. `--repo` and `--all` are mutually exclusive.
-`--repo` requires a checkout/worktree root. Ownership is recorded on launch and
-snapshot creation, allowing repo cleanup after a tracked worktree is deleted.
-
-`--all` force-removes **every cached MSB image**, including those referenced by
-unrelated MSB sandboxes, and requests machine-wide runtime cache pruning. MSB may
-retain owned cache files; these are reported as incomplete cleanup. Stable lock
-files are retained. Forced image removal untags images, but MSB preserves backing
-still owned by unrelated sandboxes/snapshots. See
-[MSB-11](../limitations/microsandbox.md#msb-11--cache-cleanup-retains-owned-backing).
-
-Workspace source files, configuration, credentials, the gateway, and Docker
-resources are preserved. If VM/snapshot deletion fails, host data and ownership
-records are retained for retry; other runtime targets are still attempted.
+- `--repo` needs a checkout or worktree root. It also removes the shared
+  baseline and resources from tracked worktrees you've deleted.
+- `--all` also removes all managed baselines, **all cached Microsandbox
+  images**, and runtime caches. This affects images and caches unrelated to
+  this tool. [Some files may be retained](../limitations/microsandbox.md#msb-11--cache-cleanup-retains-owned-backing).
+- Review the targets before confirming. Use `--yes` only to skip confirmation.

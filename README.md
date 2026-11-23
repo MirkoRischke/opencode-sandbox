@@ -31,8 +31,8 @@ Read the [accepted risks](docs/risks.md) before using this tool.
 1. Install [mise](https://mise.jdx.dev) and [Docker with Compose](https://docs.docker.com/compose/install/). Start Docker.
 2. Clone this repo and run `mise install`, `mise run install`, and `mise run build` from the checkout.
 3. Make sure `~/.local/bin` and `msb` are on `PATH` outside the checkout. With [mise activated](https://mise.jdx.dev/shell-setup.html), run `mise use --global microsandbox` (see [mise.toml](mise.toml) for the pinned version).
-4. Add a model to this tool’s [host LLM gateway (LiteLLM)](llm-gateway/README.md#optional-model-configuration).
-5. Authenticate the gateway with your chosen provider: `opencode-sandbox gateway authenticate` for ChatGPT, `opencode-sandbox gateway authenticate copilot` for GitHub Copilot, or see [LiteLLM’s docs for other providers](https://docs.litellm.ai/docs/providers).
+4. [Add a model](docs/features/llm-gateway.md#add-a-model) to the host LLM gateway.
+5. [Authenticate with your provider](docs/features/llm-gateway.md#authenticate-on-the-host).
 6. [Configure OpenCode and map its config into the VM](docs/features/llm-gateway.md#configure-opencode).
 7. Run `opencode-sandbox` from your project directory.
 
@@ -42,78 +42,28 @@ See the [feature overview](docs/features/README.md).
 
 ## How it works
 
-The custom Debian image comes with pre-installed tools (see
-[Dockerfile](Dockerfile)). Docker builds the image; Microsandbox runs it as a VM.
-
-On launch, the host launcher:
-
-1. Creates or resumes a dedicated VM for the exact current directory, mounting it
-   and any required Git metadata when it is a checkout or linked worktree root.
-   Parent repositories/configuration are never discovered. Changes are immediately
-   visible on the host—no syncing or copying needed. Drive roots, home directories,
-   and common broad/system directories are rejected; use a project subdirectory.
-2. If neither VM nor baseline exists, prepares a fresh snapshot with `mise install`
-   (when configured) and the optional snapshot command, then restores the VM from it.
-   Existing VMs are reused; otherwise the saved baseline is restored. Snapshot
-   preparation has public internet access; restored VMs enforce your network policy.
-3. Runs the startup command (OpenCode by default) inside the VM and attaches your
-   terminal to it. When it exits, you land in interactive Bash.
-
-**The agent runs inside the guest**, alongside its tools and commands—not on the
-host. Exiting Bash stops the VM without deleting its persistent disk.
+Docker builds the image and Microsandbox runs it. The launcher resumes a
+[workspace VM](docs/features/workspaces.md) or restores one from a
+[prepared snapshot](docs/features/snapshots.md). **The agent and its tools run
+inside the guest**, while edits to the mounted workspace appear on the host.
 
 ## Usage
 
 ```sh
-opencode-sandbox        # Launch for the exact current directory (Git optional)
-opencode-sandbox list   # List managed VMs (alias: ls)
-opencode-sandbox remove # Delete this directory's VM without confirmation (alias: rm)
-opencode-sandbox remove --all # Delete ALL managed VMs without confirmation
-opencode-sandbox prune --dry-run # Preview deletion of this worktree's resources
-opencode-sandbox prune # Delete this worktree's VMs, persistent state, logs, and diagnostics; keep snapshots
-opencode-sandbox prune --repo # Include this repo's other worktrees and shared snapshot, including deleted worktrees
-opencode-sandbox prune --all # All managed workspaces AND ALL machine-wide MSB images/runtime caches
-opencode-sandbox --help # Show launch options
-opencode-sandbox config default # Print documented launcher defaults
-opencode-sandbox config validate # Check global and current-directory config without launching or approving it
-opencode-sandbox secret set github # Store/replace a keyring secret (hidden input; config unchanged)
-opencode-sandbox secret remove github # Remove its keyring entry after confirmation (alias: rm)
-opencode-sandbox secret list # List account names in the opencode-sandbox keyring namespace (alias: ls)
-opencode-sandbox diagnostics network # Print saved network diagnostics JSON for this directory
-opencode-sandbox diagnostics logs # Print this workspace's host log directory
-opencode-sandbox snapshot create # Prepare a fresh VM and replace the shared repository baseline
-opencode-sandbox snapshot list   # List all snapshots; current directory gets its own section
-opencode-sandbox snapshot remove # Delete the shared repository baseline, leaving VMs untouched
-opencode-sandbox snapshot remove --all # Delete ALL managed snapshots without confirmation
+opencode-sandbox                   # Launch for the current directory (Git optional)
+opencode-sandbox --help            # Show launch options and commands
+opencode-sandbox config default    # Print documented launcher defaults
+opencode-sandbox config validate   # Validate without launching or approving
+opencode-sandbox diagnostics logs  # Find this workspace's launcher logs
+opencode-sandbox snapshot create   # Rebuild the prepared baseline
+opencode-sandbox list              # List managed VMs
+opencode-sandbox remove            # Delete this workspace's VM without confirmation
+opencode-sandbox prune --dry-run   # Preview broader workspace cleanup
 ```
 
-Configure network access and secrets in [launcher configuration](docs/config/README.md).
-New VMs use a built-in development-service allowlist by default. See also
-[GitHub access](docs/features/github.md) and [AWS credentials](docs/features/aws.md).
-Custom local Docker images and registry images are supported through
-[`vm.image`](docs/config/README.md#custom-vm-images); Docker is required on the host.
-
-### Prepared workspace snapshots
-
-Optionally define an additional preparation command in the directory's `.opencode-sandbox.toml`:
-
-```toml
-[snapshot]
-command = "./scripts/sandbox-prepare.sh"
-```
-
-The first launch automatically prepares a baseline, including installed mise tools
-and Docker images. No custom command is required. Provisioning never runs on normal
-launches or restores. After provisioning configuration changes, run
-`opencode-sandbox snapshot create` to rebuild, then `opencode-sandbox remove` to
-recreate the workspace VM on the next launch. Baselines are not auto-invalidated.
-
-Each canonical directory has its own VM. A Git checkout and its linked worktrees
-share one baseline; independent clones, non-Git directories, and repository
-subdirectories remain separate. Symlink aliases share identity. The first
-preparation uses the launching worktree's configuration; refresh explicitly when needed.
-
-See [snapshot configuration and limitations](docs/config/README.md#workspace-snapshots).
+For more commands and examples, see [configuration](docs/config/README.md),
+[proxied secrets](docs/features/secrets.md), [diagnostics](docs/features/diagnostics.md),
+[snapshots](docs/features/snapshots.md), and [resource cleanup](docs/features/cleanup.md).
 
 ### Shell completion
 

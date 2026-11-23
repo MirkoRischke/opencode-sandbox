@@ -233,7 +233,7 @@ resets can be silent. Runtime debug logging includes unrelated records, with no
 network-only verbosity filter or pre-disk Go log interception used by this project.
 The saved network overview therefore cannot prove that no denied attempts occurred.
 
-- Evidence: [network diagnostics documentation](../config/README.md#network-diagnostics),
+- Evidence: [network diagnostics documentation](../features/diagnostics.md#network-denials),
   `internal/sandbox/diagnostics.go`, `tests/vm/network_diagnostics_test.go`.
 - Upgrade check: exercise DNS, TCP, TLS, and protected-destination denials; inspect
   event completeness and any new structured or scoped logging API.
@@ -255,7 +255,7 @@ Allowing public IP destinations does not guarantee direct-IP HTTPS works while
 verified TLS inspection is enabled. Network admission and TLS compatibility are
 separate concerns.
 
-- Evidence: [unrestricted networking documentation](../config/README.md#network-policy).
+- Evidence: [unrestricted networking documentation](../features/networking.md#unrestricted-public-internet).
 - Upgrade check: use a controlled endpoint with a valid IP-SAN certificate and
   compare direct-IP versus hostname HTTPS without disabling verification.
 

@@ -1,12 +1,13 @@
 # GitHub access in the sandbox
 
-Install `gh` by rebuilding/importing the image (`mise run load`), then reinstall
-the launcher (`mise run install`). Existing VMs created without GitHub support
-must be removed and recreated; secret configuration applies only at VM creation.
-Removing a VM deletes its guest-local state, not its
-mounted host worktree.
+Use `gh` and HTTPS Git to work with private repositories without putting
+your GitHub token inside the VM. The supplied images include `gh`. If you
+bring a [custom image](vm-images.md), install `gh` in it first.
 
-## Host credential
+1. [Configure a token](#configure-a-token)
+2. [Use GitHub inside the VM](#use-github-inside-the-vm)
+
+## Configure a token
 
 Save a dedicated **fine-grained, read-only** GitHub personal access token as:
 
@@ -14,10 +15,9 @@ Save a dedicated **fine-grained, read-only** GitHub personal access token as:
 ~/.config/opencode-sandbox/creds/github-token
 ```
 
-`XDG_CONFIG_HOME` is respected. The file contains only the token, with an optional
-trailing newline. Use directory mode `700` and file mode `600`; the launcher
-rejects group/other access and symlinked credential directories or files. Add this
-explicit entry to `config.toml`; the file is never read without it:
+Use your configured `XDG_CONFIG_HOME` if set. Follow the
+[credential file rules](secrets.md#use-a-credential-file) and add this entry
+to `config.toml`. Your host `gh` login is not used.
 
 ```toml
 [secrets.github]
@@ -27,30 +27,20 @@ allowed_hosts = ["github.com", "api.github.com"]
 headers = ["authorization"]
 ```
 
-Both hosts must also be allowed by `[network].allowed_hosts`. A configured file
-that is missing or invalid fails launch. Host `gh` credentials are never used.
+Both hosts must also be allowed by the [network policy](networking.md). To
+store the token in the OS keyring instead, use the
+[keyring setup](secrets.md#use-the-os-keyring) with the `github` secret name.
 
 Select only the required repositories and grant read-only Contents, Issues, and
 Pull requests permissions. GitHub enforces read-only access: the launcher does
 not verify or reduce the token's authority. Organization approval may be needed.
 
-## Guest behavior
+## Use GitHub inside the VM
 
-- `gh` uses a placeholder in `GH_TOKEN`, not the real token.
-- With the configuration above, preparation and restored workspace VMs restrict replacement to Authorization
-  headers sent to exactly `api.github.com` or `github.com`, over verified intercepted TLS.
-- The guest GitHub CLI credential helper authenticates **HTTPS** clone/fetch.
-  SSH remotes are not converted or supported by this token mechanism.
-- No host credential directory, keychain, or SSH agent is mounted.
+- Run `gh` as usual. It uses the placeholder in `GH_TOKEN`.
+- Use HTTPS URLs for Git clone or fetch. An SSH remote won't use this token.
+- Recreate the VM after enabling or changing the token. For immediate
+  revocation, revoke it on GitHub.
 
-Microsandbox **persists the real token in host-side VM configuration**. This is
-an accepted tradeoff for the trusted, single-user host; the value is not put in
-guest configuration or files. An allowed upstream receives the real credential;
-substitution does not guarantee an upstream can never reflect it back.
-
-Credentials are fixed for the lifetime of a VM. Changing or deleting the host
-file does not change existing VMs, even after stopping and resuming them. A missing
-file still fails launch while its entry remains configured. Removing the entry
-allows launch but does not revoke a credential already stored in an existing VM.
-Recreate a VM to use a different token or remove its stored credential. To
-revoke access immediately, revoke the token on GitHub.
+See [secret rotation](secrets.md#rotate-or-revoke-a-credential) for why
+removing a source doesn't revoke a token in use.

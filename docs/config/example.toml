@@ -1,10 +1,6 @@
 # Location: ~/.config/opencode-sandbox/config.toml
 # XDG_CONFIG_HOME overrides ~/.config.
-# Unless unrestricted is enabled: DNS hosts/suffixes, HTTPS/WSS on TCP 443 only.
-# Network: example.com matches exactly; .example.com includes all subdomains and the base.
-# Secrets: example.com matches exactly; *.example.com includes all subdomains and the base.
-# VM settings apply on creation. Logging settings apply on each invocation.
-# Missing configuration uses the built-in host allowlist; invalid configuration fails.
+# See docs/config/README.md for config loading, examples, and feature guides.
 
 # Optional host file/directory mappings. Nothing is shared implicitly.
 # Sources must exist. ~/ means the host home; relative paths use this config's directory.
@@ -26,8 +22,6 @@
 # source = "~/.config/opencode/cli.json"
 # target = "/root/.config/opencode/cli.json"
 #
-# Copies refresh on creation and snapshot restore, not ordinary resume.
-# Directories merge into the exact target, preserving destination-only files.
 # [[files]]
 # source = "~/.config/opencode-sandbox/gitconfig"
 # target = "/root/.gitconfig"
@@ -43,7 +37,7 @@ guest.env = "GH_TOKEN"
 allowed_hosts = ["github.com", "api.github.com"]
 headers = ["authorization"]
 
-# The launcher manages the LLM gateway key. See llm-gateway/README.md for
+# The launcher manages the LLM gateway key. See docs/features/llm-gateway.md for
 # OpenCode provider configuration.
 
 # Optional AWS role; launch flags can override each setting.
@@ -75,13 +69,9 @@ command = ["opencode"]
 # command = "./scripts/sandbox-prepare.sh"
 
 [network]
-# Allow any public destination/port/protocol, ignoring both host lists.
-# Protected destinations remain blocked, except explicitly allowed VM-to-host ports.
-# Secret substitution scopes are unchanged.
+# See docs/features/networking.md for policy and host pattern syntax.
 unrestricted = false
-# Best-effort cumulative denied-target summary per worktree. Also enables all
-# Microsandbox runtime debug logs (rotating, about 40 MiB) and HTTP 403 denial
-# responses instead of resets where supported. Recreate VM on change.
+# Also enables runtime debug logs; see docs/features/diagnostics.md.
 diagnostics = false
 allowed_hosts = [
   # OpenCode model catalog.
@@ -133,17 +123,6 @@ ports = [4000] # [] denies all host services; [4000, 5432] also allows PostgreSQ
 # Both lists use replacement semantics across configs; their union is allowed.
 # Set both allowed_hosts and additional_allowed_hosts to [] to deny all internet.
 
-# Scope / limits:
-# - Snapshot preparation has public internet access for tool/dependency/image downloads.
-# - Runtime package installs and container pulls need explicit project allowances.
-# - Other projects, LSP downloads, Git LFS, and Actions logs can need extra hosts.
-# - Building/importing the sandbox image on the host is outside this policy.
-#   Guest Docker builds still need package/download hosts explicitly allowed;
-#   ghcr.io and Debian mirrors are not included here.
-# - Shared hosts (including GitHub) serve content
-#   from many users. An allowlist is not an exfiltration or read-only guarantee.
-# - No unrestricted web browsing/search; add destinations deliberately.
-#
 # Sources:
 # https://github.com/upstash/context7#installation
 # https://awslabs.github.io/mcp/servers/aws-knowledge-mcp-server

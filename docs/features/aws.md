@@ -1,7 +1,14 @@
 # AWS role credentials
 
-AWS access is opt-in through global `config.toml`, approved workspace
-`.opencode-sandbox.toml`, or launch flags:
+Let a guest tool use AWS without sharing your host's long-lived credentials.
+You choose a role, and the guest gets temporary credentials for that role.
+
+1. [Choose an AWS role](#choose-an-aws-role)
+2. [Use AWS inside the VM](#use-aws-inside-the-vm)
+
+## Choose an AWS role
+
+Add the role to global `config.toml` or an approved `.opencode-sandbox.toml`:
 
 ```toml
 [aws]
@@ -9,70 +16,33 @@ role = "arn:aws:iam::123456789012:role/SandboxReadOnly"
 profile = "my-sso-profile" # optional host source profile
 ```
 
-Only role/profile settings are supported, not raw access keys or secret keys.
-Each field inherits independently: **CLI flag → workspace config → global config**.
-Omitted flags preserve configured values; explicit empty flags clear them.
-
-For a one-off launch or override:
+For one launch, pass a role and optionally a host profile:
 
 ```sh
-opencode-sandbox --aws-role arn:aws:iam::123456789012:role/SandboxReadOnly
-
-# Optionally select a particular host source profile:
 opencode-sandbox --aws-role arn:aws:iam::123456789012:role/SandboxReadOnly \
   --aws-profile my-sso-profile
 ```
 
-Without a configured or CLI role/profile, no host AWS authentication is performed. Any previously
-launcher-managed AWS credentials/config in the reused VM are removed. Unmanaged
-guest files are left alone. A profile is optional, but requires a role after config
-and CLI overrides are combined. To disable configured AWS access for one launch,
-use `--aws-role= --aws-profile=`. AWS settings are validated before credentials
-are loaded or a VM is started.
+- Sign in on the host first if the profile uses SSO. The host identity must
+  be allowed to assume the role. Interactive MFA is not supported.
+- Flags override each setting individually. Use `--aws-role= --aws-profile=`
+  to disable configured AWS access for one launch.
+- The guest can **read and use the temporary credentials**. Choose a narrowly
+  scoped role, preferably read-only. Don't give the guest your host credentials.
 
-The launcher uses the host AWS SDK credential chain (or the explicitly selected
-profile) to call STS `AssumeRole`. Sign in to SSO on the host first if required.
-The source identity must be permitted to assume the role, and the role's trust
-policy must allow it. No interactive MFA flow is implemented.
+## Use AWS inside the VM
 
-Every request uses a duration of **3600 seconds** and the sandbox name as the
-session name. Region resolution uses host `AWS_REGION`, then `AWS_DEFAULT_REGION`,
-then the selected/default host profile's region, falling back to **`eu-west-1`**.
-There are no region or duration flags/config keys.
+Run `aws` in the guest using its default profile. The region comes from
+`AWS_REGION`, `AWS_DEFAULT_REGION`, or the host profile, in that order. The
+fallback is `eu-west-1`.
 
-## Guest files and refresh
-
-Before OpenCode starts, the launcher transfers only temporary role credentials
-through the SDK's filesystem operations into guest `/root/.aws/credentials`, using the `[default]`
-profile. It writes the resolved region to `/root/.aws/config`. The directory is
-mode `700` and both files are mode `600`. No host credentials file or SSO cache is
-mounted, and no `AWS_SHARED_CREDENTIALS_FILE` variable is needed.
-
-AWS CLI is installed in the base image. Rebuild/import it with `mise run load`,
-then update the launcher with `mise run install`. Existing VMs need recreation to
-gain the CLI; AWS credentials themselves are replaced on every launch without
-recreation. Existing unmanaged guest AWS files are not overwritten: remove or
-relocate them deliberately before enabling this feature.
-
-The host refreshes credentials five minutes before expiry, atomically replacing
-the guest file. New AWS CLI invocations pick them up; long-running SDK clients
-may cache credentials and are **not supported for refresh**. Failures are reported
-without credential contents and retried every 30 seconds. Old credentials expire
-naturally; no broader credentials are substituted. An initial failure refuses
-launch. The refresh loop is canceled and joined before the VM stops on exit.
-
-The stopped VM retains its last credentials on its disk. On the next launch they
-are replaced, or removed if AWS is disabled. Files are marked as launcher-managed
-using `/root/.aws/.opencode-sandbox-managed`.
-
-## Permissions and networking
-
-This differs from `[secrets]`: sandbox code **can read and exfiltrate the temporary
-AWS credentials**. Use a narrowly scoped role, preferably read-only where possible.
-Never grant broad source-identity credentials directly to the guest.
-
-Network allowlisting is independent. Add only the required guest AWS service
-hosts under `[network].allowed_hosts`, e.g. `sts.eu-west-1.amazonaws.com` for
-`aws sts get-caller-identity`. Other services, regions, S3 bucket endpoints, and
-redirects need their own hosts. Host role assumption is outside the guest's
-network policy and does not require allowing STS inside the VM.
+- Allow the [service endpoints](networking.md#allow-or-block-internet-access)
+  the guest needs. For example, allow `sts.eu-west-1.amazonaws.com` for
+  `aws sts get-caller-identity` in `eu-west-1`. Host sign-in doesn't require
+  those endpoints to be allowed in the VM.
+- New AWS CLI commands pick up refreshed credentials automatically.
+  Restart long-running clients if they cache expired credentials.
+- Changes apply on the next launch without VM recreation. Existing guest AWS
+  config you created yourself is not overwritten. Move it aside before enabling
+  the role. When you launch with AWS disabled, sandbox-managed credentials are
+  removed.

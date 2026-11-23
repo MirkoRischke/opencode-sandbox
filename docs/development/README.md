@@ -42,22 +42,39 @@ containers and volumes.
 Failures include redacted container logs. Image downloads on the first run add
 network-dependent time; later runs reuse cached images.
 
-The opt-in live test uses the real launcher and OpenCode inside a disposable VM.
-Configure a model and authenticate the installed gateway once as shown in the
-[gateway guide](../../llm-gateway/README.md). The gateway may be stopped before
-the test: the launcher starts it automatically. Tests never stop the shared
-gateway or remove its authentication volumes. `OPENCODE_TEST_MODEL` selects the
-gateway model ID (default `gpt-6-luna`). Missing setup fails the test rather
-than skipping it. It creates isolated provider configuration and exercises
-automatic virtual-key provisioning; the real key is substituted outside the VM.
-It reuses the optional host gateway config, restoring its normal mount path
-after the test. Cleanup removes the test VM and its key. Ordinary tests use no
-real provider credentials.
-
 Quality reports are advisory and saved under `.quality/` (ignored by Git).
 They require Python 3 and the pinned golangci-lint; compare with the same tool
 version and configuration. See [the readability review rubric](quality-review.md)
 for reviewing implementation and tests alongside the metrics.
+
+## Gateway smoke test
+
+Follow the [host LLM gateway guide](../features/llm-gateway.md) to configure
+a model and authenticate once, then run:
+
+```sh
+mise run test:live
+```
+
+The test prompts the configured model through the real launcher and OpenCode
+in a disposable VM. This consumes provider usage. `OPENCODE_TEST_MODEL` selects
+the public gateway model ID (default `gpt-6-luna`). Missing setup fails the
+test rather than skipping it.
+
+The launcher starts the gateway if needed. The test isolates launcher and
+provider settings, reuses the gateway's model configuration and authentication
+volumes, and checks key provisioning and substitution. Cleanup removes the test
+VM and its key and restores the gateway's normal config mount. The gateway
+stays running; authentication, the repository team, and usage history remain.
+Ordinary tests use no real provider credentials.
+
+## Adding launcher settings
+
+Add each setting with validation and a `description` tag in
+[`internal/config`](../../internal/config). The default-config printer discovers
+settings automatically. Tests check that descriptions exist and printed values
+match runtime defaults. Put usage and examples in the relevant
+[feature guide](../features/README.md).
 
 ## Upgrading Microsandbox
 

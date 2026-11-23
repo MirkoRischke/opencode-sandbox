@@ -19,6 +19,6 @@ This tool reduces risk; it does not eliminate it. I accept the following risks f
   state directories. See [persistent workspace state](features/persistent-state.md).
 - **Credential use:** guest code can read and use temporary AWS role credentials.
   I only use roles with limited permissions that I am willing to delegate to
-  an agent. Subscription credentials stay in the [host LLM gateway](../llm-gateway/README.md).
+   an agent. Subscription credentials stay in the [host LLM gateway](features/llm-gateway.md).
   The guest receives only a placeholder for its gateway key, but can still make
   requests through the gateway and consume provider usage.

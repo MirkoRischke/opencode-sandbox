@@ -1,6 +1,15 @@
-# Works with any coding agent
+# Coding agents and startup command
 
-OpenCode starts by default. Build the image for the agent you want:
+Use the coding agent you prefer without changing how the sandbox works.
+OpenCode is the default.
+
+1. [Choose an agent](#choose-an-agent)
+2. [Customize what starts](#startup-command)
+3. [Help Herdr detect your agent](#optional-agent-detection-in-herdr)
+
+## Choose an agent
+
+Build the image for the agent you want:
 
 | Agent | Build task | Image | Startup command |
 | --- | --- | --- | --- |
@@ -8,9 +17,8 @@ OpenCode starts by default. Build the image for the agent you want:
 | OpenAI Codex CLI | `mise run build:codex` | `opencode-sandbox:codex` | `codex` |
 | GitHub Copilot CLI | `mise run build:copilot` | `opencode-sandbox:copilot` | `copilot` |
 
-The launcher imports the selected image from Docker automatically. To use a
-nondefault agent, set both the image and the command in `.opencode-sandbox.toml`
-or your global launcher config:
+For a nondefault agent, set both the image and the command in
+`.opencode-sandbox.toml` or your global launcher config:
 
 ```toml
 [vm]
@@ -21,20 +29,20 @@ command = ["copilot"]
 ```
 
 For another terminal-based agent, install it in a
-[custom VM image](../config/README.md#custom-vm-images) and configure it the same
-way. The first element of `command` is the executable; subsequent elements are
-passed as literal arguments. The launcher runs it in the guest workspace when you open
-the terminal. After it exits, you land in interactive Bash in the same
-workspace. Exit Bash to stop the VM.
+[custom VM image](vm-images.md) and configure it the same way.
 
-Startup settings take effect on the next launch, even with an existing VM.
-If you switch images to install the agent, rebuild the snapshot and recreate
-the VM so it gets the new image.
+## Startup command
 
-The [LiteLLM gateway](../../llm-gateway/README.md) is still available regardless
-of the startup command. Configure the agent to use the gateway’s guest URL
-(`http://host.microsandbox.internal:4000/v1` by default) and `LLM_GATEWAY_KEY`
-placeholder if it supports an OpenAI-compatible provider.
+Set `startup.command` to the executable followed by any arguments. For
+example, use `["opencode", "--help"]` to show OpenCode's help on launch.
+The command runs in the guest workspace. When it exits, you land in Bash.
+
+Changing just the command takes effect on the next launch. If you switch
+images, [rebuild the snapshot and recreate the VM](snapshots.md#rebuild-a-baseline).
+
+The [host LLM gateway](llm-gateway.md#connect-another-client) is available
+regardless of startup command. Use it with agents that support an
+OpenAI-compatible provider.
 
 ## Optional: agent detection in Herdr
 

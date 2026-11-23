@@ -67,7 +67,7 @@ as sharing across independent VM kernels/disks. [S13][S14]
   embedded BuildKit versions must be checked before relying on version-specific
   details below. Fresh Engine 29+ installations otherwise default to the
   containerd image store. [R1][S10][S15]
-- [docs/config/README.md](../config/README.md#docker-inside-the-vm): private VM-owned ext4
+- [Guest Docker guide](../features/guest-docker.md#set-disk-space): private VM-owned ext4
   `/var/lib/docker`; stop/start preserves it, VM removal deletes it; no host
   Docker socket. Microsandbox's outer VM image store and guest Docker images are
   separate. Loading a VM template with `msb load` does not populate guest Docker.
@@ -471,7 +471,8 @@ hostname policy; the required full host set was not established here. [R3][S8]
 Repository sources (local primary evidence):
 
 - [R1] [Dockerfile](../../Dockerfile), especially lines 26–42.
-- [R2] [docs/config/README.md](../config/README.md#docker-inside-the-vm), Docker/custom-image/network sections.
+- [R2] Launcher documentation, now split into [guest Docker](../features/guest-docker.md),
+  [custom VM images](../features/vm-images.md), and [networking](../features/networking.md).
 - [R3] [internal/sandbox/network.go](../../internal/sandbox/network.go), `networkPolicy`.
 - [R4] [internal/sandbox/docker.go](../../internal/sandbox/docker.go), daemon initialization.
 - [R5] [internal/sandbox/sandbox.go](../../internal/sandbox/sandbox.go), mount construction.
