@@ -46,8 +46,8 @@ mode = "copy"
 
 ## Change or remove mappings
 
-- A workspace list replaces the global list. Set `files = []` at the top level
-  to clear it.
+- File mappings accumulate across config files. Remove a mapping from the
+  config that defines it.
 - Recreate the VM to apply changes. Rebuild the [snapshot](snapshots.md) if
   you change or remove a mount target used by the baseline.
 - Mounted contents are not captured in snapshots. Copied files are. Removing

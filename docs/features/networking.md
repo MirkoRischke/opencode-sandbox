@@ -20,11 +20,12 @@ No public hosts are allowed by default. Add the hosts your project needs in
 allowed_hosts = ["registry.npmjs.org", "nodejs.org"]
 ```
 
-- Workspace `allowed_hosts` replaces the global list.
+- `allowed_hosts` entries from global, parent, and workspace configs are combined.
 - Use `example.com` for one host or `.example.com` to include all subdomains.
   Don't use URLs, IP addresses, ports, or `*`.
 - Allowed hosts are reachable over HTTPS on port 443. To block application
-  internet access, set `allowed_hosts = []` and leave `unrestricted = false`.
+  internet access, leave `unrestricted = false` and don't list any hosts in the
+  applicable configs. An empty list does not remove inherited hosts.
 - An allowlist limits destinations, not what the guest can send to them. It
   does not widen [secret scope](secrets.md#limit-where-a-secret-can-be-used).
 
@@ -64,7 +65,8 @@ requires trusting the application's certificate.
 - Nothing is exposed by default. Mappings accept TCP only and work from the
   host, not the LAN.
 - Pick an unused host port. It is released when the VM stops.
-- To clear inherited mappings, set `host_to_vm = []` under `[network]`.
+- Mappings from all config layers are combined. Remove a mapping from the
+  config that defines it.
 
 ## VM to host
 
@@ -77,10 +79,10 @@ ports = [4000, 5432]
 
 Connect from the guest to `host.microsandbox.internal:5432`, not `localhost`.
 
-- The default list allows TCP port `4000` for the [host LLM gateway](llm-gateway.md).
-  Keep that port in your list if you use the gateway.
-- `ports = []` blocks host services, even with unrestricted public internet.
-  The same VM-to-host permissions apply during snapshot preparation.
+- If no config lists ports, TCP port `4000` is allowed for the [host LLM gateway](llm-gateway.md).
+  Explicit lists are combined. Include `4000` in one of them if you use the gateway.
+- With only empty explicit lists, host services are blocked, even with unrestricted
+  public internet. The same VM-to-host permissions apply during snapshot preparation.
 
 ## Apply and troubleshoot changes
 

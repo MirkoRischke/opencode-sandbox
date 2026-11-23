@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFileLayersResolveOriginsAndReplaceLists(t *testing.T) {
+func TestFileLayersResolveOriginsAndAppendLists(t *testing.T) {
 	t.Parallel()
 	global, repo := t.TempDir(), t.TempDir()
 	settings, err := mergeSettings(DefaultSettings(), []byte("[[files]]\nsource = 'skills'\ntarget = '/opt/skills'\n"), global)
@@ -20,14 +20,16 @@ func TestFileLayersResolveOriginsAndReplaceLists(t *testing.T) {
 	inherited, err := mergeSettings(settings, []byte("[vm]\ncpus = 1\n"), repo)
 	require.NoError(t, err)
 	require.Equal(t, settings.Files, inherited.Files)
-	replaced, err := mergeSettings(settings, []byte("[[files]]\nsource = 'AGENTS.md'\ntarget = '/opt/AGENTS.md'\nmode = 'copy'\n"), repo)
+	added, err := mergeSettings(settings, []byte("[[files]]\nsource = 'AGENTS.md'\ntarget = '/opt/AGENTS.md'\nmode = 'copy'\n"), repo)
 	require.NoError(t, err)
-	require.Equal(t, []FileSettings{{Source: filepath.Join(repo, "AGENTS.md"), Target: "/opt/AGENTS.md", Mode: "copy"}}, replaced.Files)
-	require.True(t, replaced.Files[0].IsCopy())
+	require.Equal(t, []FileSettings{settings.Files[0], {Source: filepath.Join(repo, "AGENTS.md"), Target: "/opt/AGENTS.md", Mode: "copy"}}, added.Files)
+	require.True(t, added.Files[1].IsCopy())
 	require.Equal(t, filepath.Join(global, "skills"), settings.Files[0].Source)
-	cleared, err := mergeSettings(settings, []byte("files = []\n"), repo)
+	empty, err := mergeSettings(settings, []byte("files = []\n"), repo)
 	require.NoError(t, err)
-	require.Empty(t, cleared.Files)
+	require.Equal(t, settings.Files, empty.Files)
+	_, err = mergeSettings(settings, []byte("[[files]]\nsource = '.'\ntarget = '/opt/skills/nested'\n"), repo)
+	require.ErrorContains(t, err, "overlaps")
 }
 
 func TestFileHomeExpansion(t *testing.T) {
@@ -97,7 +99,7 @@ func TestRepoFileApprovalUsesResolvedPaths(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(root, workspaceConfigName), []byte("[[files]]\nsource = 'AGENTS.md'\ntarget = '/opt/AGENTS.md'\nmode = 'copy'\n"), 0600))
 	paths := Paths{ConfigDir: t.TempDir(), StateDir: t.TempDir()}
 	_, err = paths.LoadWorkspaceSettings(root, nil)
-	require.ErrorContains(t, err, "untrusted workspace config")
+	require.ErrorContains(t, err, "untrusted config")
 	approved := false
 	_, err = paths.LoadWorkspaceSettings(root, func(_ string, _ []byte, settings Settings) error {
 		approved = true

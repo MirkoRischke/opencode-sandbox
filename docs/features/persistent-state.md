@@ -20,9 +20,9 @@ target = "/var/lib/opencode-sandbox/agent-data"
   each linked worktree, has its own state.
 - The guest can change or delete its saved files. Persist only what you need.
   Snapshots do not include this state.
-- A workspace `state` list replaces the global list. Set `state = []` to
-  clear it without deleting saved files. Use [prune](cleanup.md#prune-workspace-resources)
-  when you want to delete saved state.
+- `state` entries accumulate across config files. Remove an entry from the
+  config that defines it to stop mounting it without deleting saved files.
+  Use [prune](cleanup.md#prune-workspace-resources) to delete saved state.
 
 ## Keep OpenCode sessions
 

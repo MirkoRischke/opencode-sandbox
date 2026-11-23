@@ -4,8 +4,6 @@ package config
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -75,13 +73,13 @@ type VMSettings struct {
 type NetworkSettings struct {
 	Unrestricted bool             `toml:"unrestricted" description:"Allow public internet on any port/protocol, ignoring allowed_hosts. Protected destinations remain blocked except explicit vm_to_host ports; secret scopes are unchanged."`
 	Diagnostics  bool             `toml:"diagnostics" description:"Collect cumulative denied-target diagnostics per workspace. Enables full rotating runtime debug logs and HTTP denial responses; recreate the VM after changing this setting."`
-	AllowedHosts []string         `toml:"allowed_hosts" description:"Baseline DNS hosts: example.com matches exactly; .example.com includes the base domain and all subdomains. Passed unchanged to Microsandbox; HTTPS/WSS on TCP port 443 only."`
-	HostToVM     []PortSettings   `toml:"host_to_vm" description:"TCP mappings allowing the host to reach VM services, bound to host 127.0.0.1 only. Empty exposes nothing. Workspace lists replace global lists."`
+	AllowedHosts []string         `toml:"allowed_hosts" description:"Public DNS hosts, added across config files. example.com matches exactly; .example.com includes the base domain and all subdomains. HTTPS/WSS on TCP port 443 only."`
+	HostToVM     []PortSettings   `toml:"host_to_vm" description:"TCP mappings allowing the host to reach VM services, bound to host 127.0.0.1 only. Mappings are added across config files; none are exposed by default."`
 	VMToHost     VMToHostSettings `toml:"vm_to_host" description:"Allow the VM to reach explicitly selected host-local services via host.microsandbox.internal. No port mapping."`
 }
 
 type VMToHostSettings struct {
-	Ports []uint16 `toml:"ports" description:"Host TCP ports (1-65535) reachable from the VM. Default [4000] allows the LLM gateway. Empty blocks all host service ports, including with unrestricted enabled. Workspace lists replace global lists; [] clears inherited access."`
+	Ports []uint16 `toml:"ports" description:"Host TCP ports (1-65535) reachable from the VM. Explicit lists are combined across config files. If omitted everywhere, [4000] allows the LLM gateway."`
 }
 
 // DefaultSettings denies public guest traffic unless configured otherwise.
@@ -103,26 +101,7 @@ func DefaultSettings() Settings {
 // LoadSettings overlays the user's config.toml onto built-in defaults.
 // A missing file uses defaults; an invalid file is an error.
 func LoadSettings(configDir string) (Settings, error) {
-	return (Paths{ConfigDir: configDir}).loadGlobalSettings()
-}
-
-func (p Paths) loadGlobalSettings() (Settings, error) {
-	settings := DefaultSettings()
-	p.log("Default configuration", "settings", settings)
-	path := filepath.Join(p.ConfigDir, "opencode-sandbox", "config.toml")
-	data, err := os.ReadFile(path)
-	p.log("Configuration source", "source", "global", "path", path, "present", !os.IsNotExist(err), "raw", string(data))
-	if os.IsNotExist(err) {
-		return settings, nil
-	}
-	if err != nil {
-		return settings, fmt.Errorf("read launcher settings %s: %w", path, err)
-	}
-	settings, err = mergeSettings(settings, data, filepath.Dir(path))
-	if err != nil {
-		return settings, fmt.Errorf("decode launcher settings %s: %w", path, err)
-	}
-	return settings, nil
+	return (Paths{ConfigDir: configDir}).loadSettings("", nil)
 }
 
 // Validate rejects invalid launcher settings before runtime preparation.

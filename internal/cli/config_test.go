@@ -76,8 +76,8 @@ func TestConfigValidate(t *testing.T) {
 	}{
 		{name: "defaults"},
 		{name: "workspace overrides global", global: "[aws]\nprofile = 'dev'\n", workspace: "[aws]\nrole = 'arn:aws:iam::123456789012:role/dev'\n[logging]\nconsole_level = 'debug'\n"},
-		{name: "invalid global syntax", global: "[", wantError: "decode launcher settings"},
-		{name: "invalid workspace syntax", workspace: "[", wantError: "workspace settings"},
+		{name: "invalid global syntax", global: "[", wantError: `opencode-sandbox/config.toml": toml:`},
+		{name: "invalid workspace syntax", workspace: "[", wantError: `.opencode-sandbox.toml": toml:`},
 		{name: "unknown key", workspace: "[vm]\ncores = 2\n", wantError: "unknown launcher setting: vm.cores"},
 		{name: "incorrect type", workspace: "[vm]\ncpus = 'two'\n", wantError: "vm.cpus"},
 		{name: "resource limit", workspace: "[vm]\ncpus = 0\n", wantError: "vm.cpus must be greater than zero"},

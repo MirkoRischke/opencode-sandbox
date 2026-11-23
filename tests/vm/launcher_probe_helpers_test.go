@@ -78,6 +78,9 @@ exec %q "$@"
 	require.NoError(t, os.WriteFile(filepath.Join(credentials, "team-"+w.RepositoryID()), []byte("test-team"), 0600))
 	require.NoError(t, os.WriteFile(filepath.Join(credentials, "key-"+sandbox.Name(w)), []byte("sk-test-placeholder"), 0600))
 	command.Env = append(command.Env, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"), "XDG_DATA_HOME="+dataDir)
+	if configDir := env["XDG_CONFIG_HOME"]; configDir != "" {
+		approveTestConfig(t, s.Worktree, configDir, env["XDG_STATE_HOME"])
+	}
 	for key, value := range env {
 		command.Env = append(command.Env, key+"="+value)
 	}

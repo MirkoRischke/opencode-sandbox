@@ -22,8 +22,8 @@ allowed_hosts = ["api.example.com"]
 headers = ["authorization"]
 ```
 
-- Use one source per secret and a unique `guest.env`. A workspace entry
-  replaces the whole same-named global entry.
+- Use one source per secret and a unique `guest.env`. A more specific entry
+  replaces the whole same-named inherited entry.
 - Use a path relative to the config file or an absolute path. Don't use
   symlinks. Set the directory to mode `700` and the file to `600`.
 - Store only the credential on one line. Don't commit the file. A missing or

@@ -1,8 +1,8 @@
 # Launcher configuration
 
 Set global options in `~/.config/opencode-sandbox/config.toml` (or under
-`$XDG_CONFIG_HOME` if set). Add `.opencode-sandbox.toml` in your workspace
-to override only what that directory needs. This is separate from OpenCode's
+`$XDG_CONFIG_HOME` if set). Add `.opencode-sandbox.toml` in a workspace or a
+parent directory for settings shared by its descendants. This is separate from OpenCode's
 `opencode.json` and `cli.json`.
 
 ## Get defaults and validate
@@ -17,8 +17,7 @@ opencode-sandbox config validate
 
 `config default` prints built-in values, not your effective settings. It
 doesn't load user config or trust state. If you use its output as a workspace
-config, remove settings you want to inherit rather than replacing global
-values with the defaults.
+config, remove settings you want to inherit rather than re-declaring defaults.
 
 Run `config validate` from the target directory to check the merged settings
 without approving them, reading credential values, or launching a VM. It
@@ -26,23 +25,31 @@ rejects malformed TOML, unknown keys, and invalid values.
 
 ## Workspace overrides and trust
 
-The launcher loads built-in defaults, global config, then the config in the
-exact current directory after resolving symlinks. It doesn't load config from
-parent directories, even inside a Git checkout.
+The launcher loads built-in defaults and global config, then layers every
+`.opencode-sandbox.toml` from the filesystem root down to the current directory
+after resolving symlinks. This does not change which directory is mounted as
+the writable workspace.
 
-Tables merge recursively; specified scalars and arrays replace inherited
-values. Empty arrays clear inherited arrays, while empty tables do not
-clear inherited entries. Each named `[secrets.<name>]` definition is an
-exception: a workspace entry replaces the entire global definition and must
-provide all required fields. For example, this workspace config changes only
-memory and inherits the other VM settings:
+For example, put shared mounts or secret definitions in
+`~/workspace/my-org/.opencode-sandbox.toml`. A repo under `my-org` inherits those
+settings and can add its own in the repo's `.opencode-sandbox.toml`.
+
+Scalars and `startup.command` use the closest value specified. Lists of files,
+state, network hosts, and port mappings accumulate; empty lists add nothing
+to previously configured entries. The VM-to-host port `[4000]` is a fallback
+used only when no file sets `network.vm_to_host.ports`. Duplicate port mappings
+and overlapping mount targets are errors. Each named `[secrets.<name>]` entry
+replaces the entire inherited definition and must provide all required fields.
+Relative paths resolve against the directory of the config that sets them.
+For example, this workspace config changes only memory:
 
 ```toml
 [vm]
 memory_mib = 8192
 ```
 
-Review a new or changed workspace config before approving it at launch.
+Review each new or changed config before approving it at launch, including
+the global file. A parent config applies to every workspace below it.
 Approval defaults to no and authorizes all settings, including host files
 and credential destinations. An unapproved config fails in non-interactive
 launches. Invalid config fails before approval; an absent workspace config
@@ -50,9 +57,9 @@ needs no approval.
 
 Approvals are stored in
 `${XDG_STATE_HOME:-~/.local/state}/opencode-sandbox/trust.json`.
-Each approval binds the canonical workspace path to a SHA-256 hash of the
+Each approval binds the config's location to a SHA-256 hash of the
 exact config bytes. Even a comment change or a moved/copied checkout requires
-approval again; symlink aliases share approval. Delete the workspace's entry
+approval again; symlink aliases of a directory share approval. Delete the config's entry
 or the trust file to require approval again. Malformed trust storage prevents
 launch. The trust file is private and updated atomically. The launcher approves
 the bytes it loaded before prompting and checks approval before reading

@@ -95,20 +95,28 @@ func TestLauncherRejectsInvalidSettingsBeforeStartingVM(t *testing.T) {
 
 func TestLauncherRejectsUntrustedRepoConfigBeforeLoadingSecrets(t *testing.T) {
 	t.Parallel()
-	root, _, paths := repoSettingsFixture(t, "[secrets.github]\nsource.keyring = {}\nguest.env = 'GH_TOKEN'\nallowed_hosts = ['other.example.com']\nheaders = ['authorization']\n")
+	root, configPath, paths := repoSettingsFixture(t, "[secrets.github]\nsource.keyring = {}\nguest.env = 'GH_TOKEN'\nallowed_hosts = ['other.example.com']\nheaders = ['authorization']\n")
 	writeSettingsAt(t, paths.ConfigDir, "[secrets.github]\nsource.file = 'missing-token'\nguest.env = 'GH_TOKEN'\nallowed_hosts = ['github.com']\nheaders = ['authorization']\n")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	command := exec.CommandContext(ctx, buildLauncher(t))
-	command.Dir = root
-	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+paths.ConfigDir, "XDG_STATE_HOME="+paths.StateDir)
-	command.Stdin = strings.NewReader("yes\n")
-	output, err := command.CombinedOutput()
-	require.Error(t, err)
-	require.Contains(t, string(output), "untrusted workspace config")
-	require.NotContains(t, string(output), "missing-token")
-	_, err = os.Stat(filepath.Join(paths.StateDir, "opencode-sandbox", "trust.json"))
+	binary := buildLauncher(t)
+	checkUntrusted := func(configPath string) {
+		command := exec.CommandContext(ctx, binary)
+		command.Dir = root
+		command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+paths.ConfigDir, "XDG_STATE_HOME="+paths.StateDir)
+		command.Stdin = strings.NewReader("yes\n")
+		output, err := command.CombinedOutput()
+		require.Error(t, err)
+		require.Contains(t, string(output), "untrusted config")
+		require.Contains(t, string(output), filepath.Base(configPath))
+		require.NotContains(t, string(output), "missing-token")
+	}
+	checkUntrusted("config.toml")
+	_, err := os.Stat(filepath.Join(paths.StateDir, "opencode-sandbox", "trust.json"))
 	require.True(t, os.IsNotExist(err))
+	_, err = paths.LoadWorkspaceSettings("", func(string, []byte, launcherconfig.Settings) error { return nil })
+	require.NoError(t, err)
+	checkUntrusted(configPath)
 }
 
 func TestSecretCommandsIgnoreConfiguration(t *testing.T) {
@@ -131,7 +139,7 @@ func TestSecretCommandsIgnoreConfiguration(t *testing.T) {
 			require.Contains(t, string(output), "not confirmed")
 		}
 		require.NotContains(t, string(output), "config.toml")
-		require.NotContains(t, string(output), "untrusted workspace config")
+		require.NotContains(t, string(output), "untrusted config")
 		require.NotContains(t, string(output), "file-backed")
 	}
 	data, err := os.ReadFile(path)

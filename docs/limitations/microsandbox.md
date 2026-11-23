@@ -460,7 +460,7 @@ msb exec nesting-restored -- test -c /dev/kvm # exit 1
 ### Intermittent snapshot listing failure after snapshot removal and VM resume
 
 **Status:** observed with Go SDK/runtime v0.7.11 on 2026-11-13 and again
-with v0.7.15 on 2026-11-21; upstream cause unconfirmed.
+with v0.7.15 on 2026-11-21 and 2026-11-23; upstream cause unconfirmed.
 
 The pre-change gateway-test baseline (`mise run test`, four parallel VM tests)
 failed `TestRemovingSnapshotLeavesExistingVMDisksIntact` at its final
@@ -481,6 +481,12 @@ On v0.7.15, `go test ./...` failed with the same missing metadata error in
 `TestRemovingSnapshotLeavesExistingVMDisksIntact`. The same run also reported
 that error in `TestAutomaticSnapshotStopsOnMiseInstallationFailure` and
 `TestFirstLaunchPreparesManagedSnapshotOnlyOnce`. The tests were not changed.
+
+The 2026-11-23 `go test ./...` run also reported `snapshot not found` in
+`TestFailedAutomaticSnapshotPreparationDoesNotCreateWorkspaceVM` during the
+post-failure cleanup check. The test sets its own network settings, independent
+of the changed default public allowlist. The same test did not fail on a
+subsequent full run with the same SDK/runtime.
 
 Impact: an intermittent failure in the standard VM suite prevents claiming a
 clean full-suite baseline; no snapshot implementation or assertion was changed.

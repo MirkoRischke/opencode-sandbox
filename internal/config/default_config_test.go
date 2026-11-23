@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -219,7 +220,11 @@ func loadDefaultArrayExample(t *testing.T, name string) Settings {
 			lines[start+i] = content
 		}
 	}
-	settings, err := mergeSettings(DefaultSettings(), []byte(strings.Join(lines, "\n")), t.TempDir())
+	configDir := t.TempDir()
+	dir := filepath.Join(configDir, "opencode-sandbox")
+	require.NoError(t, os.Mkdir(dir, 0700))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.toml"), []byte(strings.Join(lines, "\n")), 0600))
+	settings, err := LoadSettings(configDir)
 	require.NoError(t, err)
 	return settings
 }

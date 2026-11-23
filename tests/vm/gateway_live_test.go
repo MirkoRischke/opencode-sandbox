@@ -127,7 +127,9 @@ printf 'exit "$(cat "$PWD/gateway-status")"\n' > /root/.bashrc
 	defer cancel()
 	command := exec.CommandContext(ctx, "script", args...)
 	command.Dir = worktree
-	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir, "XDG_STATE_HOME="+t.TempDir())
+	stateDir := t.TempDir()
+	approveTestConfig(t, worktree, dir, stateDir)
+	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir, "XDG_STATE_HOME="+stateDir)
 	// Do not include raw provider output in failures; it can contain credentials.
 	output, err := command.CombinedOutput()
 	if err != nil {

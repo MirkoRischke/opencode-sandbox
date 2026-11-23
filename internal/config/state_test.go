@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestStateLayersAreOptInAndReplaceInheritedEntries(t *testing.T) {
+func TestStateLayersAreOptInAndAppendEntries(t *testing.T) {
 	t.Parallel()
 	defaults := DefaultSettings()
 	require.Empty(t, defaults.State)
@@ -18,8 +18,8 @@ func TestStateLayersAreOptInAndReplaceInheritedEntries(t *testing.T) {
 		want        []StateSettings
 	}{
 		{"inherit", "", global.State},
-		{"replace", "[[state]]\nname = 'other'\ntarget = '/other'", []StateSettings{{Name: "other", Target: "/other"}}},
-		{"clear", "state = []", []StateSettings{}},
+		{"append", "[[state]]\nname = 'other'\ntarget = '/other'", []StateSettings{global.State[0], {Name: "other", Target: "/other"}}},
+		{"empty", "state = []", global.State},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			settings, err := mergeSettings(global, []byte(tc.input), t.TempDir())

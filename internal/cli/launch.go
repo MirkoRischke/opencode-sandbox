@@ -40,7 +40,7 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 	logger := logging.FromContext(ctx)
 	paths.Logger = logger
 	logger.Debug("CLI configuration overrides", "aws_role", awsRole, "aws_profile", awsProfile)
-	settings, err := paths.LoadWorkspaceSettings(w.Root(), approveWorkspaceConfig)
+	settings, err := paths.LoadWorkspaceSettings(w.Root(), configApprover())
 	if err != nil {
 		return err
 	}

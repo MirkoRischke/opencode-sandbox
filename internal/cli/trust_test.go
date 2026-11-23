@@ -39,7 +39,7 @@ func TestWorkspaceApprovalShowsOnlyQuotedPathAndPrompt(t *testing.T) {
 	var output bytes.Buffer
 	err := confirmWorkspaceConfig(strings.NewReader("yes\n"), &output, "/repo\x1b[2J/.opencode-sandbox.toml")
 	require.NoError(t, err)
-	require.Equal(t, "Workspace config is new or changed: \"/repo\\x1b[2J/.opencode-sandbox.toml\"\n"+
+	require.Equal(t, "New or changed config: \"/repo\\x1b[2J/.opencode-sandbox.toml\"\n"+
 		"Trust this config? [y/N] ", output.String())
 }
 
@@ -55,7 +55,7 @@ func TestApproveWorkspaceConfigRejectsPipedInput(t *testing.T) {
 	_, err = writer.WriteString("yes\n")
 	require.NoError(t, err)
 
-	err = approveWorkspaceConfig("/repo/.opencode-sandbox.toml", nil, launcherconfig.DefaultSettings())
+	err = configApprover()("/repo/.opencode-sandbox.toml", nil, launcherconfig.DefaultSettings())
 
 	require.ErrorContains(t, err, "launch interactively")
 }

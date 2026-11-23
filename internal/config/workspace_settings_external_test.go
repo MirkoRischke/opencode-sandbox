@@ -25,23 +25,58 @@ func repoSettingsFixture(t *testing.T, config string) (string, string, launcherc
 
 func approveSettings(string, []byte, launcherconfig.Settings) error { return nil }
 
-func TestWorkspaceSettingsIgnoreParentConfiguration(t *testing.T) {
+func TestWorkspaceSettingsMergeAndTrustEachLayer(t *testing.T) {
 	t.Parallel()
-	root, _, paths := repoSettingsFixture(t, "[vm]\ncpus = 7\n")
-	writeSettingsAt(t, paths.ConfigDir, "[vm]\ncpus = 3\n")
-	subdir := filepath.Join(root, "nested")
-	require.NoError(t, os.Mkdir(subdir, 0700))
-	settings, err := paths.LoadWorkspaceSettings(subdir, nil)
-	require.NoError(t, err, "parent configuration must not require approval")
-	require.EqualValues(t, 3, settings.VM.CPUs)
-	_, err = os.Stat(filepath.Join(paths.StateDir, "opencode-sandbox", "trust.json"))
-	require.ErrorIs(t, err, os.ErrNotExist)
-	require.NoError(t, os.WriteFile(filepath.Join(subdir, ".opencode-sandbox.toml"), []byte("[vm]\ncpus = 5\n"), 0600))
-	_, err = paths.LoadWorkspaceSettings(subdir, nil)
-	require.ErrorContains(t, err, "untrusted workspace config")
-	settings, err = paths.LoadWorkspaceSettings(subdir, approveSettings)
+	base, err := filepath.EvalSymlinks(t.TempDir())
 	require.NoError(t, err)
-	require.EqualValues(t, 5, settings.VM.CPUs)
+	org := filepath.Join(base, "org")
+	repo := filepath.Join(org, "gap", "repo")
+	require.NoError(t, os.MkdirAll(repo, 0700))
+	paths := launcherconfig.Paths{ConfigDir: filepath.Join(base, "xdg"), StateDir: t.TempDir()}
+	writeSettingsAt(t, paths.ConfigDir, "[vm]\ncpus = 3\n[network]\nallowed_hosts = ['global.example.com']\n")
+	global := filepath.Join(paths.ConfigDir, "opencode-sandbox", "config.toml")
+	configPaths := []string{global, filepath.Join(base, ".opencode-sandbox.toml"), filepath.Join(org, ".opencode-sandbox.toml"), filepath.Join(repo, ".opencode-sandbox.toml")}
+	require.NoError(t, os.WriteFile(configPaths[1], []byte("[vm]\ncpus = 4\n[network]\nallowed_hosts = ['parent.example.com']\n"), 0600))
+	require.NoError(t, os.WriteFile(configPaths[2], []byte("[[files]]\nsource = '.'\ntarget = '/opt/repos'\n[vm]\ncpus = 7\n[network]\nallowed_hosts = ['org.example.com']\n"), 0600))
+	require.NoError(t, os.WriteFile(configPaths[3], []byte("[vm]\ncpus = 5\n[network]\nallowed_hosts = ['repo.example.com']\n"), 0600))
+
+	validated, err := paths.ValidateWorkspaceSettings(repo)
+	require.NoError(t, err)
+	require.EqualValues(t, 5, validated.VM.CPUs)
+	require.Equal(t, []string{"global.example.com", "parent.example.com", "org.example.com", "repo.example.com"}, validated.Network.AllowedHosts)
+	require.Equal(t, []launcherconfig.FileSettings{{Source: org, Target: "/opt/repos"}}, validated.Files)
+	_, err = paths.LoadWorkspaceSettings(repo, nil)
+	require.ErrorContains(t, err, global, "validation must not approve anything")
+	var prompted []string
+	approve := func(path string, _ []byte, _ launcherconfig.Settings) error {
+		prompted = append(prompted, path)
+		return nil
+	}
+	settings, err := paths.LoadWorkspaceSettings(repo, approve)
+	require.NoError(t, err)
+	require.Equal(t, validated, settings)
+	require.Equal(t, configPaths, prompted)
+	sibling := filepath.Join(org, "sibling")
+	require.NoError(t, os.Mkdir(sibling, 0700))
+	settings, err = paths.LoadWorkspaceSettings(sibling, nil)
+	require.NoError(t, err, "ancestor approvals are shared across workspaces")
+	require.EqualValues(t, 7, settings.VM.CPUs)
+
+	for _, changed := range [][]string{{global}, {configPaths[2]}, {configPaths[3]}, configPaths} {
+		for _, path := range changed {
+			data, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(path, append(data, "# edited\n"...), 0600))
+		}
+		prompted = nil
+		_, err := paths.LoadWorkspaceSettings(repo, approve)
+		require.NoError(t, err)
+		require.Equal(t, changed, prompted)
+	}
+	prompted = nil
+	_, err = paths.LoadWorkspaceSettings(repo, approve)
+	require.NoError(t, err)
+	require.Empty(t, prompted)
 }
 
 func TestNonGitWorkspaceSettingsRequireApproval(t *testing.T) {
@@ -50,7 +85,7 @@ func TestNonGitWorkspaceSettingsRequireApproval(t *testing.T) {
 	paths := launcherconfig.Paths{ConfigDir: t.TempDir(), StateDir: t.TempDir()}
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".opencode-sandbox.toml"), []byte("[vm]\ncpus = 5\n"), 0600))
 	_, err := paths.LoadWorkspaceSettings(root, nil)
-	require.ErrorContains(t, err, "untrusted workspace config")
+	require.ErrorContains(t, err, "untrusted config")
 	settings, err := paths.LoadWorkspaceSettings(root, approveSettings)
 	require.NoError(t, err)
 	require.EqualValues(t, 5, settings.VM.CPUs)
@@ -112,20 +147,19 @@ guest.env = 'GH_TOKEN'
 allowed_hosts = ['api.github.com']
 headers = ['authorization']
 `)
-	calls := 0
+	var approved []string
 	settings, err := paths.LoadWorkspaceSettings(root, func(gotPath string, data []byte, effective launcherconfig.Settings) error {
-		calls++
-		require.Equal(t, path, gotPath)
-		want, err := os.ReadFile(path)
+		approved = append(approved, filepath.Base(gotPath))
+		want, err := os.ReadFile(gotPath)
 		require.NoError(t, err)
 		require.Equal(t, want, data)
 		require.Equal(t, []string{"custom.example.com"}, effective.Secrets["github"].AllowedHosts)
 		return nil
 	})
 	require.NoError(t, err)
-	require.Equal(t, 1, calls)
+	require.Equal(t, []string{"config.toml", filepath.Base(path)}, approved)
 	require.Equal(t, launcherconfig.VMSettings{Image: launcherconfig.DefaultImage(), CPUs: 4, MemoryMiB: 8192, RootDiskMiB: 9000, DockerDiskMiB: 20480}, settings.VM)
-	require.Empty(t, settings.Network.AllowedHosts)
+	require.Equal(t, []string{"github.com"}, settings.Network.AllowedHosts)
 	require.Equal(t, launcherconfig.SecretSettings{
 		Source: launcherconfig.SecretSourceSettings{File: filepath.Join(root, "creds/repo-github-token")}, Guest: launcherconfig.SecretGuestSettings{Env: "GH_TOKEN"},
 		AllowedHosts: []string{"custom.example.com"}, Headers: []string{"x-token"},
@@ -155,7 +189,7 @@ func TestRepoSettingsTrustUsesExactReviewedBytes(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 8192, settings.VM.MemoryMiB)
 	_, err = paths.LoadWorkspaceSettings(root, nil)
-	require.ErrorContains(t, err, "untrusted workspace config")
+	require.ErrorContains(t, err, "untrusted config")
 
 	trustPath := filepath.Join(paths.StateDir, "opencode-sandbox", "trust.json")
 	data, err := os.ReadFile(trustPath)
@@ -168,7 +202,9 @@ func TestRepoSettingsTrustUsesExactReviewedBytes(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(data, &store))
 	require.Equal(t, 1, store.Version)
-	require.Equal(t, fmt.Sprintf("%x", sha256.Sum256([]byte(original))), store.Workspaces[root].ConfigSHA256)
+	canonicalRoot, err := filepath.EvalSymlinks(root)
+	require.NoError(t, err)
+	require.Equal(t, fmt.Sprintf("%x", sha256.Sum256([]byte(original))), store.Workspaces[filepath.Join(canonicalRoot, filepath.Base(path))].ConfigSHA256)
 	for path, mode := range map[string]os.FileMode{trustPath: 0600, filepath.Dir(trustPath): 0700} {
 		info, err := os.Stat(path)
 		require.NoError(t, err)
@@ -191,11 +227,11 @@ func TestRepoSettingsTrustBoundToCanonicalRepoPath(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(filepath.Join(other, ".opencode-sandbox.toml"), data, 0600))
 	_, err = paths.LoadWorkspaceSettings(other, nil)
-	require.ErrorContains(t, err, "untrusted workspace config")
+	require.ErrorContains(t, err, "untrusted config")
 	// Even a comment-only change invalidates approval.
 	require.NoError(t, os.WriteFile(path, []byte("# changed\n"), 0600))
 	_, err = paths.LoadWorkspaceSettings(root, nil)
-	require.ErrorContains(t, err, "untrusted workspace config")
+	require.ErrorContains(t, err, "untrusted config")
 }
 
 func TestRepoSettingsApprovalRejectedOrUnavailable(t *testing.T) {

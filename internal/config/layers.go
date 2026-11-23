@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 
 	"github.com/BurntSushi/toml"
 	"github.com/knadh/koanf/providers/confmap"
@@ -11,8 +12,8 @@ import (
 )
 
 // mergeSettings overlays a TOML layer onto inherited settings. Koanf merges
-// tables recursively and replaces other values, including false and empty lists.
-// Named secrets are handled separately as atomic entries.
+// tables recursively and replaces scalars and commands. Collections append;
+// named secrets replace as atomic entries.
 func mergeSettings(settings Settings, data []byte, origin string) (Settings, error) {
 	// Keep TOML's strict type/range checks before koanf's struct decoding.
 	// Secret entries replace inherited definitions rather than merging fields.
@@ -32,12 +33,11 @@ func mergeSettings(settings Settings, data []byte, origin string) (Settings, err
 		return settings, err
 	}
 	delete(overlay, "secrets")
-	if metadata.IsDefined("files") {
-		delete(overlay, "files")
-	}
-	delete(overlay, "state") // Preserve strict TOML array-table decoding.
+	delete(overlay, "files")
+	delete(overlay, "state")
 	if network, ok := overlay["network"].(map[string]any); ok {
-		delete(network, "host_to_vm") // Preserve TOML's strict array-table decoding.
+		delete(network, "allowed_hosts")
+		delete(network, "host_to_vm")
 		delete(network, "vm_to_host")
 	}
 	k := koanf.New(".")
@@ -54,23 +54,26 @@ func mergeSettings(settings Settings, data []byte, origin string) (Settings, err
 		return settings, err
 	}
 	merged.Secrets = mergeSecretEntries(settings.Secrets, partial.Secrets)
-	merged.Network.HostToVM = settings.Network.HostToVM
-	if metadata.IsDefined("network", "host_to_vm") {
-		merged.Network.HostToVM = partial.Network.HostToVM
-	}
+	merged.Network.AllowedHosts = appendCollection(settings.Network.AllowedHosts, partial.Network.AllowedHosts)
+	merged.Network.HostToVM = appendCollection(settings.Network.HostToVM, partial.Network.HostToVM)
 	merged.Network.VMToHost = settings.Network.VMToHost
 	if metadata.IsDefined("network", "vm_to_host", "ports") {
-		merged.Network.VMToHost.Ports = partial.Network.VMToHost.Ports
+		ports := settings.Network.VMToHost.Ports
+		if ports == nil {
+			ports = []uint16{} // An explicit empty list also opts out of the built-in fallback.
+		}
+		merged.Network.VMToHost.Ports = appendCollection(ports, partial.Network.VMToHost.Ports)
 	}
-	merged.Files = settings.Files
-	if metadata.IsDefined("files") {
-		merged.Files = partial.Files
-	}
-	merged.State = settings.State
-	if metadata.IsDefined("state") {
-		merged.State = partial.State
-	}
+	merged.Files = appendCollection(settings.Files, partial.Files)
+	merged.State = appendCollection(settings.State, partial.State)
 	return merged, merged.Validate()
+}
+
+func appendCollection[T any](inherited, added []T) []T {
+	if len(added) == 0 {
+		return inherited
+	}
+	return slices.Concat(inherited, added)
 }
 
 // Resolve only paths supplied by this layer, preserving inherited origins.

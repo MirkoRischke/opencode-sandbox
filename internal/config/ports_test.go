@@ -14,12 +14,14 @@ func TestPortConfigurationLayers(t *testing.T) {
 	inherited, err := mergeSettings(settings, []byte("[vm]\ncpus = 4\n"), "/workspace")
 	require.NoError(t, err)
 	require.Equal(t, settings.Network.HostToVM, inherited.Network.HostToVM)
-	replaced, err := mergeSettings(settings, []byte("[[network.host_to_vm]]\nhost_port = 4000\nvm_port = 80\n"), "/workspace")
+	added, err := mergeSettings(settings, []byte("[[network.host_to_vm]]\nhost_port = 4000\nvm_port = 80\n"), "/workspace")
 	require.NoError(t, err)
-	require.Equal(t, []PortSettings{{HostPort: 4000, VMPort: 80}}, replaced.Network.HostToVM)
-	cleared, err := mergeSettings(settings, []byte("[network]\nhost_to_vm = []\n"), "/workspace")
+	require.Equal(t, []PortSettings{{HostPort: 3000, VMPort: 8080}, {HostPort: 3001, VMPort: 8080}, {HostPort: 4000, VMPort: 80}}, added.Network.HostToVM)
+	empty, err := mergeSettings(settings, []byte("[network]\nhost_to_vm = []\n"), "/workspace")
 	require.NoError(t, err)
-	require.Empty(t, cleared.Network.HostToVM)
+	require.Equal(t, settings.Network.HostToVM, empty.Network.HostToVM)
+	_, err = mergeSettings(settings, []byte("[[network.host_to_vm]]\nhost_port = 3000\nvm_port = 80\n"), "/workspace")
+	require.ErrorContains(t, err, "duplicate")
 }
 
 func TestInvalidPortConfiguration(t *testing.T) {
@@ -42,7 +44,9 @@ func TestInvalidPortConfiguration(t *testing.T) {
 func TestVMToHostConfigurationLayers(t *testing.T) {
 	t.Parallel()
 	require.Equal(t, []uint16{4000}, DefaultSettings().Network.VMToHost.Ports)
-	settings, err := mergeSettings(DefaultSettings(), []byte("[network.vm_to_host]\nports = [5432, 6379]"), "/global")
+	defaults := DefaultSettings()
+	defaults.Network.VMToHost.Ports = nil
+	settings, err := mergeSettings(defaults, []byte("[network.vm_to_host]\nports = [5432, 6379]"), "/global")
 	require.NoError(t, err)
 	require.Equal(t, []uint16{5432, 6379}, settings.Network.VMToHost.Ports)
 	for _, layer := range []string{"[network]\nunrestricted = true", "[network.vm_to_host]"} {
@@ -50,12 +54,15 @@ func TestVMToHostConfigurationLayers(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, settings.Network.VMToHost, inherited.Network.VMToHost)
 	}
-	replaced, err := mergeSettings(settings, []byte("[network.vm_to_host]\nports = [8080]"), "/workspace")
+	added, err := mergeSettings(settings, []byte("[network.vm_to_host]\nports = [8080]"), "/workspace")
 	require.NoError(t, err)
-	require.Equal(t, []uint16{8080}, replaced.Network.VMToHost.Ports)
-	cleared, err := mergeSettings(settings, []byte("[network.vm_to_host]\nports = []"), "/workspace")
+	require.Equal(t, []uint16{5432, 6379, 8080}, added.Network.VMToHost.Ports)
+	empty, err := mergeSettings(settings, []byte("[network.vm_to_host]\nports = []"), "/workspace")
 	require.NoError(t, err)
-	require.Empty(t, cleared.Network.VMToHost.Ports)
+	require.Equal(t, settings.Network.VMToHost.Ports, empty.Network.VMToHost.Ports)
+	explicitEmpty, err := mergeSettings(defaults, []byte("[network.vm_to_host]\nports = []"), "/global")
+	require.NoError(t, err)
+	require.Equal(t, []uint16{}, explicitEmpty.Network.VMToHost.Ports)
 }
 
 func TestInvalidVMToHostPorts(t *testing.T) {

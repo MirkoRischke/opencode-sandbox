@@ -25,3 +25,10 @@ func writeSettingsAt(t *testing.T, configDir, contents string) {
 	path := filepath.Join(dir, "config.toml")
 	require.NoError(t, os.WriteFile(path, []byte(contents), 0600))
 }
+
+func approveTestConfig(t *testing.T, worktree, configDir, stateDir string) {
+	t.Helper()
+	paths := launcherconfig.Paths{ConfigDir: configDir, StateDir: stateDir}
+	_, err := paths.LoadWorkspaceSettings(worktree, func(string, []byte, launcherconfig.Settings) error { return nil })
+	require.NoError(t, err)
+}

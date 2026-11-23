@@ -105,19 +105,19 @@ allowed_hosts = [
 
 # Host → VM: optional TCP mappings, bound only to host 127.0.0.1.
 # Application must listen on 0.0.0.0 in the VM. Recreate the VM after changes.
-# Workspace lists replace global lists; host_to_vm = [] under [network] clears them.
+# All config layers can add mappings; duplicate host ports are rejected.
 # [[network.host_to_vm]]
 # host_port = 3000
 # vm_port = 8080
 
 # VM → host: port 4000 allows the shared host LLM gateway by default.
 # Connect to host.microsandbox.internal:<port>, not the VM's localhost.
-# TCP only. Workspace lists replace global lists; [] clears inherited access.
+# TCP only. Explicit lists accumulate; [4000] is used only if no file sets ports.
 # Recreate the VM after changes.
 [network.vm_to_host]
-ports = [4000] # [] denies all host services; [4000, 5432] also allows PostgreSQL.
+ports = [4000] # Add 5432 for PostgreSQL. [] adds no access.
 
-# Optional directory-local .opencode-sandbox.toml replacement for the global list above:
+# Optional .opencode-sandbox.toml addition to the global list above:
 # [network]
 # allowed_hosts = ["nodejs.org"]
 

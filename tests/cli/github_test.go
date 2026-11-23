@@ -39,7 +39,10 @@ func TestGitHubTokenLoadsOnlyFromDedicatedCredentialFile(t *testing.T) {
 	defer cancel()
 	command := exec.CommandContext(ctx, buildLauncher(t))
 	command.Dir = newWorktree(t)
-	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir, "XDG_STATE_HOME="+t.TempDir(), "GH_TOKEN=host-gh-token-must-not-be-used")
+	paths := launcherconfig.Paths{ConfigDir: dir, StateDir: t.TempDir()}
+	_, err = paths.LoadWorkspaceSettings(command.Dir, func(string, []byte, launcherconfig.Settings) error { return nil })
+	require.NoError(t, err)
+	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+dir, "XDG_STATE_HOME="+paths.StateDir, "GH_TOKEN=host-gh-token-must-not-be-used")
 	output, err := command.CombinedOutput()
 	require.Error(t, err)
 	require.Contains(t, string(output), "load secret")
