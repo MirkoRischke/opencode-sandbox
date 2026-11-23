@@ -101,7 +101,8 @@ func DefaultSettings() Settings {
 // LoadSettings overlays the user's config.toml onto built-in defaults.
 // A missing file uses defaults; an invalid file is an error.
 func LoadSettings(configDir string) (Settings, error) {
-	return (Paths{ConfigDir: configDir}).loadSettings("", nil)
+	settings, _, err := (Paths{ConfigDir: configDir}).loadSettings("", nil)
+	return settings, err
 }
 
 // Validate rejects invalid launcher settings before runtime preparation.

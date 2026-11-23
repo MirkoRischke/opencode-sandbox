@@ -5,7 +5,7 @@ Set global options in `~/.config/opencode-sandbox/config.toml` (or under
 parent directory for settings shared by its descendants. This is separate from OpenCode's
 `opencode.json` and `cli.json`.
 
-## Get defaults and validate
+## Inspect and validate
 
 See [example.toml](example.toml) for a sample or print the current launcher
 defaults with descriptions:
@@ -13,6 +13,7 @@ defaults with descriptions:
 ```sh
 opencode-sandbox config default
 opencode-sandbox config validate
+opencode-sandbox config show
 ```
 
 `config default` prints built-in values, not your effective settings. It
@@ -22,6 +23,16 @@ config, remove settings you want to inherit rather than re-declaring defaults.
 Run `config validate` from the target directory to check the merged settings
 without approving them, reading credential values, or launching a VM. It
 rejects malformed TOML, unknown keys, and invalid values.
+
+Run `config show` from the target directory to print the validated, merged
+launcher settings as TOML on stdout, with resolved paths. It then lists the
+built-in defaults and the config files used, in merge order, on stderr.
+Like `config validate`, it does not check or change trust, read credentials, or launch a VM.
+It does not include launch-time CLI overrides.
+
+Treat the output as a preview, not a replacement for a config layer. Saving
+it as `.opencode-sandbox.toml` can duplicate inherited list entries on the
+next merge.
 
 ## Workspace overrides and trust
 

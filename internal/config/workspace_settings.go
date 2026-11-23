@@ -31,7 +31,7 @@ func (p Paths) log(message string, args ...any) {
 // Each file requires approval at its canonical location before credentials are read.
 // approve receives the exact file bytes and the final merged settings.
 func (p Paths) LoadWorkspaceSettings(directory string, approve func(string, []byte, Settings) error) (Settings, error) {
-	return p.loadSettings(directory, func(path string, data []byte, settings Settings) error {
+	settings, _, err := p.loadSettings(directory, func(path string, data []byte, settings Settings) error {
 		err := trustConfig(p.StateDir, path, data, func() error {
 			if approve == nil {
 				return fmt.Errorf("untrusted config %q; launch interactively to approve it", path)
@@ -41,11 +41,19 @@ func (p Paths) LoadWorkspaceSettings(directory string, approve func(string, []by
 		p.log("Configuration trust", "path", path, "accepted", err == nil)
 		return err
 	})
+	return settings, err
 }
 
 // ValidateWorkspaceSettings checks configuration without reading or changing trust
 // records. File sources are checked using metadata only; credentials are not read.
 func (p Paths) ValidateWorkspaceSettings(directory string) (Settings, error) {
+	settings, _, err := p.InspectWorkspaceSettings(directory)
+	return settings, err
+}
+
+// InspectWorkspaceSettings returns validated settings and the config file paths
+// in merge order, without accessing trust records or credentials.
+func (p Paths) InspectWorkspaceSettings(directory string) (Settings, []string, error) {
 	return p.loadSettings(directory, nil)
 }
 
@@ -54,37 +62,39 @@ type configLayer struct {
 	data []byte
 }
 
-func (p Paths) loadSettings(directory string, approve func(string, []byte, Settings) error) (Settings, error) {
+func (p Paths) loadSettings(directory string, approve func(string, []byte, Settings) error) (Settings, []string, error) {
 	settings := DefaultSettings()
 	p.log("Default configuration", "settings", settings)
 	defaultPorts := settings.Network.VMToHost.Ports
 	settings.Network.VMToHost.Ports = nil // No explicit ports yet.
 	layers, err := p.configLayers(directory)
 	if err != nil {
-		return settings, err
+		return settings, nil, err
 	}
+	sources := make([]string, 0, len(layers))
 	for _, layer := range layers {
 		settings, err = mergeSettings(settings, layer.data, filepath.Dir(layer.path))
 		if err != nil {
-			return settings, fmt.Errorf("config %q: %w", layer.path, err)
+			return settings, nil, fmt.Errorf("config %q: %w", layer.path, err)
 		}
+		sources = append(sources, layer.path)
 	}
 	if settings.Network.VMToHost.Ports == nil {
 		settings.Network.VMToHost.Ports = defaultPorts
 	}
 	if directory != "" {
 		if err := settings.ValidateFileSources(); err != nil {
-			return settings, err
+			return settings, nil, err
 		}
 	}
 	if approve != nil {
 		for _, layer := range layers {
 			if err := approve(layer.path, layer.data, settings); err != nil {
-				return settings, err
+				return settings, nil, err
 			}
 		}
 	}
-	return settings, nil
+	return settings, sources, nil
 }
 
 func (p Paths) configLayers(directory string) ([]configLayer, error) {

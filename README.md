@@ -54,6 +54,7 @@ opencode-sandbox                   # Launch for the current directory (Git optio
 opencode-sandbox --help            # Show launch options and commands
 opencode-sandbox config default    # Print documented launcher defaults
 opencode-sandbox config validate   # Validate without launching or approving
+opencode-sandbox config show       # Print merged launcher config and its sources
 opencode-sandbox diagnostics logs  # Find this workspace's launcher logs
 opencode-sandbox snapshot create   # Rebuild the prepared baseline
 opencode-sandbox list              # List managed VMs

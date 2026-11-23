@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"bytes"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -8,6 +11,7 @@ import (
 
 	launcherconfig "opencode-sandbox/internal/config"
 
+	"github.com/BurntSushi/toml"
 	"github.com/stretchr/testify/require"
 )
 
@@ -128,4 +132,64 @@ func TestConfigValidate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConfigShow(t *testing.T) {
+	configDir := t.TempDir()
+	stateDir := t.TempDir()
+	parent := t.TempDir()
+	workspace := filepath.Join(parent, "project")
+	globalConfig := filepath.Join(configDir, "opencode-sandbox", "config.toml")
+	parentConfig := filepath.Join(parent, ".opencode-sandbox.toml")
+	workspaceConfig := filepath.Join(workspace, ".opencode-sandbox.toml")
+	trust := filepath.Join(stateDir, "opencode-sandbox", "trust.json")
+	for path, content := range map[string]string{
+		globalConfig:    "[vm]\ncpus = 3\n[network]\nallowed_hosts = ['global.example.com']\n",
+		parentConfig:    "[[files]]\nsource = '.'\ntarget = '/opt/shared'\n[network]\nallowed_hosts = ['parent.example.com']\n[network.vm_to_host]\nports = []\n",
+		workspaceConfig: "[vm]\ncpus = 4\n[secrets.token]\nsource.file = './missing-credentials'\nguest.env = 'TOKEN'\nallowed_hosts = ['example.com']\nheaders = ['Authorization']\n",
+		trust:           "invalid trust",
+	} {
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
+		require.NoError(t, os.WriteFile(path, []byte(content), 0600))
+	}
+	t.Chdir(workspace)
+	t.Setenv("XDG_CONFIG_HOME", configDir)
+	t.Setenv("XDG_STATE_HOME", stateDir)
+
+	var combined bytes.Buffer
+	show := func() (string, string, error) {
+		t.Helper()
+		combined.Reset()
+		var stdout, stderr bytes.Buffer
+		cmd := NewCommand()
+		cmd.SetArgs([]string{"config", "show"})
+		cmd.SetOut(io.MultiWriter(&stdout, &combined))
+		cmd.SetErr(io.MultiWriter(&stderr, &combined))
+		err := cmd.ExecuteContext(t.Context())
+		return stdout.String(), stderr.String(), err
+	}
+
+	stdout, stderr, err := show()
+	require.NoError(t, err)
+	require.Equal(t, fmt.Sprintf("\nConfiguration sources (merge order):\n  built-in defaults\n  %q\n  %q\n  %q\n",
+		globalConfig, parentConfig, workspaceConfig), stderr)
+	require.Equal(t, stdout+stderr, combined.String())
+	var settings launcherconfig.Settings
+	_, err = toml.Decode(stdout, &settings)
+	require.NoError(t, err)
+	require.Equal(t, uint8(4), settings.VM.CPUs)
+	require.Equal(t, launcherconfig.DefaultSettings().VM.MemoryMiB, settings.VM.MemoryMiB)
+	require.Equal(t, []string{"global.example.com", "parent.example.com"}, settings.Network.AllowedHosts)
+	require.Equal(t, []uint16{}, settings.Network.VMToHost.Ports)
+	require.Equal(t, parent, settings.Files[0].Source)
+	require.Equal(t, filepath.Join(workspace, "missing-credentials"), settings.Secrets["token"].Source.File)
+	data, err := os.ReadFile(trust)
+	require.NoError(t, err)
+	require.Equal(t, "invalid trust", string(data))
+
+	require.NoError(t, os.WriteFile(workspaceConfig, []byte("[aws]\nprofile = 'dev'\n"), 0600))
+	stdout, stderr, err = show()
+	require.ErrorContains(t, err, "requires aws.role")
+	require.Empty(t, stdout)
+	require.Empty(t, stderr)
 }

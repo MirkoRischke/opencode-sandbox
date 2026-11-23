@@ -68,8 +68,11 @@ func configureConsoleLogging(cmd *cobra.Command, _ []string) error {
 		e.level.Set(level)
 		e.override = true
 	}
-	// Documentation/completion and validation bypass trust-dependent logging config.
-	if cmd.Name() == "default" || cmd.CommandPath() == "opencode-sandbox config validate" || cmd.Name() == "completion" || cmd.Parent() != nil && cmd.Parent().Name() == "completion" || cmd.Name() == "__complete" {
+	// Config inspection and completion bypass trust-dependent logging config.
+	if cmd.Name() == "completion" || cmd.Name() == "__complete" {
+		return nil
+	}
+	if parent := cmd.Parent(); parent != nil && (parent.Name() == "config" || parent.Name() == "completion") {
 		return nil
 	}
 	if e.override {
