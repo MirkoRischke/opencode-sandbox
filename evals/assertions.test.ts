@@ -28,7 +28,7 @@ function context(overrides = {}): AssertionValueFunctionContext {
     variant: { name: "local" }, caseID: "network",
     activatedSkills: ["opencode-sandbox"],
     files: [".opencode-sandbox.toml"],
-    config: '[vm]\nmemory_mib = 8192\n[network]\nadditional_allowed_hosts = ["registry.npmjs.org"]\n',
+    config: '[vm]\nmemory_mib = 8192\n[network]\nallowed_hosts = ["registry.npmjs.org"]\n',
     validation: { valid: true, output: "Configuration valid." },
     ...overrides,
   } } } as unknown as AssertionValueFunctionContext;
@@ -50,10 +50,10 @@ test("invalid CLI result cannot pass otherwise correct TOML", () => {
   assert.throws(() => configuration("", context({ validation: { valid: false, output: "invalid" } })));
 });
 
-test("replacement host list, changed memory, missing config, and extra files fail", () => {
+test("wrong host, changed memory, missing config, and extra files fail", () => {
   const config = context().providerResponse!.metadata!.config as string;
   for (const overrides of [
-    { config: config.replace("additional_allowed_hosts", "allowed_hosts") },
+    { config: config.replace("registry.npmjs.org", "example.org") },
     { config: config.replace("8192", "4096") },
     { config: null },
     { files: [".opencode-sandbox.toml", "unexpected.txt"] },

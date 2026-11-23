@@ -9,8 +9,7 @@ import (
 func TestEffectiveAllowedHosts(t *testing.T) {
 	t.Parallel()
 	network := NetworkSettings{
-		AllowedHosts:           []string{"GitHub.com", "api.github.com", "github.com"},
-		AdditionalAllowedHosts: []string{"API.GITHUB.COM", "registry.npmjs.org"},
+		AllowedHosts: []string{"GitHub.com", "api.github.com", "github.com", "API.GITHUB.COM", "registry.npmjs.org"},
 	}
 	require.Equal(t, []string{"GitHub.com", "api.github.com", "registry.npmjs.org"}, network.EffectiveAllowedHosts())
 	require.Equal(t, "GitHub.com", network.AllowedHosts[0], "resolution must not mutate settings")
@@ -24,16 +23,12 @@ func TestNetworkHostPatterns(t *testing.T) {
 	for _, host := range []string{"example.com", ".Example.com"} {
 		settings := DefaultSettings()
 		settings.Network.AllowedHosts = []string{host}
-		settings.Network.AdditionalAllowedHosts = []string{host}
 		require.NoError(t, settings.Validate(), host)
 		require.Equal(t, []string{host}, settings.Network.EffectiveAllowedHosts())
 	}
 	for _, host := range []string{"*.example.com", "*", "..example.com", ".com", ".127.0.0.1", ".https://example.com", ".example.com:443"} {
 		settings := DefaultSettings()
 		settings.Network.AllowedHosts = []string{host}
-		require.Error(t, settings.Validate(), host)
-		settings.Network.AllowedHosts = []string{}
-		settings.Network.AdditionalAllowedHosts = []string{host}
 		require.Error(t, settings.Validate(), host)
 	}
 }

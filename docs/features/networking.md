@@ -17,16 +17,14 @@ No public hosts are allowed by default. Add the hosts your project needs in
 
 ```toml
 [network]
-additional_allowed_hosts = ["registry.npmjs.org", "nodejs.org"]
+allowed_hosts = ["registry.npmjs.org", "nodejs.org"]
 ```
 
-- `allowed_hosts` and `additional_allowed_hosts` work together. Keep your
-  shared list in global `allowed_hosts`. A workspace replaces each list it
-  sets rather than appending to it.
+- Workspace `allowed_hosts` replaces the global list.
 - Use `example.com` for one host or `.example.com` to include all subdomains.
   Don't use URLs, IP addresses, ports, or `*`.
 - Allowed hosts are reachable over HTTPS on port 443. To block application
-  internet access, set both lists to `[]` and leave `unrestricted = false`.
+  internet access, set `allowed_hosts = []` and leave `unrestricted = false`.
 - An allowlist limits destinations, not what the guest can send to them. It
   does not widen [secret scope](secrets.md#limit-where-a-secret-can-be-used).
 

@@ -23,7 +23,7 @@ export const cases: TestCase[] = [
     ],
   },
   {
-    description: "Extend network access without replacing defaults",
+    description: "Allow a project-specific network host",
     vars: {
       caseID: "network",
       fixture: { ".opencode-sandbox.toml": "[vm]\nmemory_mib = 8192\n" },
@@ -37,14 +37,13 @@ export const cases: TestCase[] = [
         const parsed = parse(config);
         assert.equal((parsed.vm as Record<string, unknown>).memory_mib, 8192);
         const network = parsed.network as Record<string, unknown>;
-        assert.ok(Array.isArray(network.additional_allowed_hosts));
-        assert.ok(network.additional_allowed_hosts.includes("registry.npmjs.org"));
-        assert.equal(Object.hasOwn(network, "allowed_hosts"), false);
+        assert.ok(Array.isArray(network.allowed_hosts));
+        assert.ok(network.allowed_hosts.includes("registry.npmjs.org"));
         return true;
       } },
       {
         type: "llm-rubric",
-        value: "The output JSON contains an answer and the actual config. The answer must accurately explain that registry.npmjs.org was added while retaining inherited default network access. Fail if it contradicts the actual config or claims unperformed VM operations.",
+        value: "The output JSON contains an answer and the actual config. The answer must accurately explain that registry.npmjs.org was allowed. Fail if it contradicts the actual config or claims unperformed VM operations.",
       },
     ],
   },

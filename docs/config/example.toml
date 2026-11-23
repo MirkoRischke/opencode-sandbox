@@ -117,11 +117,9 @@ allowed_hosts = [
 [network.vm_to_host]
 ports = [4000] # [] denies all host services; [4000, 5432] also allows PostgreSQL.
 
-# Optional directory-local .opencode-sandbox.toml additions to the global baseline above:
+# Optional directory-local .opencode-sandbox.toml replacement for the global list above:
 # [network]
-# additional_allowed_hosts = ["nodejs.org"]
-# Both lists use replacement semantics across configs; their union is allowed.
-# Set both allowed_hosts and additional_allowed_hosts to [] to deny all internet.
+# allowed_hosts = ["nodejs.org"]
 
 # Sources:
 # https://github.com/upstash/context7#installation

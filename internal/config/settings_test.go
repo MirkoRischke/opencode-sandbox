@@ -20,17 +20,15 @@ func TestSettingsLoadFromConfigDirectory(t *testing.T) {
 	require.Equal(t, []string{"github.com", "api.github.com"}, settings.Network.AllowedHosts)
 }
 
-func TestSettingsLoadAdditionalNetworkHosts(t *testing.T) {
+func TestSettingsRejectRemovedAdditionalNetworkHosts(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	writeSettingsAt(t, dir, "[network]\nadditional_allowed_hosts = ['registry.npmjs.org']\n")
-	settings, err := launcherconfig.LoadSettings(dir)
-	require.NoError(t, err)
-	require.Equal(t, launcherconfig.DefaultSettings().Network.AllowedHosts, settings.Network.AllowedHosts)
-	require.Equal(t, []string{"registry.npmjs.org"}, settings.Network.AdditionalAllowedHosts)
+	_, err := launcherconfig.LoadSettings(dir)
+	require.ErrorContains(t, err, "unknown launcher setting: network.additional_allowed_hosts")
 }
 
-func TestSettingsRejectInvalidAdditionalNetworkHosts(t *testing.T) {
+func TestSettingsRejectInvalidNetworkHosts(t *testing.T) {
 	t.Parallel()
 	for _, value := range []string{
 		"'github.com'", "['https://github.com']", "['*.github.com']",
@@ -38,9 +36,9 @@ func TestSettingsRejectInvalidAdditionalNetworkHosts(t *testing.T) {
 	} {
 		t.Run(value, func(t *testing.T) {
 			dir := t.TempDir()
-			writeSettingsAt(t, dir, "[network]\nadditional_allowed_hosts = "+value+"\n")
+			writeSettingsAt(t, dir, "[network]\nallowed_hosts = "+value+"\n")
 			_, err := launcherconfig.LoadSettings(dir)
-			require.ErrorContains(t, err, "additional_allowed_hosts")
+			require.ErrorContains(t, err, "allowed_hosts")
 		})
 	}
 }

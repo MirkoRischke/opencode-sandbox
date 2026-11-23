@@ -44,7 +44,7 @@ if (process.argv.includes("--demo-history")) {
   gitRoot = join(state, "demo-history");
   await mkdir(join(gitRoot, skillPath), { recursive: true });
   await writeFile(join(gitRoot, skillPath, "SKILL.md"), local.replace(
-    "   To extend network access, use `[network] additional_allowed_hosts`;\n   `allowed_hosts` replaces inherited defaults.\n", ""));
+    "   For network access, set `[network] allowed_hosts`;\n   it replaces the inherited list.\n", ""));
   execFileSync("git", ["init", "-q", gitRoot]);
   execFileSync("git", ["-C", gitRoot, "add", skillPath]);
   execFileSync("git", ["-C", gitRoot, "-c", "user.name=Eval demo", "-c", "user.email=eval@example.invalid", "commit", "-qm", "Synthetic previous skill for POC"]);

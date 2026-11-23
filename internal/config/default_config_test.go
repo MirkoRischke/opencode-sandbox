@@ -27,7 +27,7 @@ func TestDefaultConfigRoundTripsToRuntimeDefaults(t *testing.T) {
 	require.Empty(t, settings.Files, "examples must not expose host files")
 	require.Empty(t, settings.Network.HostToVM, "examples must not expose VM ports")
 	require.Equal(t, []uint16{4000}, settings.Network.VMToHost.Ports, "only the host gateway is exposed by default")
-	require.Contains(t, out.String(), "additional_allowed_hosts = []")
+	require.Contains(t, out.String(), "allowed_hosts = []")
 	require.Contains(t, out.String(), "diagnostics = false")
 	require.Contains(t, out.String(), "unrestricted = false")
 	require.Contains(t, out.String(), "[aws]")
@@ -56,7 +56,6 @@ func TestDefaultNetworkAllowlist(t *testing.T) {
 	t.Parallel()
 	settings := DefaultSettings()
 	require.Empty(t, settings.Network.AllowedHosts)
-	require.Empty(t, settings.Network.AdditionalAllowedHosts)
 	require.False(t, settings.Network.Diagnostics)
 	require.False(t, settings.Network.Unrestricted)
 	require.Empty(t, settings.Secrets)
@@ -111,7 +110,6 @@ func TestUnrestrictedNetworkConfigMerging(t *testing.T) {
 	settings := DefaultSettings()
 	require.False(t, settings.Network.Unrestricted)
 	settings.Network.AllowedHosts = []string{"github.com"}
-	settings.Network.AdditionalAllowedHosts = []string{"registry.npmjs.org"}
 	settings, err := mergeSettings(settings, []byte("[network]\nunrestricted = true\n"), "/project")
 	require.NoError(t, err)
 	require.True(t, settings.Network.Unrestricted)
@@ -123,7 +121,6 @@ func TestUnrestrictedNetworkConfigMerging(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, settings.Network.Unrestricted)
 	require.Equal(t, []string{"github.com"}, settings.Network.AllowedHosts)
-	require.Equal(t, []string{"registry.npmjs.org"}, settings.Network.AdditionalAllowedHosts)
 	_, err = mergeSettings(settings, []byte("[network]\nunrestricted = 'true'\n"), "/project")
 	require.Error(t, err)
 }

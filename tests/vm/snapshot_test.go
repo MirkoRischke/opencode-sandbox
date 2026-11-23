@@ -40,7 +40,6 @@ func TestRepositorySnapshotWithoutPreparationCommand(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(skills, "SKILL.md"), []byte("current skill"), 0600))
 	settings.Files = append(settings.Files, config.FileSettings{Source: skills, Target: "/opt/skills"})
 	settings.Network.AllowedHosts = []string{"example.com"}
-	settings.Network.AdditionalAllowedHosts = nil
 	settings.VM.Image = "127.0.0.1:1/must-not-resolve:snapshot-restore"
 	child := prepareSnapshotChild(t, ctx, worktree, settings)
 	instructions := execInSandbox(t, child, "cat", guestInstructions)
@@ -68,7 +67,6 @@ func TestSnapshotPreparationHasPublicAccessButRestoredVMIsRestricted(t *testing.
 			worktree := newWorktree(t)
 			settings := testSettings(t)
 			settings.Network.AllowedHosts = []string{}
-			settings.Network.AdditionalAllowedHosts = nil
 			settings.Snapshot.Command = `
 curl --noproxy '*' --fail --silent --show-error --max-time 15 https://example.com > /root/preparation-download
 if curl --noproxy '*' --insecure --silent --max-time 3 https://host.microsandbox.internal; then

@@ -21,8 +21,7 @@ func TestSandboxInstructionsPreserveUserConfigAndSurviveReconnect(t *testing.T) 
 	const userConfig = `{"instructions":["/root/user-instructions.md","` + guestInstructions + `"],"model":"openai/user-model"}`
 	require.NoError(t, os.WriteFile(source, []byte(userConfig), 0600))
 	settings := testSettings(t)
-	settings.Network.AllowedHosts = []string{"GitHub.com"}
-	settings.Network.AdditionalAllowedHosts = []string{"github.com", "api.github.com"}
+	settings.Network.AllowedHosts = []string{"GitHub.com", "github.com", "api.github.com"}
 	settings.Files = []config.FileSettings{{Source: source, Target: "/root/.config/opencode/opencode.json"}}
 	s := prepareSandboxWithSettings(t, newWorktree(t), settings)
 	instructions := execInSandbox(t, s, "cat", guestInstructions)

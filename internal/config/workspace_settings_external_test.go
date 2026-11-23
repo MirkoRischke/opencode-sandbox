@@ -81,33 +81,6 @@ func TestRepoSettingsVMImage(t *testing.T) {
 	}
 }
 
-func TestRepoSettingsAdditionalNetworkHostsMergeIndependently(t *testing.T) {
-	t.Parallel()
-	for _, tc := range []struct {
-		name, config        string
-		allowed, additional []string
-	}{
-		{"add repo hosts", "[network]\nadditional_allowed_hosts = ['registry.npmjs.org']\n", []string{"github.com"}, []string{"registry.npmjs.org"}},
-		{"inherit both", "# inherit\n", []string{"github.com"}, []string{"global.example.com"}},
-		{"clear additions", "[network]\nadditional_allowed_hosts = []\n", []string{"github.com"}, []string{}},
-		{"clear baseline", "[network]\nallowed_hosts = []\n", []string{}, []string{"global.example.com"}},
-		{"deny all", "[network]\nallowed_hosts = []\nadditional_allowed_hosts = []\n", []string{}, []string{}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			root, _, paths := repoSettingsFixture(t, tc.config)
-			writeSettingsAt(t, paths.ConfigDir, "[network]\nallowed_hosts = ['github.com']\nadditional_allowed_hosts = ['global.example.com']\n")
-			settings, err := paths.LoadWorkspaceSettings(root, func(_ string, _ []byte, effective launcherconfig.Settings) error {
-				require.Equal(t, tc.allowed, effective.Network.AllowedHosts)
-				require.Equal(t, tc.additional, effective.Network.AdditionalAllowedHosts)
-				return nil
-			})
-			require.NoError(t, err)
-			require.Equal(t, tc.allowed, settings.Network.AllowedHosts)
-			require.Equal(t, tc.additional, settings.Network.AdditionalAllowedHosts)
-		})
-	}
-}
-
 func TestRepoSettingsMergeAllAttributes(t *testing.T) {
 	t.Parallel()
 	root, path, paths := repoSettingsFixture(t, `
@@ -255,7 +228,6 @@ func TestRepoSettingsRejectInvalidBeforeApproval(t *testing.T) {
 	for _, config := range []string{
 		"[network", "[vm]\ncpuz = 4", "[vm]\ncpus = 0", "[vm]\ncpus = 256",
 		"[network]\nallowed_hosts = 'github.com'", "[network]\nallowed_hosts = ['*.github.com']",
-		"[network]\nadditional_allowed_hosts = ['*.github.com']", "[network]\nadditional_allowed_hosts = 'github.com'",
 		"[secrets.test]\nsource.file = 'token'", "[secrets.test]\nvalue = 'inline'",
 	} {
 		t.Run(config, func(t *testing.T) {

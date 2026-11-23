@@ -45,7 +45,6 @@ func TestEmptyNetworkAllowlistBlocksInternet(t *testing.T) {
 	t.Parallel()
 	settings := testSettings(t)
 	settings.Network.AllowedHosts = []string{}
-	settings.Network.AdditionalAllowedHosts = []string{}
 	s := startSandboxWithSettings(t, settings)
 	requireNetworkBlocked(t, s, "https://github.com")
 }
@@ -54,8 +53,7 @@ func TestUnrestrictedNetworkAllowsPublicInternetButBlocksProtectedDestinations(t
 	t.Parallel()
 	settings := testSettings(t)
 	settings.Network.Unrestricted = true
-	settings.Network.AllowedHosts = []string{"github.com"}
-	settings.Network.AdditionalAllowedHosts = []string{"api.github.com"}
+	settings.Network.AllowedHosts = []string{"github.com", "api.github.com"}
 	s := startSandboxWithSettings(t, settings)
 	for _, url := range []string{"https://example.org", "http://example.org", "http://1.1.1.1"} {
 		t.Run(url, func(t *testing.T) {
@@ -83,7 +81,6 @@ func TestExistingSandboxRetainsItsNetworkPolicy(t *testing.T) {
 	t.Parallel()
 	initial := testSettings(t)
 	initial.Network.AllowedHosts = []string{}
-	initial.Network.AdditionalAllowedHosts = []string{}
 	s := startSandboxWithSettings(t, initial)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

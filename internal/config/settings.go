@@ -73,12 +73,11 @@ type VMSettings struct {
 }
 
 type NetworkSettings struct {
-	Unrestricted           bool             `toml:"unrestricted" description:"Allow public internet on any port/protocol, ignoring both host lists. Protected destinations remain blocked except explicit vm_to_host ports; secret scopes are unchanged."`
-	Diagnostics            bool             `toml:"diagnostics" description:"Collect cumulative denied-target diagnostics per workspace. Enables full rotating runtime debug logs and HTTP denial responses; recreate the VM after changing this setting."`
-	AllowedHosts           []string         `toml:"allowed_hosts" description:"Baseline DNS hosts: example.com matches exactly; .example.com includes the base domain and all subdomains. Passed unchanged to Microsandbox; HTTPS/WSS on TCP port 443 only."`
-	AdditionalAllowedHosts []string         `toml:"additional_allowed_hosts" description:"Extra hostnames, combined with allowed_hosts after merging. With unrestricted disabled, both lists must be empty to deny internet access. Each list replaces its inherited value when specified."`
-	HostToVM               []PortSettings   `toml:"host_to_vm" description:"TCP mappings allowing the host to reach VM services, bound to host 127.0.0.1 only. Empty exposes nothing. Workspace lists replace global lists."`
-	VMToHost               VMToHostSettings `toml:"vm_to_host" description:"Allow the VM to reach explicitly selected host-local services via host.microsandbox.internal. No port mapping."`
+	Unrestricted bool             `toml:"unrestricted" description:"Allow public internet on any port/protocol, ignoring allowed_hosts. Protected destinations remain blocked except explicit vm_to_host ports; secret scopes are unchanged."`
+	Diagnostics  bool             `toml:"diagnostics" description:"Collect cumulative denied-target diagnostics per workspace. Enables full rotating runtime debug logs and HTTP denial responses; recreate the VM after changing this setting."`
+	AllowedHosts []string         `toml:"allowed_hosts" description:"Baseline DNS hosts: example.com matches exactly; .example.com includes the base domain and all subdomains. Passed unchanged to Microsandbox; HTTPS/WSS on TCP port 443 only."`
+	HostToVM     []PortSettings   `toml:"host_to_vm" description:"TCP mappings allowing the host to reach VM services, bound to host 127.0.0.1 only. Empty exposes nothing. Workspace lists replace global lists."`
+	VMToHost     VMToHostSettings `toml:"vm_to_host" description:"Allow the VM to reach explicitly selected host-local services via host.microsandbox.internal. No port mapping."`
 }
 
 type VMToHostSettings struct {
@@ -94,10 +93,9 @@ func DefaultSettings() Settings {
 		VM:      VMSettings{Image: DefaultImage(), CPUs: 2, MemoryMiB: 2048, RootDiskMiB: 4096, DockerDiskMiB: 10240},
 		Startup: StartupSettings{Command: []string{DefaultStartupExecutable}},
 		Network: NetworkSettings{
-			HostToVM: []PortSettings{},
-			VMToHost: VMToHostSettings{Ports: []uint16{4000}},
-			AllowedHosts:           []string{},
-			AdditionalAllowedHosts: []string{},
+			HostToVM:     []PortSettings{},
+			VMToHost:     VMToHostSettings{Ports: []uint16{4000}},
+			AllowedHosts: []string{},
 		},
 	}
 }
@@ -184,18 +182,10 @@ func (n NetworkSettings) validate() error {
 	if n.AllowedHosts == nil {
 		return fmt.Errorf("network.allowed_hosts is required (use [] for an empty baseline)")
 	}
-	for _, list := range []struct {
-		name  string
-		hosts []string
-	}{
-		{"allowed_hosts", n.AllowedHosts},
-		{"additional_allowed_hosts", n.AdditionalAllowedHosts},
-	} {
-		for _, host := range list.hosts {
-			name := strings.TrimPrefix(host, ".")
-			if len(name) > 253 || !hostnamePattern.MatchString(name) {
-				return fmt.Errorf("network.%s: %q must be a DNS hostname or .prefixed domain suffix, not a URL, wildcard, IP, or port", list.name, host)
-			}
+	for _, host := range n.AllowedHosts {
+		name := strings.TrimPrefix(host, ".")
+		if len(name) > 253 || !hostnamePattern.MatchString(name) {
+			return fmt.Errorf("network.allowed_hosts: %q must be a DNS hostname or .prefixed domain suffix, not a URL, wildcard, IP, or port", host)
 		}
 	}
 	return nil

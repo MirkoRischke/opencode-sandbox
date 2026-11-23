@@ -9,11 +9,10 @@ import (
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
-func TestNetworkPolicyCombinesAndDeduplicatesHostLists(t *testing.T) {
+func TestNetworkPolicyDeduplicatesAllowedHosts(t *testing.T) {
 	t.Parallel()
 	settings := config.NetworkSettings{
-		AllowedHosts:           []string{"GitHub.com", "api.github.com", "github.com"},
-		AdditionalAllowedHosts: []string{"API.GITHUB.COM", "registry.npmjs.org", "registry.npmjs.org"},
+		AllowedHosts: []string{"GitHub.com", "api.github.com", "github.com", "API.GITHUB.COM", "registry.npmjs.org"},
 	}
 	policy := networkPolicy(settings)
 	require.Equal(t, m.PolicyActionDeny, policy.DefaultEgress)
@@ -33,16 +32,6 @@ func TestNetworkPolicyCombinesAndDeduplicatesHostLists(t *testing.T) {
 	require.Equal(t, "GitHub.com", settings.AllowedHosts[0], "policy must not mutate settings")
 }
 
-func TestNetworkPolicyAdditionalHostsWithoutBaseline(t *testing.T) {
-	t.Parallel()
-	settings := config.DefaultSettings()
-	settings.Network.AllowedHosts = []string{}
-	settings.Network.AdditionalAllowedHosts = []string{"registry.npmjs.org"}
-	require.NoError(t, settings.Validate())
-	policy := networkPolicy(settings.Network)
-	require.Equal(t, "registry.npmjs.org", policy.Rules[len(policy.Rules)-1].Destination)
-}
-
 func TestNetworkPolicyPreservesDomainSuffix(t *testing.T) {
 	t.Parallel()
 	settings := config.DefaultSettings()
@@ -53,7 +42,7 @@ func TestNetworkPolicyPreservesDomainSuffix(t *testing.T) {
 	require.Equal(t, ".Example.com", policy.Rules[len(policy.Rules)-1].Destination)
 }
 
-func TestUnrestrictedNetworkAllowsOnlyPublicDestinationsAndIgnoresHostLists(t *testing.T) {
+func TestUnrestrictedNetworkAllowsOnlyPublicDestinationsAndIgnoresAllowlist(t *testing.T) {
 	t.Parallel()
 	settings := config.DefaultSettings().Network
 	settings.Unrestricted = true
@@ -71,8 +60,7 @@ func TestUnrestrictedNetworkAllowsOnlyPublicDestinationsAndIgnoresHostLists(t *t
 	require.Equal(t, append(baseline, m.PolicyRule{
 		Action: m.PolicyActionAllow, Direction: m.PolicyDirectionEgress, Destination: "public",
 	}), policy.Rules)
-	settings.AllowedHosts = []string{"github.com"}
-	settings.AdditionalAllowedHosts = []string{"registry.npmjs.org"}
+	settings.AllowedHosts = []string{"github.com", "registry.npmjs.org"}
 	require.Equal(t, policy, networkPolicy(settings))
 	settings.Unrestricted = false
 	restricted := networkPolicy(settings)
