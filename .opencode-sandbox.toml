@@ -1,6 +1,0 @@
-[network]
-unrestricted = true
-
-allowed_hosts = [
-  "tuf-repo-cdn.sigstore.dev", # golang-ci-lint
-]
