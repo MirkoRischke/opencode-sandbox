@@ -1,7 +1,12 @@
 # Documentation
 
-When a change appears to introduce a feature worth documenting, ask the user
-whether to document it. Add it to `docs/features/` only after the user confirms.
+When a change appears to introduce a capability that gives users a meaningful
+reason to choose opencode-sandbox, ask whether to add a feature guide. Add one
+to `docs/features/` only after the user confirms.
+
+For significant user-facing features, follow the
+[feature-docs skill](skills/feature-docs/SKILL.md) when writing, consolidating,
+or reviewing their guides.
 
 Update `README.md` only when explicitly asked or to correct information made
 outdated by your changes. Exceptions:
