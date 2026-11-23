@@ -1,5 +1,8 @@
 # Documentation
 
+When a change appears to introduce a feature worth documenting, ask the user
+whether to document it. Add it to `docs/features/` only after the user confirms.
+
 Update `README.md` only when explicitly asked or to correct information made
 outdated by your changes. Exceptions:
 
