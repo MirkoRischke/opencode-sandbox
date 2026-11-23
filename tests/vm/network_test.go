@@ -70,13 +70,12 @@ func TestUnrestrictedNetworkAllowsPublicInternetButBlocksProtectedDestinations(t
 	}
 }
 
-func TestMissingConfigDefaultsToDevelopmentAllowlistInVM(t *testing.T) {
+func TestMissingConfigBlocksPublicInternetInVM(t *testing.T) {
 	t.Parallel()
 	settings, err := launcherconfig.LoadSettings(t.TempDir())
 	require.NoError(t, err)
 	s := startSandboxWithSettings(t, settings)
-	execInSandbox(t, s, "curl", "--noproxy", "*", "--fail", "--silent", "--show-error", "--max-time", "15", "https://github.com")
-	requireNetworkBlocked(t, s, "https://example.org")
+	requireNetworkBlocked(t, s, "https://github.com")
 	requireNetworkBlocked(t, s, "https://1.1.1.1")
 }
 

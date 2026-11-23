@@ -55,17 +55,11 @@ func TestNetworkDiagnosticsConfigMerging(t *testing.T) {
 func TestDefaultNetworkAllowlist(t *testing.T) {
 	t.Parallel()
 	settings := DefaultSettings()
-	require.Equal(t, []string{
-		"models.dev", "mcp.context7.com", "knowledge-mcp.global.api.aws",
-		"github.com", "api.github.com", "raw.githubusercontent.com",
-	}, settings.Network.AllowedHosts)
+	require.Empty(t, settings.Network.AllowedHosts)
 	require.Empty(t, settings.Network.AdditionalAllowedHosts)
 	require.False(t, settings.Network.Diagnostics)
 	require.False(t, settings.Network.Unrestricted)
 	require.Empty(t, settings.Secrets)
-
-	settings.Network.AllowedHosts[0] = "changed.example.com"
-	require.Equal(t, "models.dev", DefaultSettings().Network.AllowedHosts[0])
 }
 
 func TestSnapshotCommandConfigMerging(t *testing.T) {

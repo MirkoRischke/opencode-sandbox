@@ -75,20 +75,20 @@ unrestricted = false
 diagnostics = false
 allowed_hosts = [
   # OpenCode model catalog.
-  "models.dev",
+  # "models.dev",
 
   # Context7 remote MCP. Documentation retrieval happens server-side;
   # individual documentation sites need not be allowed for this MCP.
-  "mcp.context7.com",
+  # "mcp.context7.com",
 
   # AWS Knowledge remote MCP. Documentation retrieval happens server-side.
-  "knowledge-mcp.global.api.aws",
+  # "knowledge-mcp.global.api.aws",
 
   # GitHub: HTTPS Git, REST/GraphQL, and raw files.
   # Credential substitution remains limited to github.com / api.github.com.
-  "github.com",
-  "api.github.com",
-  "raw.githubusercontent.com",
+  # "github.com",
+  # "api.github.com",
+  # "raw.githubusercontent.com",
 
   # Optional: installing other Node versions with mise.
   # "nodejs.org",

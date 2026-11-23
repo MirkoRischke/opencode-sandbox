@@ -85,7 +85,7 @@ type VMToHostSettings struct {
 	Ports []uint16 `toml:"ports" description:"Host TCP ports (1-65535) reachable from the VM. Default [4000] allows the LLM gateway. Empty blocks all host service ports, including with unrestricted enabled. Workspace lists replace global lists; [] clears inherited access."`
 }
 
-// DefaultSettings allows common development services over HTTPS.
+// DefaultSettings denies public guest traffic unless configured otherwise.
 func DefaultSettings() Settings {
 	return Settings{
 		Logging: LoggingSettings{ConsoleLevel: "info"},
@@ -96,12 +96,7 @@ func DefaultSettings() Settings {
 		Network: NetworkSettings{
 			HostToVM: []PortSettings{},
 			VMToHost: VMToHostSettings{Ports: []uint16{4000}},
-			AllowedHosts: []string{
-				// Model catalog and remote documentation MCPs.
-				"models.dev", "mcp.context7.com", "knowledge-mcp.global.api.aws",
-				// GitHub Git operations, APIs, and raw files.
-				"github.com", "api.github.com", "raw.githubusercontent.com",
-			},
+			AllowedHosts:           []string{},
 			AdditionalAllowedHosts: []string{},
 		},
 	}

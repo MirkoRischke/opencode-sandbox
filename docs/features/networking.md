@@ -1,6 +1,6 @@
 # Sandbox networking
 
-Workspace VMs can reach common development services by default. You control
+Workspace VMs cannot reach the public internet by default. You control
 which internet destinations they can reach and which ports connect the host
 and guest.
 
@@ -12,9 +12,8 @@ and guest.
 
 ## Allow or block internet access
 
-Run `opencode-sandbox config default` to see the allowed hosts. GitHub and
-common documentation services are included. Package and container registries
-are not. Add the hosts your project needs in `.opencode-sandbox.toml`:
+No public hosts are allowed by default. Add the hosts your project needs in
+`.opencode-sandbox.toml`:
 
 ```toml
 [network]
