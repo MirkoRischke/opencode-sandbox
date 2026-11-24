@@ -3,7 +3,8 @@ import { test } from "node:test";
 import type { AssertionValueFunctionContext } from "promptfoo";
 import {
   activatesSkillWhenInstalled, allowsNetworkHost, doesNotActivateSkill,
-  hasMemoryMiB, hasOnlyWorkspaceConfig, leavesWorkspaceConfigUnchanged, validConfiguration,
+  hasCpuCount, hasMemoryMiB, hasOnlyWorkspaceConfig, leavesInheritedConfigsUnchanged,
+  leavesWorkspaceConfigUnchanged, validConfiguration,
 } from "./assertions.ts";
 import { cases } from "./cases.ts";
 
@@ -49,6 +50,13 @@ test("memory check requires the expected value and an existing config", () => {
   assert.throws(() => check("", context({ config: null })), /must exist/);
 });
 
+test("CPU count check requires the supported key and preserves the requested count", () => {
+  const check = hasCpuCount(2).value;
+  assert.equal(check("", context({ config: "[vm]\ncpus = 2\n" })), true);
+  assert.throws(() => check("", context({ config: "[vm]\ncores = 2\n" })), /vm.cpus/);
+  assert.throws(() => check("", context({ config: "[vm]\ncpus = 4\n" })), /vm.cpus/);
+});
+
 test("workspace config must be the only file", () => {
   const check = hasOnlyWorkspaceConfig().value;
   assert.equal(check("", context()), true);
@@ -59,6 +67,15 @@ test("unrelated case requires byte-for-byte unchanged config", () => {
   const check = leavesWorkspaceConfigUnchanged().value;
   assert.equal(check("", context({ config: fixtureConfig })), true);
   assert.throws(() => check("", context({ config: fixtureConfig + "\n" })), /must be unchanged/);
+});
+
+test("inherited configs must both remain unchanged", () => {
+  const check = leavesInheritedConfigsUnchanged().value;
+  const vars = { parentConfig: "parent", globalConfig: "global" };
+  const trial = (overrides = {}) => ({ ...context({ ...vars, ...overrides }), vars });
+  assert.equal(check("", trial()), true);
+  assert.throws(() => check("", trial({ parentConfig: "changed" })), /parentConfig must be unchanged/);
+  assert.throws(() => check("", trial({ globalConfig: null })), /globalConfig must be unchanged/);
 });
 
 test("Promptfoo merges mandatory validation, supports built-ins, and repeats native cases", async () => {

@@ -51,6 +51,14 @@ export function hasMemoryMiB(expected: number) {
   });
 }
 
+export function hasCpuCount(expected: number) {
+  return check(context => {
+    const vm = parsedConfig(context).vm as Record<string, unknown> | undefined;
+    assert.equal(vm?.cpus, expected, `vm.cpus must be ${expected}`);
+    return true;
+  });
+}
+
 export function allowsNetworkHost(host: string) {
   return check(context => {
     const network = parsedConfig(context).network as Record<string, unknown> | undefined;
@@ -67,6 +75,18 @@ export function leavesWorkspaceConfigUnchanged() {
     const before = fixture[configFile];
     assert.equal(typeof before, "string", `fixture must provide ${configFile}`);
     assert.equal(metadata(context).config, before, `${configFile} must be unchanged`);
+    return true;
+  });
+}
+
+export function leavesInheritedConfigsUnchanged() {
+  return check(context => {
+    const meta = metadata(context);
+    for (const layer of ["parentConfig", "globalConfig"] as const) {
+      const before = context.vars[layer];
+      assert.equal(typeof before, "string", `fixture must provide ${layer}`);
+      assert.equal(meta[layer], before, `${layer} must be unchanged`);
+    }
     return true;
   });
 }

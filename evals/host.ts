@@ -20,6 +20,7 @@ export async function createEvalHost(
     "$schema": "https://opencode.ai/config.json",
     providers: { litellm: provider },
     snapshots: false,
+    websearch: false,
   }) };
   return SDK.create({
     plugins: [Plugin.define({

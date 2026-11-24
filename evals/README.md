@@ -125,6 +125,8 @@ assertion regression tests to `assertions.test.ts` when appropriate.
 - LLM judge: Promptfoo `llm-rubric` compares the network-task explanation to the
   actual resulting config. CLI validation remains authoritative for validity.
 
+All variants have web search disabled. Each agent has 30 seconds to finish;
+timed-out trials are interrupted and reported as errors, not graded answers.
 All variants receive identical task prompts. No prompt explicitly tells the agent
 to invoke the candidate skill. Positive activation measures model choice.
 

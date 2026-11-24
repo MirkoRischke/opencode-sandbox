@@ -1,13 +1,111 @@
 import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { OpenCode } from "@opencode/sdk";
-import type { SessionMessageInfo } from "@opencode/client";
+import type { MessageListOutput, SessionCreateOutput, SessionMessageInfo } from "@opencode/client";
 import type { ApiProvider, CallApiContextParams, ProviderResponse } from "promptfoo";
 
 const exec = promisify(execFile);
+const workspaceConfigName = ".opencode-sandbox.toml";
+const messageLimit = 200;
+const agentTimeoutMs = 30_000;
+const sdkTimeoutMs = 5_000;
 export type Variant = { name: string; skillDirectory?: string; revision: string; hash?: string };
+
+async function withDeadline<T>(ms: number, operation: (request: { signal: AbortSignal }) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const deadline = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(`Timed out after ${ms / 1000} seconds`));
+        controller.abort();
+      }, ms);
+    });
+    return await Promise.race([deadline, operation({ signal: controller.signal })]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function prepareTrial(directory: string, vars: CallApiContextParams["vars"]) {
+  const { fixture, parentConfig, globalConfig } = vars;
+  const workspace = join(directory, "workspace");
+  await mkdir(workspace);
+  for (const [file, contents] of Object.entries(fixture as Record<string, string>)) {
+    await writeFile(join(workspace, file), contents);
+  }
+
+  let parentPath: string | undefined;
+  if (typeof parentConfig === "string") {
+    parentPath = join(directory, workspaceConfigName);
+    await writeFile(parentPath, parentConfig);
+  }
+
+  let globalPath: string | undefined;
+  let shellEnvironment: Record<string, string> | undefined;
+  if (typeof globalConfig === "string") {
+    // Give parallel trials separate global launcher configs without changing process.env.
+    const configHome = join(directory, "xdg-config");
+    globalPath = join(configHome, "opencode-sandbox", "config.toml");
+    await mkdir(dirname(globalPath), { recursive: true });
+    await writeFile(globalPath, globalConfig);
+    shellEnvironment = { XDG_CONFIG_HOME: configHome };
+    for (const key of ["PATH", "HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME", "LANG", "SHELL"]) {
+      const value = process.env[key];
+      if (value !== undefined) shellEnvironment[key] = value;
+    }
+  }
+
+  return { workspace, parentPath, globalPath, shellEnvironment };
+}
+
+async function readConfig(path: string) {
+  try {
+    return await readFile(path, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+async function inspectWorkspace(trial: Awaited<ReturnType<typeof prepareTrial>>) {
+  const { workspace, parentPath, globalPath, shellEnvironment } = trial;
+  const files = (await readdir(workspace, { recursive: true })).sort();
+  const config = await readConfig(join(workspace, workspaceConfigName));
+  const env = shellEnvironment && { ...process.env, ...shellEnvironment };
+  let validation: { valid: boolean; output: string };
+  try {
+    const result = await exec("opencode-sandbox", ["config", "validate"], { cwd: workspace, env, timeout: 10_000 });
+    validation = { valid: true, output: result.stdout + result.stderr };
+  } catch (error) {
+    validation = { valid: false, output: String(error) };
+  }
+  return {
+    config, files, validation,
+    ...(parentPath && { parentConfig: await readConfig(parentPath) }),
+    ...(globalPath && { globalConfig: await readConfig(globalPath) }),
+  };
+}
+
+function transcriptEvidence(data: SessionMessageInfo[]) {
+  if (data.length === messageLimit) throw new Error("Trace reaches POC message limit; refusing incomplete assertions");
+  const assistants = data.filter(message => message.type === "assistant");
+  const failure = assistants.find(message => message.error);
+  if (failure) throw new Error(JSON.stringify(failure.error));
+
+  const parts = assistants.flatMap(message => message.content);
+  return {
+    answer: parts.flatMap(part => part.type === "text" ? [part.text] : []).join("\n"),
+    activatedSkills: [
+      ...data.filter(message => message.type === "skill").map(message => message.name),
+      ...parts.flatMap(part =>
+        part.type === "tool" && part.name === "skill" && part.state.status === "completed"
+          ? [String((part.state.input as { id?: string }).id)] : []),
+    ],
+  };
+}
 
 export class OpenCodeProvider implements ApiProvider {
   private host: OpenCode.Interface;
@@ -25,66 +123,67 @@ export class OpenCodeProvider implements ApiProvider {
 
   id() { return this.variant.name; }
 
+  private async checkedSkillInventory(workspace: string, request: { signal: AbortSignal }) {
+    const available = await this.host.skill.list({ location: { directory: workspace } }, request);
+    const names = (available.data as { name: string }[]).map(skill => skill.name).sort();
+    // Browser is supplied by the SDK after plugin transforms, not personal config.
+    const expected = this.variant.skillDirectory ? ["Browser", "opencode-sandbox"] : ["Browser"];
+    if (JSON.stringify(names) !== JSON.stringify(expected)) {
+      throw new Error(`Unexpected skill inventory: ${JSON.stringify(names)}`);
+    }
+    return available;
+  }
+
   async callApi(prompt: string, context?: CallApiContextParams): Promise<ProviderResponse> {
     const started = performance.now();
-    const { caseID, fixture } = context!.vars;
-    const trial = await mkdtemp(join(this.artifacts, `${caseID}-${this.variant.name}-`));
-    const workspace = join(trial, "workspace");
-    await mkdir(workspace);
-    for (const [file, contents] of Object.entries(fixture as Record<string, string>)) {
-      await writeFile(join(workspace, file), contents);
-    }
-    const request = { signal: AbortSignal.timeout(90_000) };
-    const session = await this.host.sessions.create({
+    const { vars } = context!;
+    const { caseID } = vars;
+    const directory = await mkdtemp(join(this.artifacts, `${caseID}-${this.variant.name}-`));
+    const trial = await prepareTrial(directory, vars);
+    const { workspace, shellEnvironment } = trial;
+    const session = await withDeadline<SessionCreateOutput>(sdkTimeoutMs, request => this.host.sessions.create({
       location: { directory: workspace },
       model: { providerID: "litellm", id: process.env.EVAL_MODEL ?? "gpt-6.2-sol" },
       permissions: [{ action: "*", resource: "*", effect: "allow" }],
-    }, request);
+    }, request));
+    let completed = false;
     try {
-      await this.host.sessions.prompt({ sessionID: session.id, text: prompt }, request);
-      await this.host.session.wait({ sessionID: session.id }, request);
-      const available = await this.host.skill.list({ location: { directory: workspace } });
-      const skillNames = (available.data as Array<{name: string}>).map(s => s.name).sort();
-      // Browser is supplied by the SDK after plugin transforms, not personal config.
-      const expected = this.variant.skillDirectory ? ["Browser", "opencode-sandbox"] : ["Browser"];
-      if (JSON.stringify(skillNames) !== JSON.stringify(expected)) {
-        throw new Error(`Unexpected skill inventory: ${JSON.stringify(skillNames)}`);
+      if (shellEnvironment) {
+        await withDeadline(sdkTimeoutMs, request =>
+          this.host.session.environment({ sessionID: session.id, variables: shellEnvironment }, request));
       }
-      const messages = await this.host.message.list({ sessionID: session.id, limit: 200, order: "asc" }, request);
-      if (messages.data.length === 200) throw new Error("Trace reaches POC message limit; refusing incomplete assertions");
-      const data = messages.data as SessionMessageInfo[];
-      const assistants = data.filter(m => m.type === "assistant");
-      const failure = assistants.find(m => m.error);
-      if (failure) throw new Error(JSON.stringify(failure.error));
-      const answer = assistants.flatMap(m => m.content.flatMap(p => p.type === "text" ? [p.text] : [])).join("\n");
-      const files = await readdir(workspace, { recursive: true });
-      const config = await readFile(join(workspace, ".opencode-sandbox.toml"), "utf8").catch((error: NodeJS.ErrnoException) => {
-        if (error.code === "ENOENT") return null;
-        throw error;
-      });
-      let validation: { valid: boolean; output: string };
+      let agentFinished = false;
       try {
-        const result = await exec("opencode-sandbox", ["config", "validate"], { cwd: workspace, timeout: 10_000 });
-        validation = { valid: true, output: result.stdout + result.stderr };
-      } catch (error) {
-        validation = { valid: false, output: String(error) };
+        await withDeadline(agentTimeoutMs, async request => {
+          await this.host.sessions.prompt({ sessionID: session.id, text: prompt }, request);
+          request.signal.throwIfAborted();
+          await this.host.session.wait({ sessionID: session.id }, request);
+        });
+        agentFinished = true;
+      } finally {
+        if (!agentFinished) {
+          await withDeadline(sdkTimeoutMs, request =>
+            this.host.session.interrupt({ sessionID: session.id }, request)).catch(() => {});
+        }
       }
+
+      const availableSkills = await withDeadline(sdkTimeoutMs, request => this.checkedSkillInventory(workspace, request));
+      const messages = await withDeadline<MessageListOutput>(sdkTimeoutMs, request =>
+        this.host.message.list({ sessionID: session.id, limit: messageLimit, order: "asc" }, request));
+      const { answer, activatedSkills } = transcriptEvidence(messages.data);
+      const result = await inspectWorkspace(trial);
       const metadata = {
         variant: this.variant, workspace, caseID,
-        availableSkills: available,
-        activatedSkills: [
-          ...data.filter(m => m.type === "skill").map(m => m.name),
-          ...assistants.flatMap(m => m.content.flatMap(p =>
-            p.type === "tool" && p.name === "skill" && p.state.status === "completed"
-              ? [String((p.state.input as { id?: string }).id)] : [])),
-        ],
-        config, files: files.sort(), validation, elapsedMs: performance.now() - started,
+        availableSkills, activatedSkills, ...result,
+        elapsedMs: performance.now() - started,
       };
-      await writeFile(join(trial, "trace.json"), JSON.stringify(messages, null, 2));
-      await writeFile(join(trial, "result.json"), JSON.stringify({ answer, ...metadata }, null, 2));
-      return { output: JSON.stringify({ answer, config }), metadata };
+      await writeFile(join(directory, "trace.json"), JSON.stringify(messages, null, 2));
+      await writeFile(join(directory, "result.json"), JSON.stringify({ answer, ...metadata }, null, 2));
+      completed = true;
+      return { output: JSON.stringify({ answer, config: result.config }), metadata };
     } finally {
-      await this.host.sessions.remove({ sessionID: session.id });
+      await withDeadline(sdkTimeoutMs, request => this.host.sessions.remove({ sessionID: session.id }, request))
+        .catch(error => { if (completed) throw error; });
     }
   }
 }
