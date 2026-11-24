@@ -98,13 +98,9 @@ are needed:
     task: "Set workspace sandbox VM memory to 4096 MiB. Only edit the local config.",
   },
   assert: [
-    { type: "javascript", value: expectSkillActivation(true) },
-    { type: "javascript", value: (_output, context) => {
-      const { config, files } = context.providerResponse!.metadata!;
-      assert.deepEqual(files, [".opencode-sandbox.toml"]);
-      assert.equal((parse(config).vm as Record<string, unknown>).memory_mib, 4096);
-      return true;
-    } },
+    activatesSkillWhenInstalled(),
+    hasOnlyWorkspaceConfig(),
+    hasMemoryMiB(4096),
     {
       type: "llm-rubric",
       value: "The explanation accurately describes the memory change in the config.",
@@ -113,12 +109,13 @@ are needed:
 }
 ```
 
-Inline JavaScript assertions use ordinary TypeScript/Node assertions: throw to
-fail and return `true` to pass. `files` is the sorted workspace inventory.
+Use named helpers from `assertions.ts` for deterministic checks. The helpers
+handle TOML parsing and Promptfoo metadata so cases can describe just what to check.
 Shared `defaultTest.assert` requires CLI validation and an existing config for
 every case; these checks and case assertions all must pass (no ordering assumed).
-`expectSkillActivation(false)` checks non-activation; the helper always expects
-non-activation for the no-skill baseline. Optional `llm-rubric` assertions inherit
+`doesNotActivateSkill()` checks non-activation for all variants, while
+`activatesSkillWhenInstalled()` expects activation only when a skill is installed.
+Optional `llm-rubric` assertions inherit
 the judge provider from `defaultTest.options.provider`. Other Promptfoo assertion
 types can be added directly, without extending a custom schema.
 Use `EVAL_CASE=<id>` to run just the new case across the three variants. Add

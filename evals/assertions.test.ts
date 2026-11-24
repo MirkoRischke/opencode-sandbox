@@ -1,30 +1,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { AssertionValueFunctionContext, TestCase } from "promptfoo";
-import { expectSkillActivation, validConfiguration } from "./assertions.ts";
+import type { AssertionValueFunctionContext } from "promptfoo";
+import {
+  activatesSkillWhenInstalled, allowsNetworkHost, doesNotActivateSkill,
+  hasMemoryMiB, hasOnlyWorkspaceConfig, leavesWorkspaceConfigUnchanged, validConfiguration,
+} from "./assertions.ts";
 import { cases } from "./cases.ts";
 
 const network = cases.find(c => c.vars?.caseID === "network")!;
-const unrelated = cases.find(c => c.vars?.caseID === "unrelated")!;
-const activation = expectSkillActivation(true);
-
-function inlineCheck(testCase: TestCase, index: number) {
-  const assertion = testCase.assert![index];
-  if (assertion.type !== "javascript" || typeof assertion.value !== "function") {
-    throw new Error("Expected inline JavaScript assertion");
-  }
-  return assertion.value;
-}
-
-// Activation returns a grading object; configuration checks return true.
-const configuration = (_output: string, ctx: AssertionValueFunctionContext) => {
-  validConfiguration("", ctx);
-  assert.equal(inlineCheck(network, 1)("", ctx), true);
-  return true;
-};
+const fixtureConfig = "[vm]\nmemory_mib = 8192\n";
 
 function context(overrides = {}): AssertionValueFunctionContext {
-  return { providerResponse: { metadata: {
+  return { vars: { fixture: { ".opencode-sandbox.toml": fixtureConfig } }, providerResponse: { metadata: {
     variant: { name: "local" }, caseID: "network",
     activatedSkills: ["opencode-sandbox"],
     files: [".opencode-sandbox.toml"],
@@ -35,51 +22,43 @@ function context(overrides = {}): AssertionValueFunctionContext {
 }
 
 test("activation checks both positive and negative expectations", () => {
+  const activation = activatesSkillWhenInstalled().value;
+  const noActivation = doesNotActivateSkill().value;
   assert.equal(activation("", context()).pass, true);
   assert.equal(activation("", context({ activatedSkills: [] })).pass, false);
-  assert.equal(expectSkillActivation(false)("", context({ activatedSkills: [] })).pass, true);
-  assert.equal(expectSkillActivation(false)("", context()).pass, false);
+  assert.equal(noActivation("", context({ activatedSkills: [] })).pass, true);
+  assert.equal(noActivation("", context()).pass, false);
   assert.equal(activation("", context({ variant: { name: "none" }, activatedSkills: [] })).pass, true);
 });
 
-test("valid network extension passes", () => {
-  assert.equal(configuration("", context()), true);
+test("network host check requires the requested host", () => {
+  const check = allowsNetworkHost("registry.npmjs.org").value;
+  assert.equal(check("", context()), true);
+  assert.throws(() => check("", context({ config: fixtureConfig })), /network.allowed_hosts/);
+  assert.throws(() => check("", context({ config: '[network]\nallowed_hosts = ["example.org"]\n' })), /registry.npmjs.org/);
 });
 
 test("invalid CLI result cannot pass otherwise correct TOML", () => {
-  assert.throws(() => configuration("", context({ validation: { valid: false, output: "invalid" } })));
+  assert.throws(() => validConfiguration("", context({ validation: { valid: false, output: "invalid" } })), /invalid/);
 });
 
-test("wrong host, changed memory, missing config, and extra files fail", () => {
-  const config = context().providerResponse!.metadata!.config as string;
-  for (const overrides of [
-    { config: config.replace("registry.npmjs.org", "example.org") },
-    { config: config.replace("8192", "4096") },
-    { config: null },
-    { files: [".opencode-sandbox.toml", "unexpected.txt"] },
-  ]) assert.throws(() => configuration("", context(overrides)));
+test("memory check requires the expected value and an existing config", () => {
+  const check = hasMemoryMiB(8192).value;
+  assert.equal(check("", context()), true);
+  assert.throws(() => check("", context({ config: "[vm]\nmemory_mib = 4096\n" })), /vm.memory_mib/);
+  assert.throws(() => check("", context({ config: null })), /must exist/);
+});
+
+test("workspace config must be the only file", () => {
+  const check = hasOnlyWorkspaceConfig().value;
+  assert.equal(check("", context()), true);
+  assert.throws(() => check("", context({ files: [".opencode-sandbox.toml", "unexpected.txt"] })));
 });
 
 test("unrelated case requires byte-for-byte unchanged config", () => {
-  const check = inlineCheck(unrelated, 1);
-  assert.equal(check("", context({ config: "[vm]\nmemory_mib = 8192\n" })), true);
-  assert.throws(() => check("", context()));
-});
-
-test("new native cases supply their own checks without runner changes", () => {
-  const custom: TestCase = {
-    vars: { fixture: {}, task: "custom" },
-    assert: [{
-      type: "javascript",
-      value: (_output, ctx) => {
-        assert.equal(ctx.providerResponse!.metadata!.config, "expected");
-        return true;
-      },
-    }],
-  };
-  const check = inlineCheck(custom, 0);
-  assert.equal(check("", context({ config: "expected" })), true);
-  assert.throws(() => check("", context()));
+  const check = leavesWorkspaceConfigUnchanged().value;
+  assert.equal(check("", context({ config: fixtureConfig })), true);
+  assert.throws(() => check("", context({ config: fixtureConfig + "\n" })), /must be unchanged/);
 });
 
 test("Promptfoo merges mandatory validation, supports built-ins, and repeats native cases", async () => {
@@ -98,8 +77,8 @@ test("Promptfoo merges mandatory validation, supports built-ins, and repeats nat
     }],
     defaultTest: { assert: [{ type: "javascript", value: validConfiguration }] },
     tests: [true, false].map(valid => ({
-      vars: { task: "7 times 8", valid },
-      assert: [{ type: "contains" as const, value: "56" }],
+      vars: { ...network.vars, valid },
+      assert: [...network.assert!.filter(a => a.type !== "llm-rubric"), { type: "contains" as const, value: "56" }],
     })),
   }, { cache: false, repeat: 2 });
   const { stats } = await suite.toEvaluateSummary();
