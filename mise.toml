@@ -32,6 +32,14 @@ run = 'python3 scripts/quality.py "${usage_action?}"'
 description = "Build the worktree launcher"
 run = "go build -o bin/opencode-sandbox ./cmd/opencode-sandbox"
 
+[tasks."skill:sync"]
+description = "Copy the canonical user guides into the installable skill"
+run = "sh scripts/sync-skill-docs.sh"
+
+[tasks."skill:check"]
+description = "Check that the bundled skill guides match the canonical docs"
+run = "sh scripts/sync-skill-docs.sh --check"
+
 [tasks.install]
 description = "Build and install the launcher to ~/.local/bin"
 depends = ["cli"]

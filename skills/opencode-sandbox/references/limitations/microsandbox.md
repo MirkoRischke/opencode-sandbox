@@ -1,0 +1,544 @@
+# Microsandbox limitations and bugs
+
+Tracker for upstream limitations encountered by this project, not an exhaustive
+inventory of Microsandbox features. Use it when evaluating an SDK/runtime upgrade.
+
+Baseline: **Go SDK and runtime v0.7.8**. Inventory recorded 2026-10-28 from
+versioned source, existing experiments, tests, and the automatic-snapshot review.
+Tests were not rerun when writing the original inventory. Source rechecked through
+**Go SDK/runtime v0.7.11** on 2026-10-28; see the
+[upgrade research](https://github.com/MirkoRischke/opencode-sandbox/blob/main/docs/research/microsandbox-v0.7.11-upgrade.md). Source rechecks below
+are not behavioral verification. Separately attributed parent-session test results
+do not imply every upgrade check was exercised.
+
+### v0.7.15 upgrade recheck (2026-11-13)
+
+Reviewed releases v0.7.12–v0.7.15 and compared relevant versioned source against
+v0.7.11. No existing open limitation was established resolved. The full standard
+suite passed on v0.7.15, including selected-header substitution, snapshot removal,
+restore, resume, owned Docker storage, and published ports. This does not exercise
+every entry's dedicated upgrade check or establish an intermittent bug fixed.
+
+- MSB-01/05: Go modification fields are unchanged; `modify.go` differs only in
+  a documentation comment. Selected-header restoration remains supported;
+  general network-policy modification remains unavailable.
+- MSB-02–04: `sdk/go/restore.go` is byte-identical to v0.7.11. Existing restore
+  configuration adaptations remain necessary.
+- MSB-06: `crates/agentd/lib/tls.rs` is byte-identical; no old-CA removal fix found.
+- MSB-07/08: `crates/network/lib/engine/tls/proxy.rs` is byte-identical. New inbound
+  admission metrics are not a complete policy-denial audit. The controlled
+  valid-IP-SAN check remains outstanding.
+- MSB-09: snapshot `group.rs` is byte-identical; HEAD/deletion constraints remain.
+- MSB-11: public/FFI storage options, runtime cache ownership, and image cleanup
+  source are byte-identical; no ownership/force bypass was added.
+- The root-disk `size_mib: None` restore assignment remains. No identified release
+  change establishes a fix for the intermittent snapshot-listing failure or
+  warrants reverting the identity-addressed DNS test fixture.
+
+Evidence: [v0.7.11 → v0.7.15 comparison](https://github.com/superradcompany/microsandbox/compare/v0.7.11...v0.7.15),
+[v0.7.12](https://github.com/superradcompany/microsandbox/releases/tag/v0.7.12),
+[v0.7.13](https://github.com/superradcompany/microsandbox/releases/tag/v0.7.13),
+[v0.7.14](https://github.com/superradcompany/microsandbox/releases/tag/v0.7.14),
+[v0.7.15](https://github.com/superradcompany/microsandbox/releases/tag/v0.7.15).
+These are source rechecks unless behavior is explicitly attributed above.
+
+Entries distinguish confirmed API gaps, observed behavior, and unverified issues.
+Documenting a security limitation does **not** make it safe or imply acceptance.
+This tracker does not prescribe workarounds. Existing implementation adaptations
+are described only to identify their impact and eventual removal criteria.
+
+## MSB-01 — Go secret modification loses selected-header restrictions
+
+**Status:** resolved for this tool with Go SDK/runtime v0.7.11. Original Go API gap
+addressed upstream in v0.7.10; restore now preserves the substitution policy.
+Last source and reproduced behavior check: v0.7.11 (2026-10-28).
+
+In v0.7.8, creation supports selected-header substitution, but `SecretModifySpec` has no
+`HeaderFields` equivalent. Adding credentials after restore therefore permits
+substitution in any header on the allowed hosts, instead of only configured
+headers. An allowed endpoint could log or reflect a credential placed in an
+arbitrary header. Host scoping remains, but the configured header contract is lost.
+
+Automatic snapshots make this affect ordinary first launches as well as explicit
+snapshot restores. The three selected-header failures reported during implementation
+are behavioral regressions, not assertions to relax merely to make tests pass.
+
+**Historical project decision (2026-10-28; superseded by the fix below):** explicitly accept this limitation for automatic
+and manual snapshot restores pending an upstream Microsandbox fix. Host restrictions
+remain enforced; selected-header restrictions are not preserved after restore.
+Keep the selected-header tests as evidence of the limitation and recheck them on
+SDK/runtime upgrades; no local workaround is planned.
+
+Rechecked 2026-10-28 with v0.7.8: reproduced all three selected-header failures.
+Only those assertions are now isolated in explicitly skipped `selected_headers`
+subtests; supported substitution, TLS, and host-scoping assertions still run.
+
+Source rechecked 2026-10-28 at v0.7.11: [PR #1880](https://github.com/superradcompany/microsandbox/pull/1880)
+(released v0.7.10; fixes upstream issue #1835) adds
+[`SecretModifySpec.Substitution`](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/go/modify.go#L99-L136),
+including `SecretSubstitution.HeaderFields`, and rejects unsupported native libraries.
+The tool's `restoredWorktreePatch` still omits this policy; upgrading alone therefore
+does not restore header restrictions. The parent upgrade session temporarily removed
+all three `selected_headers` skips and reran their targeted VM tests with v0.7.11:
+all three failed (`header_fields` nil instead of `[authorization]`, and arbitrary
+`X-Untrusted` headers received fake credentials instead of retaining placeholders).
+Skips were restored with v0.7.11 recheck messages. The integrated limitation is
+behaviorally confirmed, not evidence that the newly available policy API fails.
+The historical acceptance above is not evidence that the new API was evaluated.
+
+Follow-up verified 2026-10-28 with Go SDK/runtime v0.7.11: `restoredWorktreePatch`
+now passes the original `Substitution` policy, placeholder passthrough hosts,
+violation action, and TLS-identity requirement to `SecretModifySpec`. All three
+`selected_headers` skips were removed. Targeted VM tests now pass: stored header
+fields remain Authorization-only, authorized substitution works, and unrelated
+`X-Untrusted` headers retain their placeholders. The unit test also checks policy
+preservation. The accepted limitation above no longer applies.
+Full `mise run verify` (lint and standard suite, including all three re-enabled
+assertions) passed; the updated launcher was installed with `mise run install`.
+
+- Evidence: [Go secret modification API](https://github.com/superradcompany/microsandbox/blob/v0.7.8/sdk/go/modify.go#L85-L106),
+  [restore experiment](https://github.com/MirkoRischke/opencode-sandbox/blob/main/docs/research/repo-snapshot-experiment.md#restore-enrichment-tls-and-credentials).
+- Project references: `internal/sandbox/snapshot.go` (`restoredWorktreePatch`),
+  `tests/vm/secrets_test.go`.
+- Upgrade check: configure Authorization-only substitution, restore, and verify
+  Authorization is substituted while an arbitrary header retains its placeholder.
+  Both creation and modification must preserve the configured restriction.
+
+## MSB-02 — Restore cannot configure the full destination before boot
+
+**Status:** confirmed Go restore API gap. Last checked: v0.7.8.
+
+Source rechecked 2026-10-28 at v0.7.11:
+[`RestoreConfig`](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/go/restore.go#L15-L57)
+still lacks these destination settings. Live label modification added in v0.7.9
+does not supply restore-time secrets/workdir/TLS or eliminate the enrichment cycle.
+
+`RestoreConfig` accepts resource, mount, port, and host-policy overrides, but not
+create-time secrets, labels, working directory, arbitrary environment, TLS settings,
+or upstream proxy settings. Supplying creation options when connecting to the
+already restored VM does not update it. The current launcher consequently performs
+an additional stop/configure/start cycle before executing project commands.
+Adding the first secret also requires a restart.
+
+- Evidence: [restore API](https://github.com/superradcompany/microsandbox/blob/v0.7.8/sdk/go/restore.go#L12-L54),
+  [experiment and restart observations](https://github.com/MirkoRischke/opencode-sandbox/blob/main/docs/research/repo-snapshot-experiment.md#restore-enrichment-tls-and-credentials).
+- Project reference: `internal/sandbox/snapshot.go` (`configureRestoredWorktree`).
+- Upgrade check: restore with destination configuration applied before the first
+  boot, without a second boot or temporary bootstrap secret.
+
+## MSB-03 — Restore cannot directly enable/configure TLS inspection
+
+**Status:** confirmed API gap; custom-setting loss observed experimentally.
+Last checked: v0.7.8.
+
+Source rechecked 2026-10-28 at v0.7.11:
+[`RestoreConfig` and its validation](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/go/restore.go#L15-L57)
+still expose no TLS configuration. The temporary-secret adaptation remains necessary
+for the current Go integration; custom TLS ports/trust were not retested.
+
+Restore does not expose TLS interception configuration. Subsequent secret addition
+can enable default interception, but does not reproduce custom interception ports
+or custom upstream trust settings. The launcher currently uses a temporary
+non-credential secret to activate inspection when restoring without real secrets.
+This is an existing adaptation, not a supported direct TLS restore option.
+
+- Evidence: [restore API](https://github.com/superradcompany/microsandbox/blob/v0.7.8/sdk/go/restore.go#L12-L54),
+  [custom-port and CA experiment](https://github.com/MirkoRischke/opencode-sandbox/blob/main/docs/research/repo-snapshot-experiment.md#restore-enrichment-tls-and-credentials).
+- Upgrade check: secret-free restore with explicit verified TLS interception;
+  separately verify custom ports and upstream trust. Proxy migration was only
+  source-reviewed in the experiment, not exercised.
+
+## MSB-04 — Restore HTTP overrides unavailable; default responder now enabled
+
+**Status:** confirmed Go restore validation restriction. Last checked: v0.7.8.
+
+Source rechecked 2026-10-28 at v0.7.11: explicit HTTP overrides are
+[still rejected](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/go/restore.go#L156-L163),
+but [PR #1825](https://github.com/superradcompany/microsandbox/pull/1825) changed the
+runtime default in v0.7.9 to
+[`deny_response: true` with JSON](https://github.com/superradcompany/microsandbox/blob/v0.7.11/packages/microsandbox-types/rust/lib/domain.rs#L1961-L1970).
+Thus omission no longer means the responder is disabled: the reset description
+below describes v0.7.8, not a universal v0.7.11 restore limitation.
+The parent upgrade session reproduced the old test's `false`-versus-`true`
+configuration failure twice with v0.7.11, then replaced it with
+`TestSnapshotRestoreBlocksHTTPSWithDenialDiagnostics`: it asserts the enabled
+responder and positive `example.org` hostname observations after blocked
+`curl --resolve example.org:443:1.1.1.1 https://example.org` (bypassing DNS).
+The updated test passed twice targeted and once in the full upgrade suite.
+The original missing-responder behavior is resolved for this tested default path;
+the explicit HTTP override restriction remains. This research session ran no tests.
+
+Restore accepts only network rules and default ingress/egress actions, not the
+`HTTP` configuration used for denial responses. The launcher must omit it on
+restore. Denied connections can reset without hostname evidence, reducing network
+diagnostic coverage; this does not itself remove destination enforcement.
+
+- Evidence: [restore validation](https://github.com/superradcompany/microsandbox/blob/v0.7.8/sdk/go/restore.go),
+  `internal/sandbox/snapshot.go` (`restoreWorktree`),
+  `tests/vm/network_diagnostics_test.go`.
+- Upgrade check: restore with the responder enabled; denied HTTPS produces the
+  expected local denial response and diagnostic without contacting the upstream.
+
+## MSB-05 — Go Modify cannot change network policy
+
+**Status:** confirmed Go API gap. Last checked: v0.7.8.
+
+Source rechecked 2026-10-28 at v0.7.11:
+[`ModifyOptions`](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/go/modify.go#L36-L90)
+adds published-port modification, not general network-policy modification.
+
+`ModifyOptions` has no network-policy field. The API used by this project cannot
+switch a running preparation VM from broad access to restricted access. This is
+an SDK-surface finding, not proof that every runtime/backend lacks the capability.
+
+- Evidence: [Go modification options](https://github.com/superradcompany/microsandbox/blob/v0.7.8/sdk/go/modify.go#L36-L83).
+- Upgrade check: inspect the public API and verify policy persistence, failure
+  semantics, and treatment of already-established connections before relying on
+  any new transition capability.
+
+## MSB-06 — Previous interception CA remains in restored system trust
+
+**Status:** observed experimentally. Last checked: v0.7.8.
+
+Source rechecked 2026-10-28 at v0.7.11: v0.7.9's atomic CA-bundle replacement
+([PR #1856](https://github.com/superradcompany/microsandbox/pull/1856)) prevents partial
+writes and duplicate copies of the same CA. It still
+[appends to the existing bundle](https://github.com/superradcompany/microsandbox/blob/v0.7.11/crates/agentd/lib/tls.rs#L181-L213),
+without removing a different captured CA. This is not a revocation fix; no new CA
+transition or nested-container experiment was performed.
+
+The destination runtime installs its CA, but the preparation VM's CA can remain
+in the captured system trust bundle. Installing the new CA is not revocation of
+the old one. Nested containers have separate trust stores; their CA behavior was
+not validated by that experiment.
+
+- Evidence: [CA transition experiment and source links](https://github.com/MirkoRischke/opencode-sandbox/blob/main/docs/research/repo-snapshot-experiment.md#restore-enrichment-tls-and-credentials).
+- Upgrade check: use distinct preparation/destination CAs; confirm the destination
+  CA works and determine whether the preparation CA is intentionally retained or
+  removed. Verify container trust separately if required.
+
+## MSB-07 — Network denial logs are not a complete audit
+
+**Status:** known runtime observability limitation. Last checked: v0.7.8.
+
+Source rechecked 2026-10-28 at v0.7.11: default JSON denial responses improve supported
+HTTP/HTTPS diagnostics ([PR #1825](https://github.com/superradcompany/microsandbox/pull/1825)),
+including restores that omit HTTP options. This does not establish complete logging:
+[TLS denial handling](https://github.com/superradcompany/microsandbox/blob/v0.7.11/crates/network/lib/engine/tls/proxy.rs#L199-L223)
+still has bypass/response-failure paths, and the tool still parses system debug logs.
+No exhaustive denial matrix was run in this source review.
+
+Not every denial emits a diagnostic or exposes a hostname. Early default-deny TCP
+resets can be silent. Runtime debug logging includes unrelated records, with no
+network-only verbosity filter or pre-disk Go log interception used by this project.
+The saved network overview therefore cannot prove that no denied attempts occurred.
+
+- Evidence: [network diagnostics documentation](../features/diagnostics.md#network-denials),
+  `internal/sandbox/diagnostics.go`, `tests/vm/network_diagnostics_test.go`.
+- Upgrade check: exercise DNS, TCP, TLS, and protected-destination denials; inspect
+  event completeness and any new structured or scoped logging API.
+
+## MSB-08 — TLS inspection can prevent direct-IP HTTPS
+
+**Status:** documented integration limitation; precise failure modes need rechecking.
+Last recorded: v0.7.8.
+
+Source rechecked 2026-10-28 at v0.7.11: [PR #1825](https://github.com/superradcompany/microsandbox/pull/1825)
+(v0.7.9) explicitly adds no-SNI direct-IP TLS support. The
+[proxy](https://github.com/superradcompany/microsandbox/blob/v0.7.11/crates/network/lib/engine/tls/proxy.rs#L155-L198)
+binds certificate and secret identity to the original destination IP, not a cached
+DNS name. Upstream includes IPv4/IPv6 tests in `sdk/rust/tests/tls_intercept.rs`.
+This is a source-level fix candidate; the controlled valid-IP-SAN upgrade check
+below has not been run by this research session. Do not disable verification.
+
+Allowing public IP destinations does not guarantee direct-IP HTTPS works while
+verified TLS inspection is enabled. Network admission and TLS compatibility are
+separate concerns.
+
+- Evidence: [unrestricted networking documentation](../features/networking.md#unrestricted-public-internet).
+- Upgrade check: use a controlled endpoint with a valid IP-SAN certificate and
+  compare direct-IP versus hostname HTTPS without disabling verification.
+
+## MSB-09 — Snapshot publication and removal have group constraints
+
+**Status:** observed native semantics, not necessarily bugs. Last checked: v0.7.8.
+
+Source rechecked 2026-10-28 at v0.7.11:
+[`group.rs`](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/rust/lib/backend/local/snapshot/group.rs)
+is byte-identical to v0.7.8. Explicit HEAD selection, the HEAD deletion guard,
+and retention of empty group metadata remain in source. New snapshot import and
+archive fixes do not replace the tool's publication/deletion ordering.
+
+Capturing a fresh, independent preparation VM does not automatically advance an
+existing group's HEAD. Capture and explicit HEAD selection are separate operations,
+not one atomic publication. Deleting HEAD while other members remain is refused,
+even with force; deletion ordering matters. Experiments also left empty group
+metadata directories after removing every member, with no public group-delete
+command found.
+
+- Evidence: [group/HEAD experiment](https://github.com/MirkoRischke/opencode-sandbox/blob/main/docs/research/repo-snapshot-experiment.md#native-grouphead-semantics-matter-for-fresh-only-preparation),
+  [cleanup observations](https://github.com/MirkoRischke/opencode-sandbox/blob/main/docs/research/repo-snapshot-experiment.md#limits-cleanup-and-leftovers).
+- Upgrade check: independent fresh captures, interrupted publication, member
+  deletion ordering, and complete group cleanup through public APIs.
+
+## MSB-10 — Bind-mount file locks do not coordinate independent VMs
+
+**Status:** confirmed source-level limitation, not behaviorally reproduced here.
+Checked Go SDK/runtime v0.7.11 and its pinned `msb_krun` v0.1.41 dependency.
+
+Source rechecked 2026-11-13 at v0.7.15 with `msb_krun` v0.1.45: the
+[Unix backend](https://github.com/superradcompany/microsandbox/blob/v0.7.15/crates/filesystem/lib/backends/passthroughfs/unix/mod.rs#L613-L654)
+still negotiates neither lock capability, and the dependency's
+[locking methods remain ENOSYS stubs](https://github.com/superradcompany/libkrun/blob/344cb2488c0475e644ed21152344a408973d4369/src/devices/src/virtio/fs/filesystem.rs#L1222-L1235).
+The v0.7.15 [descriptor-reuse optimization](https://github.com/superradcompany/microsandbox/pull/2032)
+does not establish shared locking or SQLite WAL safety; no performance benchmark
+or cross-VM lock experiment was run for this recheck.
+
+The Unix passthrough backend does not negotiate `POSIX_LOCKS` or `FLOCK_LOCKS`.
+Its underlying filesystem trait leaves `getlk`, `setlk`, and `setlkw`
+unimplemented. Linux FUSE therefore handles locks locally in each guest kernel,
+not as shared host locks across independent VMs. DAX/mmap support alone does not
+provide the missing locking semantics.
+
+Impact: OpenCode SQLite storage is dedicated to each workspace VM, rather than
+shared across worktree VMs. Keep that isolation: SQLite WAL requires coherent
+shared memory and file locking, and concurrent database access across VMs can
+corrupt or lose history. A successful short test is not evidence of safety.
+OpenCode's independent-server coordination is a separate application-level
+concern, not a Microsandbox defect.
+
+- Evidence: [v0.7.11 backend capability negotiation](https://github.com/superradcompany/microsandbox/blob/v0.7.11/crates/filesystem/lib/backends/passthroughfs/unix/mod.rs#L613-L654),
+  [pinned dependency](https://github.com/superradcompany/microsandbox/blob/v0.7.11/Cargo.toml),
+  [`msb_krun` v0.1.41 source locking stubs](https://github.com/zerocore-ai/libkrun/blob/b35c7e118d7a1e48c8fad103b258e64ff5c49147/src/devices/src/virtio/fs/filesystem.rs#L1222-L1235),
+  [Linux FUSE local-lock fallback](https://github.com/torvalds/linux/blob/master/fs/fuse/file.c),
+  [SQLite WAL requirements](https://sqlite.org/wal.html).
+- Project references: `internal/sandbox/state.go`, `internal/sandbox/snapshot.go`,
+  [persistent workspace state](../features/persistent-state.md).
+- Upgrade check: verify POSIX byte-range locks conflict across two independent
+  guests mounting the same host directory, including lock release after guest
+  termination. Separately verify WAL shared-memory coherence and crash recovery.
+  Recheck OpenCode multi-server behavior independently before claiming safety.
+
+## MSB-11 — Cache cleanup retains owned backing
+
+**Status:** confirmed public interface limitation. Checked Go SDK/runtime v0.7.11
+on 2026-11-07; source-level check, not a live ownership experiment.
+
+`PruneStorage` only removes unused runtime RAM. Its options expose dry-run and age
+filtering, but no force flag. The runtime revalidates ownership under its own locks
+and retains active or pending-handoff files. Stable lock files are also retained.
+This is a safety constraint, not a suspected bug.
+
+Image removal has a related constraint: `Image.Remove(..., true)` removes a
+reference even when a sandbox/snapshot uses it, but retains the backing owned by
+those resources. Active storage operations can still return `ErrImageInUse`.
+`Image.Prune` collects unreferenced backing but also respects ownership.
+
+Impact: `prune --all` force-removes all cached MSB images, but cannot promise to
+delete every runtime cache while unrelated MSB resources still own it. The command
+rescans caches after managed VM/snapshot removal and reports retained files as
+incomplete cleanup. It never bypasses ownership locks or removes stable lock files.
+Image references are removed machine-wide, but image backing owned by unrelated
+sandboxes/snapshots remains. Removing those unrelated VMs/snapshots is outside the
+command's scope.
+
+- Evidence: [Go storage contract](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/go/storage.go),
+  [prune options and report](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/go/internal/ffi/storage.go),
+  [runtime cache ownership](https://github.com/superradcompany/microsandbox/blob/v0.7.11/crates/runtime/lib/checkpoint/cache_storage.rs),
+  [image cleanup and force semantics](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/rust/lib/image/cleanup.rs).
+- Project references: `internal/sandbox/prune_runtime.go`, `internal/sandbox/prune_test.go`.
+- Upgrade check: recheck force/ownership options and retained-file report states;
+  verify cleanup before and after releasing an unrelated runtime owner. Do not
+  infer complete cache deletion merely from a successful pruning call.
+  Also recheck forced image removal versus backing retention, and orphaned image
+  backing collection after its final sandbox/snapshot owner is removed.
+
+## MSB-12 — Storage ancestors must prevent path substitution
+
+**Status:** confirmed runtime security requirement, not an upstream bug. Observed
+with Go SDK/runtime v0.7.15 during the 2026-11-13 upgrade from v0.7.11.
+
+Introduced in v0.7.12 by the
+[catalog security change](https://github.com/superradcompany/microsandbox/commit/8ff916f38a628390fff21e26339495272f20d782),
+although omitted from its generated release notes. Catalog files/backups are
+restricted to `0600`; unsafe ancestors, foreign ownership, and linked catalog
+files fail closed. Access control does not erase or encrypt historical copies.
+If persisted credentials may have been exposed to other accounts, rotate them.
+
+The existing `~/.microsandbox` directory had mode `0775`. Both `msb load` in
+`mise run verify` and a standalone `msb image list` failed with
+`catalog ancestor /home/mirko/.microsandbox permits path substitution; use a storage root protected from other accounts`.
+The parent directories were not group- or world-writable. Changing only
+`~/.microsandbox` to owner-only mode `0700` made `msb image list` succeed.
+The subsequent `mise run upgrade-microsandbox 0.7.15` completed: lint and the full
+standard suite passed (226.28 seconds overall; 204.96 seconds for the VM package),
+then the launcher was installed and the dotfiles runtime pin updated.
+
+Impact: upgrading an existing installation can block image preparation and all
+catalog operations until storage permissions are secured. Do not bypass the
+check or make catalog storage shared across OS accounts.
+
+- Evidence: the failed upgrade task and standalone CLI reproduction above;
+  [v0.7.15 catalog security documentation](https://github.com/superradcompany/microsandbox/blob/v0.7.15/docs/security/secrets.mdx).
+- Upgrade check: inspect storage-root and ancestor permissions, then verify
+  `msb image list` and image loading with the selected runtime. Keep the storage
+  root private; this observation does not establish the minimum accepted mode.
+
+## MSB-13 — Protected disk state rejects unsafe or legacy layouts
+
+**Status:** confirmed source-level security/compatibility change, introduced in
+v0.7.12; reviewed at Go SDK/runtime v0.7.15 on 2026-11-13. No exploit reproduced.
+
+The [protected-state security change](https://github.com/superradcompany/microsandbox/commit/fc5ba184e1adcba71eb3d67ed8a503ac5254c3bb)
+moves host-managed disk/checkpoint records away from guest-accessible directories
+and rejects journal symlinks, paths outside the sandbox, symlinked layer components,
+and nonregular layer files. Previously, guest-accessible journals could substitute
+another sandbox's writable disk. Older runtimes or legacy storage layouts may now
+be refused. v0.7.14 adds [storage recovery fixes](https://github.com/superradcompany/microsandbox/pull/2022).
+
+Impact: keep SDK/runtime paired. This project permits recreating VMs and baselines;
+no migration implementation is required. The successful v0.7.15 suite verifies
+ordinary fresh preparation, snapshot/restore, stop/resume, and owned Docker storage,
+not legacy-layout recovery or exploit resistance.
+
+- Evidence: the security change above and
+  [versioned storage guide](https://github.com/superradcompany/microsandbox/blob/v0.7.15/docs/migrations/sandbox-storage.mdx).
+- Upgrade check: fresh preparation → snapshot → restore → stop/resume → remove,
+  including owned Docker disks and cleanup after failed preparation/restore.
+  Do not infer a fix for the separate intermittent snapshot-listing failure.
+
+## MSB-14 — Nested virtualization is lost on disk snapshot restore
+
+**Nested virtualization works in fresh VMs but is lost on disk snapshot restore.**
+Because opencode-sandbox restores workspace VMs from disk baselines, its guests
+cannot currently run this repository's VM tests or full `mise run verify`.
+Unit tests and Docker-only tests do not require nesting. We are waiting for an
+upstream restore fix before adding nesting support to this tool.
+
+**Status:** behavior reproduced with Go SDK/runtime v0.7.15 on Linux x86-64
+(AMD KVM), 2026-11-13. Reproduced independently through the MSB CLI; precise
+upstream cause unconfirmed.
+
+Fresh creation with `--nested-virt` exposes `/dev/kvm` and the `svm` CPU flag in
+the guest. Stopping that VM, capturing a default disk snapshot, and restoring it
+into another VM loses `/dev/kvm`. The fresh VM's inspected
+`resources.nested_virt` is `true`; the launcher's restored workspace configuration
+omits it. The CLI-only reproduction fails before any launcher credential/TLS
+enrichment or post-restore restart, so that cycle is not required to trigger it.
+Full snapshots were not tested.
+
+Impact: an experimental launcher integration using `WithNestedVirt(true)`
+enabled nesting in fresh preparation VMs, but the automatic disk-baseline path
+produced a workspace VM unable to run `tests/vm` inside it.
+Larger CPU/memory/disk settings do not fix this. The Go `RestoreConfig` and
+`ModifyOptions` expose no nesting override. The project will wait for an upstream
+fix rather than introduce a fresh-VM lifecycle workaround. The experimental
+configuration/launcher changes were reverted; no nesting setting is exposed by
+this tool.
+
+Evidence (using an already imported image, v0.7.15):
+
+```sh
+msb create <loaded-image> --name nesting-source --nested-virt --pull never
+msb exec nesting-source -- test -c /dev/kvm # exit 0
+msb stop nesting-source
+msb snapshot create nesting-probe --sandbox nesting-source
+msb snapshot restore nesting-source:nesting-probe --name nesting-restored
+msb exec nesting-restored -- test -c /dev/kvm # exit 1
+```
+
+- Project reference: `internal/sandbox/snapshot.go` (`createPreparationVM`,
+  `restoreWorktree`).
+- Upgrade check: repeat the CLI reproduction; verify nesting remains enabled
+  after disk restore and stop/resume. Then recreate a launcher baseline/workspace
+  and run `mise run verify` inside it with the normal four-way VM parallelism.
+  The full nested suite was not run during this investigation because the
+  restored guest failed the KVM prerequisite.
+
+## Issues needing verification, not confirmed upstream bugs
+
+### Intermittent snapshot listing failure after snapshot removal and VM resume
+
+**Status:** observed with Go SDK/runtime v0.7.11 on 2026-11-13 and again
+with v0.7.15 on 2026-11-21 and 2026-11-23; upstream cause unconfirmed.
+
+The pre-change gateway-test baseline (`mise run test`, four parallel VM tests)
+failed `TestRemovingSnapshotLeavesExistingVMDisksIntact` at its final
+`sandbox.ListSnapshots` call: a native snapshot metadata lookup returned
+`snapshot not found` / `No such file or directory`. Earlier assertions confirmed
+snapshot removal, an empty listing, and successful resume of the existing VM.
+Three isolated reruns of the unchanged test passed:
+
+```sh
+go test -count=3 -parallel 4 -timeout 5m ./tests/vm \
+  -run '^TestRemovingSnapshotLeavesExistingVMDisksIntact$'
+```
+
+The subsequent full `mise run verify` also passed, including this test and the
+new gateway suite (531.53 seconds overall; 510.87 seconds for the VM package).
+
+On v0.7.15, `go test ./...` failed with the same missing metadata error in
+`TestRemovingSnapshotLeavesExistingVMDisksIntact`. The same run also reported
+that error in `TestAutomaticSnapshotStopsOnMiseInstallationFailure` and
+`TestFirstLaunchPreparesManagedSnapshotOnlyOnce`. The tests were not changed.
+
+The 2026-11-23 `go test ./...` run also reported `snapshot not found` in
+`TestFailedAutomaticSnapshotPreparationDoesNotCreateWorkspaceVM` during the
+post-failure cleanup check. The test sets its own network settings, independent
+of the changed default public allowlist. The same test did not fail on a
+subsequent full run with the same SDK/runtime.
+
+Impact: an intermittent failure in the standard VM suite prevents claiming a
+clean full-suite baseline; no snapshot implementation or assertion was changed.
+This is not proof of an upstream defect rather than a tool/runtime interaction.
+
+- Project reference: `tests/vm/snapshot_test.go`.
+- Upgrade check: rerun the affected tests in isolation and in the concurrent
+  full VM suite. Snapshot listing must not look up removed metadata after
+  snapshot removal and VM resume, or during automatic preparation.
+
+### Restored root-disk metadata reports `SizeMiB = 0`
+
+The automatic-snapshot implementation reported a failing metadata assertion in
+`tests/vm/vm_settings_test.go`. Source review indicates restored managed disks
+deliberately use unspecified size while retaining captured virtual capacity
+([restore builder](https://github.com/superradcompany/microsandbox/blob/v0.7.8/sdk/rust/lib/sandbox/builder.rs#L2178-L2179)).
+Rechecked 2026-10-28 with v0.7.8: the configured 5120 MiB writable root device
+retains its capacity after restore and stop/resume; the root filesystem spans
+more than 90% of that capacity. The test now measures those instead of requiring
+nonzero size metadata. This is not evidence of lost capacity. Recheck metadata
+and actual capacity on an upgrade.
+
+Source rechecked 2026-10-28 at v0.7.11: the
+[restore builder](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/rust/lib/sandbox/builder.rs#L2315-L2319)
+still maps captured managed root disks to `size_mib: None`. This supports retaining
+the capacity-based assertion, not asserting nonzero metadata. Capacity was not
+measured by this source review.
+
+### Native image-cache lookup failures in DNS fixtures
+
+Five DNS fixture failures were reported during implementation. Review identified
+fixtures passing an original Docker tag directly to native creation with
+`PullPolicyNever`, bypassing this project's identity-addressed import. Rechecked
+2026-10-28 with v0.7.8: all five tests pass using the source VM's already imported
+image reference, with DNS-policy assertions unchanged. The fixture has been
+corrected; no upstream cache or DNS-enforcement bug is established.
+
+References: `tests/vm/dns_test.go`, `internal/sandbox/image.go`.
+
+Source rechecked 2026-10-28 at v0.7.11: anonymous native registry auth (v0.7.10) and
+[image-cache/pruning changes](https://github.com/superradcompany/microsandbox/pull/1919)
+(v0.7.11) do not establish an upstream DNS defect or justify reverting the fixture's
+identity-addressed image reference. The project still imports Docker archives and
+uses `PullPolicyNever`; this source review did not run DNS fixtures.
+
+## Upgrade review checklist
+
+- Record the candidate SDK and runtime versions separately.
+- Recheck each entry against versioned source and its reproduction/test.
+- Keep security assertions intact; do not redefine success around missing APIs.
+- Record results per entry, including version and evidence; retain resolved history.
+- Only mark fixed after verifying behavior, not merely finding a new API field.
+- MSB-01 maps to upstream [issue #1835](https://github.com/superradcompany/microsandbox/issues/1835)
+  and [PR #1880](https://github.com/superradcompany/microsandbox/pull/1880); add other
+  verified issue links when available.

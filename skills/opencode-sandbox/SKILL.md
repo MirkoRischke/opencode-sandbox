@@ -1,9 +1,17 @@
 ---
 name: opencode-sandbox
-description: Create or edit workspace-local opencode-sandbox TOML configuration, including VM resources and network access. Use when asked to configure the sandbox; unrelated programming questions do not need this skill.
+description: Use when asked what opencode-sandbox can do, how to configure it, or how to troubleshoot it.
 ---
 
-# Workspace sandbox configuration
+# opencode-sandbox
+
+For questions about what the sandbox can do or how to use it, start at the
+[feature index](references/features/README.md) and read the relevant guide.
+For questions about effective settings, use `opencode-sandbox config show` in the
+workspace and consult the [configuration guide](references/config/README.md).
+Keep explanation-only requests read-only.
+
+## Edit workspace configuration
 
 1. Read the existing `.opencode-sandbox.toml`, if present.
 2. Consult `opencode-sandbox config default` for supported fields and defaults.

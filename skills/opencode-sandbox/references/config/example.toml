@@ -1,0 +1,131 @@
+# Location: ~/.config/opencode-sandbox/config.toml
+# XDG_CONFIG_HOME overrides ~/.config.
+# See docs/config/README.md for config loading, examples, and feature guides.
+
+# Optional host file/directory mappings. Nothing is shared implicitly.
+# Sources must exist. ~/ means the host home; relative paths use this config's directory.
+# Repo file lists replace the global list; top-level files = [] disables inheritance.
+# mode defaults to "mount" (read-only); "copy" creates writable guest copies.
+# [[files]]
+# source = "~/.config/opencode/AGENTS.md"
+# target = "/root/.config/opencode/AGENTS.md"
+#
+# [[files]]
+# source = "~/.config/opencode/skills"
+# target = "/root/.config/opencode/skills"
+#
+# [[files]]
+# source = "~/.config/opencode-sandbox/opencode.json"
+# target = "/root/.config/opencode/opencode.json"
+#
+# [[files]]
+# source = "~/.config/opencode/cli.json"
+# target = "/root/.config/opencode/cli.json"
+#
+# [[files]]
+# source = "~/.config/opencode-sandbox/gitconfig"
+# target = "/root/.gitconfig"
+# mode = "copy"
+
+# This example enables GitHub authentication and requires the file below.
+# Remove this section to disable loading the credential for new VMs.
+# Relative file paths are resolved against this config's directory.
+# The credential directory must be mode 700 and file mode 600.
+[secrets.github]
+source.file = "creds/github-token"
+guest.env = "GH_TOKEN"
+allowed_hosts = ["github.com", "api.github.com"]
+headers = ["authorization"]
+
+# The launcher manages the LLM gateway key. See docs/features/llm-gateway.md for
+# OpenCode provider configuration.
+
+# Optional AWS role; launch flags can override each setting.
+# [aws]
+# role = "arn:aws:iam::123456789012:role/SandboxReadOnly"
+# profile = "my-sso-profile"
+
+[logging]
+# Minimum stderr severity; overridden by --console-log-level. File logs stay Debug+.
+console_level = "info" # debug, info, warn, or error
+
+[vm]
+# Applied at VM creation only. Sizes are in MiB.
+# Uses the local Docker image or pulls it if missing, then imports it automatically.
+image = "opencode-sandbox:opencode"
+cpus = 2
+memory_mib = 2048
+root_disk_mib = 4096
+docker_disk_mib = 10240
+
+[startup]
+# Guest executable and literal arguments; interactive Bash opens after it exits.
+command = ["opencode"]
+
+# Optional command: runs during automatic first-launch snapshot preparation.
+# Rebuild explicitly with `opencode-sandbox snapshot create`, then recreate the VM.
+# Usually put this section in each repo's .opencode-sandbox.toml instead.
+# [snapshot]
+# command = "./scripts/sandbox-prepare.sh"
+
+[network]
+# See docs/features/networking.md for policy and host pattern syntax.
+unrestricted = false
+# Also enables runtime debug logs; see docs/features/diagnostics.md.
+diagnostics = false
+allowed_hosts = [
+  # OpenCode model catalog.
+  # "models.dev",
+
+  # Context7 remote MCP. Documentation retrieval happens server-side;
+  # individual documentation sites need not be allowed for this MCP.
+  # "mcp.context7.com",
+
+  # AWS Knowledge remote MCP. Documentation retrieval happens server-side.
+  # "knowledge-mcp.global.api.aws",
+
+  # GitHub: HTTPS Git, REST/GraphQL, and raw files.
+  # Credential substitution remains limited to github.com / api.github.com.
+  # "github.com",
+  # "api.github.com",
+  # "raw.githubusercontent.com",
+
+  # Optional: installing other Node versions with mise.
+  # "nodejs.org",
+
+  # Optional: fetching OpenCode / Microsandbox / Go documentation directly.
+  # "opencode.ai",
+  # "docs.microsandbox.dev",
+  # "go.dev",
+
+  # Optional: existing fake-token echo integration test only.
+  # Not needed for normal sandbox use.
+  # "httpbingo.org",
+]
+
+# Host → VM: optional TCP mappings, bound only to host 127.0.0.1.
+# Application must listen on 0.0.0.0 in the VM. Recreate the VM after changes.
+# All config layers can add mappings; duplicate host ports are rejected.
+# [[network.host_to_vm]]
+# host_port = 3000
+# vm_port = 8080
+
+# VM → host: port 4000 allows the shared host LLM gateway by default.
+# Connect to host.microsandbox.internal:<port>, not the VM's localhost.
+# TCP only. Explicit lists accumulate; [4000] is used only if no file sets ports.
+# Recreate the VM after changes.
+[network.vm_to_host]
+ports = [4000] # Add 5432 for PostgreSQL. [] adds no access.
+
+# Optional .opencode-sandbox.toml addition to the global list above:
+# [network]
+# allowed_hosts = ["nodejs.org"]
+
+# Sources:
+# https://github.com/upstash/context7#installation
+# https://awslabs.github.io/mcp/servers/aws-knowledge-mcp-server
+# https://github.com/jdx/mise/blob/v2026.10.12/settings.toml
+# https://github.com/jdx/mise/blob/v2026.10.12/src/aqua/aqua_registry_wrapper.rs
+# https://go.dev/ref/mod#module-proxy
+# https://docs.docker.com/desktop/setup/allow-list/
+# https://docs.aws.amazon.com/AmazonECR/latest/public/docker-pull-ecr-image.html

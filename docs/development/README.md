@@ -17,6 +17,11 @@ mise run test        # Prepare changed images, then run the full suite including
 mise run test:live   # Real VM prompt via gateway; requires persisted provider auth
 ```
 
+After editing feature guides, configuration docs, limitations, or `docs/risks.md`,
+run `mise run skill:sync` and include the generated references in the same change.
+Edit the originals in `docs/`, not the copies under the skill. To check for drift
+locally without writing files, run `mise run skill:check`.
+
 Image preparation tracks the Dockerfiles and the root `.dockerignore`.
 Unchanged builds and imports are skipped; tests always run. After deleting
 Docker or Microsandbox images, run `mise run --force test:prepare` to prepare them again.
