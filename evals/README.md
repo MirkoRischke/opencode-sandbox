@@ -145,7 +145,14 @@ exports are `promptfoo.json` and `report.html` (side-by-side results); open the 
 on the host. Promptfoo internal state lives in the disposable container, with cloud sharing
 disabled. Judge credentials are referenced by environment variable,
 not embedded in exported config. Per-trial `trace.json` contains actual SDK
-messages/tool calls. Workspaces are retained for debugging; HOME/XDG state and SDK databases are
+messages/tool calls. Promptfoo reports agent token usage separately from judge
+usage (`assertions`). Per-trial `result.json` and Promptfoo response metadata
+also record agent-only time, model turns, tool calls by name, and peak input
+tokens per model request. On timeout the harness tries to save a partial trace
+after interruption. Recovered usage is marked partial; missing usage is marked
+unavailable. These diagnostics do not change grading.
+
+Workspaces are retained for debugging; HOME/XDG state and SDK databases are
 discarded with the container. Metadata paths such as `/results/...` refer to
 container paths; their contents are under the printed host artifact directory. Exit status is nonzero for failures/errors. Keep results private:
 traces and runtime state can contain sensitive model/provider data.

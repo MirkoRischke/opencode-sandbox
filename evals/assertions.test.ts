@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { AssertionValueFunctionContext } from "promptfoo";
+import type { SessionMessageInfo } from "@opencode/client";
+import { transcriptMetrics } from "./adapter.ts";
 import {
   activatesSkillWhenInstalled, allowsNetworkHost, doesNotActivateSkill,
   hasCpuCount, hasMemoryMiB, hasOnlyWorkspaceConfig, leavesInheritedConfigsUnchanged,
@@ -21,6 +23,29 @@ function context(overrides = {}): AssertionValueFunctionContext {
     ...overrides,
   } } } as unknown as AssertionValueFunctionContext;
 }
+
+test("agent metrics count cache, reasoning, and tool calls separately", () => {
+  const messages = [
+    { type: "assistant", content: [{ type: "tool", name: "read" }],
+      tokens: { input: 100, output: 10, reasoning: 5, cache: { read: 50, write: 25 } } },
+    { type: "assistant", content: [{ type: "tool", name: "read" }, { type: "tool", name: "shell" }],
+      tokens: { input: 200, output: 20, reasoning: 5, cache: { read: 50, write: 0 } } },
+  ] as unknown as SessionMessageInfo[];
+  assert.deepEqual(transcriptMetrics(messages, false), {
+    usageStatus: "complete", modelTurns: 2, toolCalls: 3, toolCallsByName: { read: 2, shell: 1 },
+    peakInputTokens: 250,
+    tokenUsage: { prompt: 425, completion: 40, cached: 100, total: 465, numRequests: 2,
+      completionDetails: { reasoning: 10, cacheReadInputTokens: 100, cacheCreationInputTokens: 25 } },
+  });
+  assert.equal(transcriptMetrics(messages, true).usageStatus, "partial");
+  const unfinished = { type: "assistant", content: [] } as unknown as SessionMessageInfo;
+  assert.equal(transcriptMetrics([...messages, unfinished], false).usageStatus, "partial");
+  for (const data of [[unfinished], undefined]) {
+    const metrics = transcriptMetrics(data, true);
+    assert.equal(metrics.usageStatus, "unavailable");
+    assert.equal(metrics.tokenUsage, undefined);
+  }
+});
 
 test("activation checks both positive and negative expectations", () => {
   const activation = activatesSkillWhenInstalled().value;

@@ -13,13 +13,15 @@ const agentTimeoutMs = 30_000;
 const sdkTimeoutMs = 5_000;
 export type Variant = { name: string; skillDirectory?: string; revision: string; hash?: string };
 
+class DeadlineExceeded extends Error {}
+
 async function withDeadline<T>(ms: number, operation: (request: { signal: AbortSignal }) => Promise<T>): Promise<T> {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const deadline = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => {
-        reject(new Error(`Timed out after ${ms / 1000} seconds`));
+        reject(new DeadlineExceeded(`Timed out after ${ms / 1000} seconds`));
         controller.abort();
       }, ms);
     });
@@ -92,9 +94,6 @@ async function inspectWorkspace(trial: Awaited<ReturnType<typeof prepareTrial>>)
 function transcriptEvidence(data: SessionMessageInfo[]) {
   if (data.length === messageLimit) throw new Error("Trace reaches POC message limit; refusing incomplete assertions");
   const assistants = data.filter(message => message.type === "assistant");
-  const failure = assistants.find(message => message.error);
-  if (failure) throw new Error(JSON.stringify(failure.error));
-
   const parts = assistants.flatMap(message => message.content);
   return {
     answer: parts.flatMap(part => part.type === "text" ? [part.text] : []).join("\n"),
@@ -105,6 +104,46 @@ function transcriptEvidence(data: SessionMessageInfo[]) {
           ? [String((part.state.input as { id?: string }).id)] : []),
     ],
   };
+}
+
+export function transcriptMetrics(data: SessionMessageInfo[] | undefined, partial: boolean) {
+  if (!data) return { usageStatus: "unavailable", tokenUsage: undefined } as const;
+  let modelTurns = 0;
+  let turnsWithUsage = 0;
+  let toolCalls = 0;
+  const toolCallsByName = new Map<string, number>();
+  let prompt = 0, completion = 0, cached = 0, cacheWrite = 0, reasoning = 0, peakInputTokens = 0;
+  for (const message of data) {
+    if (message.type !== "assistant") continue;
+    modelTurns++;
+    for (const part of message.content) {
+      if (part.type !== "tool") continue;
+      toolCalls++;
+      toolCallsByName.set(part.name, (toolCallsByName.get(part.name) ?? 0) + 1);
+    }
+    if (!message.tokens) continue;
+    turnsWithUsage++;
+    const tokens = message.tokens;
+    // OpenCode stores uncached input and visible output separately from cache and reasoning.
+    const input = tokens.input + tokens.cache.read + tokens.cache.write;
+    prompt += input;
+    completion += tokens.output + tokens.reasoning;
+    cached += tokens.cache.read;
+    cacheWrite += tokens.cache.write;
+    reasoning += tokens.reasoning;
+    peakInputTokens = Math.max(peakInputTokens, input);
+  }
+  return {
+    usageStatus: !turnsWithUsage ? "unavailable" : partial || turnsWithUsage < modelTurns ? "partial" : "complete",
+    modelTurns, toolCalls, toolCallsByName: Object.fromEntries(toolCallsByName),
+    ...(turnsWithUsage ? {
+      peakInputTokens,
+      tokenUsage: {
+        prompt, completion, cached, total: prompt + completion, numRequests: turnsWithUsage,
+        completionDetails: { reasoning, cacheReadInputTokens: cached, cacheCreationInputTokens: cacheWrite },
+      },
+    } : { tokenUsage: undefined }),
+  } as const;
 }
 
 export class OpenCodeProvider implements ApiProvider {
@@ -152,35 +191,57 @@ export class OpenCodeProvider implements ApiProvider {
         await withDeadline(sdkTimeoutMs, request =>
           this.host.session.environment({ sessionID: session.id, variables: shellEnvironment }, request));
       }
-      let agentFinished = false;
+      const agentStarted = performance.now();
+      let agentError: { outcome: "timeout" | "error"; error: string } | undefined;
       try {
         await withDeadline(agentTimeoutMs, async request => {
           await this.host.sessions.prompt({ sessionID: session.id, text: prompt }, request);
           request.signal.throwIfAborted();
           await this.host.session.wait({ sessionID: session.id }, request);
         });
-        agentFinished = true;
-      } finally {
-        if (!agentFinished) {
-          await withDeadline(sdkTimeoutMs, request =>
-            this.host.session.interrupt({ sessionID: session.id }, request)).catch(() => {});
-        }
+      } catch (error) {
+        agentError = {
+          outcome: error instanceof DeadlineExceeded ? "timeout" : "error",
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+      const agentElapsedMs = performance.now() - agentStarted;
+      if (agentError) {
+        await withDeadline(sdkTimeoutMs, request =>
+          this.host.session.interrupt({ sessionID: session.id }, request)).catch(() => {});
+      }
+
+      const trace = await withDeadline<MessageListOutput>(sdkTimeoutMs, request =>
+        this.host.message.list({ sessionID: session.id, limit: messageLimit, order: "asc" }, request))
+        .then(messages => ({ messages, traceError: undefined }), error => {
+          if (!agentError) throw error;
+          return { messages: undefined, traceError: String(error) };
+        });
+      const { messages, traceError } = trace;
+      if (messages) await writeFile(join(directory, "trace.json"), JSON.stringify(messages, null, 2));
+      const sessionError = messages?.data.find(message => message.type === "assistant" && message.error);
+      const failure = agentError ?? (sessionError?.type === "assistant"
+        ? { outcome: "error", error: JSON.stringify(sessionError.error) } : undefined);
+      const { tokenUsage, ...metrics } = transcriptMetrics(messages?.data,
+        Boolean(failure) || messages?.data.length === messageLimit);
+      const diagnostics = { variant: this.variant, workspace, caseID, agentElapsedMs, ...metrics, traceError };
+      if (failure) {
+        const metadata = { ...diagnostics, ...failure, elapsedMs: performance.now() - started };
+        await writeFile(join(directory, "result.json"), JSON.stringify({ ...metadata, tokenUsage }, null, 2));
+        return { error: failure.error, metadata, tokenUsage };
       }
 
       const availableSkills = await withDeadline(sdkTimeoutMs, request => this.checkedSkillInventory(workspace, request));
-      const messages = await withDeadline<MessageListOutput>(sdkTimeoutMs, request =>
-        this.host.message.list({ sessionID: session.id, limit: messageLimit, order: "asc" }, request));
-      const { answer, activatedSkills } = transcriptEvidence(messages.data);
+      const { answer, activatedSkills } = transcriptEvidence(messages!.data);
       const result = await inspectWorkspace(trial);
       const metadata = {
-        variant: this.variant, workspace, caseID,
+        ...diagnostics, outcome: "answered",
         availableSkills, activatedSkills, ...result,
         elapsedMs: performance.now() - started,
       };
-      await writeFile(join(directory, "trace.json"), JSON.stringify(messages, null, 2));
-      await writeFile(join(directory, "result.json"), JSON.stringify({ answer, ...metadata }, null, 2));
+      await writeFile(join(directory, "result.json"), JSON.stringify({ answer, ...metadata, tokenUsage }, null, 2));
       completed = true;
-      return { output: JSON.stringify({ answer, config: result.config }), metadata };
+      return { output: JSON.stringify({ answer, config: result.config }), metadata, tokenUsage };
     } finally {
       await withDeadline(sdkTimeoutMs, request => this.host.sessions.remove({ sessionID: session.id }, request))
         .catch(error => { if (completed) throw error; });
