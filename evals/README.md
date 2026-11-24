@@ -1,7 +1,8 @@
 # Skill evaluation POC
 
-Host-based Promptfoo evaluations with the official embedded OpenCode V2 SDK
-(`@opencode/sdk`), using the configured LiteLLM provider. No Docker or Harbor.
+Docker-based Promptfoo evaluations with our custom provider and the official
+embedded OpenCode V2 SDK (`@opencode/sdk`), using the configured LiteLLM provider.
+One disposable container runs the whole suite. No Harbor.
 
 ## Setup
 
@@ -12,16 +13,39 @@ mise install
 cd evals
 npm ci
 npm run build:cli
+npm run build:image
 npm test
 ```
 
-Requires Go with CGO/a C compiler, Node, Git, and tar. Use the toolchain pinned
-in [`mise.toml`](../mise.toml). npm currently reports transitive dependency
+Requires Docker (Linux containers), Go with CGO/a C compiler, Node, Git, and tar.
+Use the toolchain pinned in [`mise.toml`](../mise.toml).
+The image copies installed `node_modules` and the built Linux CLI from an
+allowlisted temporary build context, not the repository checkout. Build with
+Linux dependencies matching the container architecture. Rebuild the image after
+changing evaluation code, dependencies, or the CLI; skill edits are snapshotted
+at run time and need no rebuild. npm currently reports transitive dependency
 audit findings; this is a local POC, not a hardened service.
 
 The runner reads only `providers.litellm` from your OpenCode JSON config and uses
 `LLM_GATEWAY_KEY` from the environment. It does not import personal plugins,
 instructions, or skills. The judge uses the same provider endpoint directly.
+
+`npm test` runs the assertion and Promptfoo integration tests inside the image.
+No LiteLLM calls are needed. Environment isolation is supplied by Docker.
+`host.ts` uses public `OpenCode.create()`; no internal factory, core configuration
+layer override, or system/global discovery workaround remains.
+
+The host launcher prepares local/previous skill snapshots and a minimal LiteLLM
+provider configuration. Only the prepared input directory (read-only) and the
+run's result directory (writable) are mounted. The gateway key is passed through
+an environment variable, not stored in the input config. Inputs are deleted after
+the run; the container is removed automatically. No host HOME, checkout, personal
+OpenCode config, or Docker socket is mounted.
+
+The public host CA bundle is copied into the input directory and used by Node,
+OpenSSL, and curl so the sandbox HTTPS proxy is trusted without disabling TLS
+verification. Override its path with `EVAL_CA_BUNDLE`; the Linux default is
+`/etc/ssl/certs/ca-certificates.crt`.
 
 ## Run
 
@@ -56,7 +80,7 @@ EVAL_CONCURRENCY=12 EVAL_REPETITIONS=7 npm run eval -- --demo-history
 The second command is a 63-agent-run throughput probe, **not 21 distinct cases**.
 Defaults: three cases, three variants, concurrency nine, one repetition. Optional
 `EVAL_MODEL` and `EVAL_JUDGE_MODEL` select LiteLLM model IDs; both default to
-`gpt-6.1-sol`. Agent-result caching is disabled; provider-side prompt caching may
+`gpt-6.2-sol`. Agent-result caching is disabled; provider-side prompt caching may
 still happen. Dependencies and the CLI are not rebuilt in the eval hot path.
 
 ## Assertions
@@ -117,19 +141,25 @@ each trial has its own session and fixture-only workspace. SDK hosts are reused
 across a variant's trials. Project config/instruction discovery is disabled.
 An SDK plugin registers the candidate using the official skill transform API.
 No personal configuration files are written. This is isolation for reproducibility,
-not a security sandbox; agents run with allowed tool permissions inside the VM.
+not per-trial security isolation. Agents have allowed tool permissions inside
+the container and can inspect sibling trials, evaluation code/assertions, and
+provider credentials. Do not use this setup for hostile agents. Host filesystem
+isolation is supplied by Docker, not OpenCode tool permission rules.
 
 `results/run-*/summary.json` contains assertion results/timing. Standard Promptfoo
 exports are `promptfoo.json` and `report.html` (side-by-side results); open the HTML
-on the host. Promptfoo also persists results in the run's isolated HOME, with
-cloud sharing disabled. Judge credentials are referenced by environment variable,
+on the host. Promptfoo internal state lives in the disposable container, with cloud sharing
+disabled. Judge credentials are referenced by environment variable,
 not embedded in exported config. Per-trial `trace.json` contains actual SDK
-messages/tool calls. Workspaces and isolated state are retained
-for debugging. Exit status is nonzero for failures/errors. Keep results private:
+messages/tool calls. Workspaces are retained for debugging; HOME/XDG state and SDK databases are
+discarded with the container. Metadata paths such as `/results/...` refer to
+container paths; their contents are under the printed host artifact directory. Exit status is nonzero for failures/errors. Keep results private:
 traces and runtime state can contain sensitive model/provider data.
 
-Runtime includes SDK startup, workspace preparation, agent runs, assertions,
-judging, and SDK shutdown. Target roughly a minute for small suites; benchmark
+`docker.json` records total wall time (including snapshot preparation, container
+startup/exit), image identity, and exit status. `summary.json` records versions
+and suite time, including SDK startup, agent runs, assertions, judging, and SDK
+shutdown. Builds/installations are excluded. Target roughly a minute for small suites; benchmark
 gateway concurrency before extrapolating to 20 cases across three variants.
 
 ## Measured POC results
@@ -144,3 +174,14 @@ gateway, agent/judge `gpt-6.1-sol`, and no Promptfoo agent-result caching:
 
 Both use synthetic demo Git history. These establish integration and approximate
 throughput, not skill improvement or a guarantee for longer, distinct scenarios.
+
+### Docker switch verification
+
+On 2026-11-17, the 3-case x 3-variant suite completed in **32.8 seconds**
+(including Docker startup/exit; 31.7 seconds inside the container). Seven passed,
+two failed, zero runtime errors. Local and synthetic-previous skills passed all
+cases. The no-skill baseline asked for platform details instead of creating the
+RAM config, and tested live npm connectivity instead of editing the network
+config. Its HTTPS request succeeded with certificate verification enabled.
+These are evaluation failures, not container failures; the launcher correctly
+returned exit status 1. Artifacts: `results/run-1794955219862/`.

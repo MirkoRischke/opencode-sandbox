@@ -37,7 +37,7 @@ export class OpenCodeProvider implements ApiProvider {
     const request = { signal: AbortSignal.timeout(90_000) };
     const session = await this.host.sessions.create({
       location: { directory: workspace },
-      model: { providerID: "litellm", id: process.env.EVAL_MODEL ?? "gpt-6.1-sol" },
+      model: { providerID: "litellm", id: process.env.EVAL_MODEL ?? "gpt-6.2-sol" },
       permissions: [{ action: "*", resource: "*", effect: "allow" }],
     }, request);
     try {

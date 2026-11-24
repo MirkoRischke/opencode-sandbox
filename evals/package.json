@@ -3,8 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test assertions.test.ts",
-    "eval": "node run.ts",
+    "test": "node docker.ts test",
+    "eval": "node docker.ts run",
+    "build:image": "node docker.ts build",
     "typecheck": "tsc --noEmit",
     "build:cli": "go build -o ../bin/opencode-sandbox ../cmd/opencode-sandbox"
   },
