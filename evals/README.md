@@ -49,22 +49,17 @@ verification. Override its path with `EVAL_CA_BUNDLE`; the Linux default is
 
 ## Run
 
-To demonstrate all three variants without choosing an earlier skill revision:
+By default, compare three variants: no skill, the working-tree skill (including
+uncommitted edits), and the skill checked in at `HEAD`:
 
 ```sh
-npm run eval -- --demo-history
+npm run eval
 ```
 
-This creates a temporary Git repository with a **synthetic** earlier skill lacking
-the network-extension guidance. It is a plumbing demonstration, not a historical
-quality comparison. It neither commits to nor modifies this repository's history.
+If the working-tree skill hasn't changed, both skill variants have the same
+content. To compare against another revision, set `EVAL_PREVIOUS_REF`:
 
-For a real comparison, select an earlier revision containing a different
-version of `skills/opencode-sandbox/`:
-
-```sh
-EVAL_PREVIOUS_REF=<commit-or-tag> npm run eval
-```
+`EVAL_PREVIOUS_REF=<commit-or-tag> npm run eval`
 
 The previous variant extracts the entire directory using `git archive`; missing
 revisions/paths fail rather than silently falling back. The local variant snapshots
@@ -73,13 +68,13 @@ previous SHA and archive hashes (hashes include archive metadata, not just text)
 Only `SKILL.md` is registered, while referenced sibling files remain available.
 
 ```sh
-EVAL_CASE=network npm run eval -- --demo-history
-EVAL_CONCURRENCY=12 EVAL_REPETITIONS=7 npm run eval -- --demo-history
+EVAL_CASE=network npm run eval
+EVAL_CONCURRENCY=12 EVAL_REPETITIONS=7 npm run eval
 ```
 
-The second command is a 63-agent-run throughput probe, **not 21 distinct cases**.
-Defaults: three cases, three variants, concurrency nine, one repetition. Optional
-`EVAL_MODEL` and `EVAL_JUDGE_MODEL` select LiteLLM model IDs; both default to
+The second command repeats each case seven times across all three variants; it
+does not add distinct cases. Defaults: three variants, concurrency nine, one
+repetition. `EVAL_MODEL` and `EVAL_JUDGE_MODEL` select LiteLLM model IDs; both default to
 `gpt-6.2-sol`. Agent-result caching is disabled; provider-side prompt caching may
 still happen. Dependencies and the CLI are not rebuilt in the eval hot path.
 

@@ -32,7 +32,7 @@ if (command === "build") {
   if (result.error) throw result.error;
   process.exitCode = result.status ?? 1;
 } else if (command === "run") {
-  if (args.some(arg => arg !== "--demo-history")) throw new Error("Only --demo-history is supported");
+  if (args.length) throw new Error("Unexpected arguments; use environment variables to configure the eval");
   if (!process.env.LLM_GATEWAY_KEY) throw new Error("LLM_GATEWAY_KEY required");
   const resolvedImage = imageID();
   const personal = JSON.parse(await readFile(join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "opencode/opencode.json"), "utf8"));
@@ -49,28 +49,13 @@ if (command === "build") {
   const started = performance.now();
   try {
     const skillPath = "skills/opencode-sandbox";
-    const local = await readFile(join(root, skillPath, "SKILL.md"), "utf8");
     await mkdir(join(input, "local"));
     await cp(join(root, skillPath), join(input, "local/opencode-sandbox"), { recursive: true });
-    let gitRoot = root;
-    let ref = process.env.EVAL_PREVIOUS_REF;
-    const demo = args.includes("--demo-history");
-    if (demo) {
-      gitRoot = join(input, "demo-history");
-      await mkdir(join(gitRoot, skillPath), { recursive: true });
-      await writeFile(join(gitRoot, skillPath, "SKILL.md"), local.replace(
-        "   For network access, add hosts to `[network] allowed_hosts`;\n   inherited entries stay in effect.\n", ""));
-      execFileSync("git", ["init", "-q", gitRoot]);
-      execFileSync("git", ["-C", gitRoot, "add", skillPath]);
-      execFileSync("git", ["-C", gitRoot, "-c", "user.name=Eval demo", "-c", "user.email=eval@example.invalid", "commit", "-qm", "Synthetic previous skill for POC"]);
-      ref = "HEAD";
-    }
-    if (!ref) throw new Error("Set EVAL_PREVIOUS_REF or use --demo-history");
-    const sha = execFileSync("git", ["-C", gitRoot, "rev-parse", "--verify", `${ref}^{commit}`], { encoding: "utf8" }).trim();
-    const archive = execFileSync("git", ["-C", gitRoot, "archive", sha, skillPath]);
+    const ref = process.env.EVAL_PREVIOUS_REF || "HEAD";
+    const sha = execFileSync("git", ["-C", root, "rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`], { encoding: "utf8" }).trim();
+    const archive = execFileSync("git", ["-C", root, "archive", sha, skillPath]);
     await mkdir(join(input, "previous"));
     execFileSync("tar", ["-x", "-C", join(input, "previous")], { input: archive });
-    if (demo) await rm(gitRoot, { recursive: true });
     const hash = (data: Buffer) => createHash("sha256").update(data).digest("hex");
     const variants: Variant[] = [
       { name: "none", revision: "none" },
@@ -83,7 +68,7 @@ if (command === "build") {
     await cp(process.env.EVAL_CA_BUNDLE ?? "/etc/ssl/certs/ca-certificates.crt", join(input, "ca.pem"));
     const dockerArgs = ["run", "--rm", "--env", "LLM_GATEWAY_KEY",
       "--env", "NODE_EXTRA_CA_CERTS=/input/ca.pem", "--env", "CURL_CA_BUNDLE=/input/ca.pem",
-      "--env", "SSL_CERT_FILE=/input/ca.pem", "--env", `EVAL_DEMO_HISTORY=${demo ? "1" : "0"}`,
+      "--env", "SSL_CERT_FILE=/input/ca.pem",
       "--mount", `type=bind,source=${input},target=/input,readonly`,
       "--mount", `type=bind,source=${artifacts},target=/results`];
     for (const key of ["EVAL_CASE", "EVAL_CONCURRENCY", "EVAL_REPETITIONS", "EVAL_MODEL", "EVAL_JUDGE_MODEL"]) {

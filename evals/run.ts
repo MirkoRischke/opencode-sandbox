@@ -62,7 +62,7 @@ try {
   hosts.length = 0;
   // Persist results, not the suite configuration containing runtime judge credentials.
   await writeFile(join(artifacts, "summary.json"), JSON.stringify({
-    demoHistory: process.env.EVAL_DEMO_HISTORY === "1", variants,
+    variants,
     versions: { node: process.version, opencode: "2.3.0", promptfoo: "0.125.1" },
     elapsedSeconds: (performance.now() - started) / 1000, stats: results.stats,
     results: results.results,
