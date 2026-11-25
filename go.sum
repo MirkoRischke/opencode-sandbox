@@ -64,8 +64,8 @@ github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWD
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
 github.com/superradcompany/microsandbox/sdk/go v0.7.15 h1:1RfMGylU/KX+BqHWbTjsQYRWfRo+c3qFrvFX9UnaT3A=
 github.com/superradcompany/microsandbox/sdk/go v0.7.15/go.mod h1:p7Tm/p9zkO7sHO3N8A1fiTVeLB2w/fQoKdYlpN/5neA=
-github.com/zalando/go-keyring v0.2.9-0.20261117193117-626840982519 h1:OPi/WRGE2An8iG2vK2wVWkBdVM30eIzZmXcunaHlec0=
-github.com/zalando/go-keyring v0.2.9-0.20261117193117-626840982519/go.mod h1:tsMo+VpRq5NGyKfxoBVjCuMrG47yj8cmakZDO5QGii0=
+github.com/zalando/go-keyring v0.2.9-0.20261124221039-008046328ba3 h1:/sTKA96odmRq8V3kZvqVrr+FbCifN9ilGhcqP8WTmOA=
+github.com/zalando/go-keyring v0.2.9-0.20261124221039-008046328ba3/go.mod h1:tsMo+VpRq5NGyKfxoBVjCuMrG47yj8cmakZDO5QGii0=
 go.yaml.in/yaml/v3 v3.0.4/go.mod h1:DhzuOOF2ATzADvBadXxruRBLzYTpT36CKvDb3+aBEFg=
 go.yaml.in/yaml/v3 v3.0.5 h1:N6y/pJk8buWs9NY5ERU2HSMfm+IuD/OtfdAnq6kESPw=
 go.yaml.in/yaml/v3 v3.0.5/go.mod h1:HVTZu1O7/Vkt2N+BFy8Zza+lnLsABggaTM2ZpNIGuKg=

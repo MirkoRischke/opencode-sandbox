@@ -17,7 +17,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	github.com/superradcompany/microsandbox/sdk/go v0.7.15
-	github.com/zalando/go-keyring v0.2.9-0.20261117193117-626840982519
+	github.com/zalando/go-keyring v0.2.9-0.20261124221039-008046328ba3
 	golang.org/x/term v0.48.0
 )
 
