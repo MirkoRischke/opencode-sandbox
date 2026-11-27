@@ -41,7 +41,7 @@ func newCommand(resolveInspection configInspectionInputs) *cobra.Command {
 	root.PersistentFlags().String("console-log-level", "", "Minimum stderr log level: debug, info, warn, or error (default info; overrides config)")
 	root.Flags().StringVar(&awsRole, "aws-role", "", "IAM role ARN to assume for this session (optional)")
 	root.Flags().StringVar(&awsProfile, "aws-profile", "", "Optional host AWS source profile (requires a role via config or --aws-role)")
-	root.AddCommand(newListCommand(), newRemoveCommand(), newPruneCommand(), newConfigCommand(resolveInspection), newDiagnosticsCommand(), newSnapshotCommand(), newSecretCommand(), newGatewayCommand())
+	root.AddCommand(newListCommand(), newRemoveCommand(), newPruneCommand(), newConfigCommand(resolveInspection), newDiagnosticsCommand(), newSnapshotCommand(), newSecretCommand(), newGatewayCommand(), newStateCommand())
 	return root
 }
 
@@ -72,11 +72,11 @@ func configureConsoleLogging(cmd *cobra.Command, _ []string) error {
 		e.level.Set(level)
 		e.override = true
 	}
-	// Config inspection and completion bypass trust-dependent logging config.
+	// Config inspection, state lookup, and completion bypass trust-dependent logging config.
 	if cmd.Name() == "completion" || cmd.Name() == "__complete" {
 		return nil
 	}
-	if parent := cmd.Parent(); parent != nil && (parent.Name() == "config" || parent.Name() == "completion") {
+	if parent := cmd.Parent(); parent != nil && (parent.Name() == "config" || parent.Name() == "state" || parent.Name() == "completion") {
 		return nil
 	}
 	if e.override {

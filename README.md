@@ -60,6 +60,9 @@ opencode-sandbox snapshot create   # Rebuild the prepared baseline
 opencode-sandbox list              # List managed VMs
 opencode-sandbox remove            # Delete this workspace's VM without confirmation
 opencode-sandbox prune --dry-run   # Preview broader workspace cleanup
+opencode-sandbox state path         # Find this workspace's persistent state
+opencode-sandbox state path --repo  # Find state for this repo, including deleted worktrees
+opencode-sandbox state path --all   # Find the top-level persistent state directory
 ```
 
 For more commands and examples, see [configuration](docs/config/README.md),

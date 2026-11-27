@@ -101,6 +101,18 @@ func TestDiagnosticsCommandRejectsInvalidArguments(t *testing.T) {
 	}
 }
 
+func TestStatePathRejectsInvalidArguments(t *testing.T) {
+	t.Parallel()
+	for _, args := range [][]string{
+		{"state"},
+		{"state", "path", "opencode-sessions"},
+		{"state", "path", "--repo", "--all"},
+	} {
+		_, err := executeCommand(args...)
+		require.Error(t, err)
+	}
+}
+
 func executeCommand(args ...string) (string, error) {
 	var output bytes.Buffer
 	cmd := NewCommand()
