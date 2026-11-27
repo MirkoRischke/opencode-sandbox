@@ -42,7 +42,7 @@ func TestStartupExitFallsBackToInteractiveGuestBash(t *testing.T) {
 		shellExit   string
 	}{
 		{"success", "0", "0"},
-		{"opencode failure", "7", "0"},
+		{"startup failure", "7", "0"},
 		{"shell failure", "0", "9"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
