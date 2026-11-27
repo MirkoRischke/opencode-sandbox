@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -19,11 +20,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestHostHTTPGatewaySubstitutesOnlyAuthorization(t *testing.T) {
+func TestHostHTTPGatewaySubstitutesOnlyItsAuthorizationAndPassesPlaceholders(t *testing.T) {
 	t.Parallel()
-	headers := make(chan http.Header, 1)
+	type request struct {
+		headers http.Header
+		body    string
+	}
+	requests := make(chan request, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		headers <- r.Header.Clone()
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		requests <- request{headers: r.Header.Clone(), body: string(body)}
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	t.Cleanup(server.Close)
@@ -32,26 +42,31 @@ func TestHostHTTPGatewaySubstitutesOnlyAuthorization(t *testing.T) {
 	require.True(t, ok)
 	settings.Network.VMToHost.Ports = []uint16{uint16(address.Port)}
 	dir := t.TempDir()
-	path := filepath.Join(dir, "gateway-key")
+	path := filepath.Join(dir, "service-key")
 	require.NoError(t, os.Chmod(dir, 0700))
-	require.NoError(t, os.WriteFile(path, []byte("FAKE_GATEWAY_KEY"), 0600))
+	require.NoError(t, os.WriteFile(path, []byte("FAKE_SERVICE_KEY"), 0600))
 	settings.Secrets = map[string]launcherconfig.SecretSettings{
-		"gateway": {Source: launcherconfig.SecretSourceSettings{File: path}, Guest: launcherconfig.SecretGuestSettings{Env: "GATEWAY_KEY"}, AllowedHosts: []string{"host.microsandbox.internal"}, Headers: []string{"authorization"}, AllowHTTP: true},
+		"service": {Source: launcherconfig.SecretSourceSettings{File: path}, Guest: launcherconfig.SecretGuestSettings{Env: "SERVICE_KEY"}, AllowedHosts: []string{"service.example.com"}, Headers: []string{"x-service-key"}, AllowHTTP: true},
 	}
 	secrets, err := sandbox.LoadSecrets(settings)
 	require.NoError(t, err)
+	secrets = sandbox.AddGatewaySecret(secrets, "FAKE_GATEWAY_KEY")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	s, err := sandbox.Prepare(ctx, newWorktree(t), secrets, settings)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, s.Remove(context.Background())) })
+	const body = `{"messages":[{"role":"user","content":"$MSB_SERVICE_KEY $MSB_LLM_GATEWAY_KEY"}]}`
 	execInSandbox(t, s, "curl", "--noproxy", "*", "--fail", "--silent", "--show-error", "--max-time", "10",
-		"-H", "Authorization: Bearer $MSB_GATEWAY_KEY", "-H", "X-Untrusted: $MSB_GATEWAY_KEY",
-		fmt.Sprintf("http://host.microsandbox.internal:%d/v1/models", settings.Network.VMToHost.Ports[0]))
+		"-H", "Authorization: Bearer $MSB_LLM_GATEWAY_KEY", "-H", "X-Untrusted: $MSB_LLM_GATEWAY_KEY",
+		"-H", "X-Service-Key: $MSB_SERVICE_KEY", "-H", "Content-Type: application/json", "--data", body,
+		fmt.Sprintf("http://host.microsandbox.internal:%d/v1/chat/completions", settings.Network.VMToHost.Ports[0]))
 	select {
-	case got := <-headers:
-		require.Equal(t, "Bearer FAKE_GATEWAY_KEY", got.Get("Authorization"))
-		require.Equal(t, "$MSB_GATEWAY_KEY", got.Get("X-Untrusted"))
+	case got := <-requests:
+		require.Equal(t, "Bearer FAKE_GATEWAY_KEY", got.headers.Get("Authorization"))
+		require.Equal(t, "$MSB_LLM_GATEWAY_KEY", got.headers.Get("X-Untrusted"))
+		require.Equal(t, "$MSB_SERVICE_KEY", got.headers.Get("X-Service-Key"))
+		require.Equal(t, body, got.body)
 	case <-ctx.Done():
 		t.Fatal("host gateway did not receive the request")
 	}

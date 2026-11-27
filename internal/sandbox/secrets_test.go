@@ -15,7 +15,7 @@ import (
 
 func TestGatewaySecretUsesHostSideHeaderSubstitution(t *testing.T) {
 	t.Parallel()
-	secret := GatewaySecret("sk-vm").entry
+	secret := AddGatewaySecret(nil, "sk-vm")[0].entry
 	require.Equal(t, "LLM_GATEWAY_KEY", secret.EnvVar)
 	require.Equal(t, "sk-vm", secret.Value)
 	require.Equal(t, []string{"host.microsandbox.internal"}, secret.Allow)

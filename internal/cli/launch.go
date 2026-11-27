@@ -75,7 +75,7 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 	if err != nil {
 		return err
 	}
-	secrets = append(secrets, sandbox.GatewaySecret(key))
+	secrets = sandbox.AddGatewaySecret(secrets, key)
 	s, err := sandbox.PrepareWorkspace(ctx, w, secrets, settings, sandbox.DiagnosticsOptions{StateDir: stateDir})
 	if err != nil {
 		return err

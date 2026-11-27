@@ -20,14 +20,21 @@ type Secret struct {
 	entry m.SecretEntry
 }
 
-// GatewaySecret substitutes a VM-specific LiteLLM key outside the guest.
-func GatewaySecret(key string) Secret {
+// AddGatewaySecret configures gateway authentication and lets prompts carry
+// unchanged placeholders for other secrets.
+func AddGatewaySecret(secrets []Secret, key string) []Secret {
+	const gatewayHost = "host.microsandbox.internal"
+	for i := range secrets {
+		entry := &secrets[i].entry
+		entry.Passthrough = append(entry.Passthrough, gatewayHost)
+	}
 	requireTLS := false
-	return Secret{entry: m.Secret.Env("LLM_GATEWAY_KEY", key, m.SecretEnvOptions{
-		Allow:              []string{"host.microsandbox.internal"},
+	gateway := Secret{entry: m.Secret.Env("LLM_GATEWAY_KEY", key, m.SecretEnvOptions{
+		Allow:              []string{gatewayHost},
 		Substitution:       m.SecretSubstitution{HeaderFields: []string{"authorization"}},
 		RequireTLSIdentity: &requireTLS,
 	})}
+	return append(secrets, gateway)
 }
 
 // LoadSecrets reads only explicitly configured files or keyring entries. Relative paths
