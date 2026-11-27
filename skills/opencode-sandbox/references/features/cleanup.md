@@ -4,8 +4,9 @@ Free disk space or reset an environment without deleting your project files.
 Choose how much to remove:
 
 1. [List and remove VMs](#list-and-remove-vms)
-2. [Remove just the prepared baseline](#remove-a-baseline)
-3. [Prune workspace resources](#prune-workspace-resources)
+2. [Remove VMs left behind by deleted worktrees](#remove-vms-left-behind-by-deleted-worktrees)
+3. [Remove just the prepared baseline](#remove-a-baseline)
+4. [Prune workspace resources](#prune-workspace-resources)
 
 ## List and remove VMs
 
@@ -15,6 +16,23 @@ Choose how much to remove:
   keep the snapshot and host-backed state.
 - `opencode-sandbox remove --all` deletes **all** managed VMs without
   confirmation.
+
+## Remove VMs left behind by deleted worktrees
+
+`git worktree remove` leaves the VM behind. Preview which VMs you can clean up:
+
+```sh
+opencode-sandbox remove --orphaned --dry-run        # Current Git repo
+opencode-sandbox remove --orphaned --all --dry-run  # All repos, from anywhere
+```
+
+Drop `--dry-run` to delete the matching VMs **without confirmation**. Keep
+`--orphaned` when using `--all` to limit deletion to orphaned VMs.
+
+Only stopped VMs for linked worktrees whose directories are gone and whose
+paths are no longer listed by Git qualify. If Git can't verify the worktree,
+the VM is skipped. Snapshots, logs, diagnostics, and host-backed state are
+preserved. Older VMs missing worktree metadata need manual cleanup.
 
 ## Remove a baseline
 
