@@ -44,9 +44,13 @@ func portBindings(ports []config.PortSettings) []m.PortBinding {
 // The runtime logs listener bind failures without failing VM startup. Check
 // before starting it so ordinary port conflicts are returned to the caller.
 func checkPortBindings(bindings []m.PortBinding) error {
+	return checkPortBindingsWith(bindings, net.Listen)
+}
+
+func checkPortBindingsWith(bindings []m.PortBinding, listen func(network, address string) (net.Listener, error)) error {
 	for _, binding := range bindings {
 		address := net.JoinHostPort(binding.Bind, strconv.Itoa(int(binding.HostPort)))
-		listener, err := net.Listen("tcp4", address)
+		listener, err := listen("tcp4", address)
 		if err != nil {
 			return fmt.Errorf("host TCP port %s unavailable: %w", address, err)
 		}

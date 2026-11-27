@@ -8,7 +8,6 @@ import (
 	"strings"
 	"syscall"
 	"testing"
-	"time"
 
 	"opencode-sandbox/internal/workspace"
 
@@ -136,24 +135,14 @@ func TestManagedSnapshotRepositoryUsesStoredIdentity(t *testing.T) {
 	require.False(t, ok)
 }
 
-// Run before parallel lock tests: fork briefly inherits their flock descriptors.
-func TestBulkSnapshotRemovalRespectsRepositoryLock(t *testing.T) { //nolint:paralleltest // Subprocess inheritance can delay release of parallel tests' locks.
-	if os.Getenv("OPENCODE_SANDBOX_SNAPSHOT_LOCK_TEST") != "1" {
-		executable, err := os.Executable()
-		require.NoError(t, err)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		command := exec.CommandContext(ctx, executable, "-test.run=^TestBulkSnapshotRemovalRespectsRepositoryLock$")
-		command.Env = append(os.Environ(), "OPENCODE_SANDBOX_SNAPSHOT_LOCK_TEST=1", "XDG_CACHE_HOME="+t.TempDir())
-		output, err := command.CombinedOutput()
-		require.NoError(t, err, "%s", output)
-		return
-	}
+func TestBulkSnapshotRemovalRespectsRepositoryLock(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
 	repo := snapshotIdentity("/deleted/repository/.git")
-	unlock, err := repo.lock()
+	unlock, err := repo.lockIn(dir)
 	require.NoError(t, err)
 	defer unlock()
 	stored, ok := managedSnapshotWorkspace(repo.group, repo.labels())
 	require.True(t, ok)
-	require.ErrorContains(t, stored.removeLocked(context.Background()), "another snapshot operation")
+	require.ErrorContains(t, stored.removeLockedIn(t.Context(), dir), "another snapshot operation")
 }

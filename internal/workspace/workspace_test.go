@@ -99,11 +99,12 @@ func TestSeparateGitDirectory(t *testing.T) {
 }
 
 func TestGitEnvironmentCannotRedirectDiscovery(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	git(t, "init", root)
-	t.Setenv("GIT_DIR", "/does/not/exist")       //nolint:forbidigo // Exercise process-environment sanitization; Setenv prevents parallel execution.
-	t.Setenv("GIT_WORK_TREE", "/does/not/exist") //nolint:forbidigo // Exercise process-environment sanitization; Setenv prevents parallel execution.
-	require.IsType(t, GitRepository{}, resolve(t, root))
+	w, err := resolveWithGitEnv(t.Context(), root, []string{"GIT_DIR=/does/not/exist", "GIT_WORK_TREE=/does/not/exist"})
+	require.NoError(t, err)
+	require.IsType(t, GitRepository{}, w)
 }
 
 func TestUnsafePaths(t *testing.T) {

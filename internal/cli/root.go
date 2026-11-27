@@ -15,6 +15,10 @@ import (
 
 // NewCommand constructs the CLI without loading host state or launching a sandbox.
 func NewCommand() *cobra.Command {
+	return newCommand(hostConfigInspection)
+}
+
+func newCommand(resolveInspection configInspectionInputs) *cobra.Command {
 	var awsRole, awsProfile string
 	root := &cobra.Command{
 		Use:               "opencode-sandbox",
@@ -37,7 +41,7 @@ func NewCommand() *cobra.Command {
 	root.PersistentFlags().String("console-log-level", "", "Minimum stderr log level: debug, info, warn, or error (default info; overrides config)")
 	root.Flags().StringVar(&awsRole, "aws-role", "", "IAM role ARN to assume for this session (optional)")
 	root.Flags().StringVar(&awsProfile, "aws-profile", "", "Optional host AWS source profile (requires a role via config or --aws-role)")
-	root.AddCommand(newListCommand(), newRemoveCommand(), newPruneCommand(), newConfigCommand(), newDiagnosticsCommand(), newSnapshotCommand(), newSecretCommand(), newGatewayCommand())
+	root.AddCommand(newListCommand(), newRemoveCommand(), newPruneCommand(), newConfigCommand(resolveInspection), newDiagnosticsCommand(), newSnapshotCommand(), newSecretCommand(), newGatewayCommand())
 	return root
 }
 

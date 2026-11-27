@@ -15,6 +15,39 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestLauncherCompletionIgnoresInvalidHostConfig(t *testing.T) {
+	t.Parallel()
+	configDir := t.TempDir()
+	writeSettingsAt(t, configDir, "invalid TOML [")
+	command := exec.CommandContext(t.Context(), buildLauncher(t), "completion", "bash")
+	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+configDir)
+	output, err := command.CombinedOutput()
+	require.NoError(t, err, "%s", output)
+	require.Contains(t, string(output), "opencode-sandbox")
+}
+
+func TestLauncherConfigShowUsesXDGAndCurrentDirectory(t *testing.T) {
+	t.Parallel()
+	configDir, stateDir, directory := t.TempDir(), t.TempDir(), t.TempDir()
+	writeSettingsAt(t, configDir, "[vm]\nmemory_mib = 3072\n")
+	workspaceConfig := filepath.Join(directory, ".opencode-sandbox.toml")
+	require.NoError(t, os.WriteFile(workspaceConfig, []byte("[vm]\ncpus = 4\n"), 0600))
+	command := exec.CommandContext(t.Context(), buildLauncher(t), "config", "show")
+	command.Dir = directory
+	command.Env = append(os.Environ(), "XDG_CONFIG_HOME="+configDir, "XDG_STATE_HOME="+stateDir)
+	var stderr strings.Builder
+	command.Stderr = &stderr
+	output, err := command.Output()
+	require.NoError(t, err, "%s", stderr.String())
+	var settings launcherconfig.Settings
+	_, err = toml.Decode(string(output), &settings)
+	require.NoError(t, err)
+	require.EqualValues(t, 4, settings.VM.CPUs)
+	require.EqualValues(t, 3072, settings.VM.MemoryMiB)
+	require.Contains(t, stderr.String(), workspaceConfig)
+	require.NoDirExists(t, filepath.Join(stateDir, "opencode-sandbox"))
+}
+
 func TestLauncherPrintsDefaultConfigWithoutLoadingHostState(t *testing.T) {
 	t.Parallel()
 	configDir, stateDir := t.TempDir(), t.TempDir()

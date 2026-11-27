@@ -17,26 +17,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fake Docker executable observes the external Compose boundary, without
-// requiring Docker or touching the developer's shared gateway.
-//
-//nolint:forbidigo // The external executable seam needs process PATH; these tests run serially and never alter the real gateway.
+func fakeDocker(t *testing.T, script string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "docker")
+	require.NoError(t, os.WriteFile(path, []byte("#!/bin/sh\n"+script), 0700))
+	return path
+}
+
 func TestEnsureRefreshesComposeAndReconcilesHealthyProject(t *testing.T) {
-	// PATH is process-local; this test must not run in parallel.
-	bin := t.TempDir()
-	log := filepath.Join(bin, "calls")
-	require.NoError(t, os.WriteFile(filepath.Join(bin, "docker"), []byte(`#!/bin/sh
-echo "$*" >> "$CALL_LOG"
+	t.Parallel()
+	docker := fakeDocker(t, `echo "$*" >> calls
 case "$*" in
   *" ps "*)
     if test -f ready; then printf 'litellm healthy\ndb healthy\n'; fi ;;
   *" up "*) touch ready ;;
   *" stop") rm -f ready ;;
 esac
-`), 0700))
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("CALL_LOG", log)
-	g := gateway.New(t.TempDir())
+`)
+	g := gateway.NewWithOptions(t.TempDir(), gateway.Options{DockerPath: docker})
+	log := filepath.Join(g.Directory(), "calls")
 	require.NoError(t, g.Ensure(context.Background(), io.Discard))
 	composePath := filepath.Join(g.Directory(), "compose.yaml")
 	firstCompose, err := os.ReadFile(composePath)
@@ -78,19 +77,13 @@ esac
 	require.NotContains(t, string(calls), " down")
 }
 
-//nolint:forbidigo // Serial PATH override observes Compose arguments and environment without Docker.
 func TestOptionalConfigIsSelectedAndReconciledOnStartup(t *testing.T) {
-	bin := t.TempDir()
-	log := filepath.Join(bin, "calls")
-	require.NoError(t, os.WriteFile(filepath.Join(bin, "docker"), []byte(`#!/bin/sh
-printf '%s\n%s\n%s\n' "$*" "$OPENCODE_SANDBOX_GATEWAY_CONFIG" "$OPENCODE_SANDBOX_GATEWAY_CONFIG_SHA256" >> "$CALL_LOG"
-`), 0700))
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("CALL_LOG", log)
-	t.Setenv("OPENCODE_SANDBOX_GATEWAY_CONFIG", "")
-	t.Setenv("OPENCODE_SANDBOX_GATEWAY_CONFIG_SHA256", "")
+	t.Parallel()
+	docker := fakeDocker(t, `printf '%s\n%s\n%s\n' "$*" "$OPENCODE_SANDBOX_GATEWAY_CONFIG" "$OPENCODE_SANDBOX_GATEWAY_CONFIG_SHA256" >> calls
+`)
 	configPath := filepath.Join(t.TempDir(), "config with spaces.yaml")
-	g := gateway.NewWithOptions(t.TempDir(), gateway.Options{ConfigFile: configPath})
+	g := gateway.NewWithOptions(t.TempDir(), gateway.Options{ConfigFile: configPath, DockerPath: docker})
+	log := filepath.Join(g.Directory(), "calls")
 
 	// A missing optional file must not be created or mounted.
 	require.NoError(t, g.Ensure(t.Context(), io.Discard))
@@ -141,17 +134,13 @@ func TestStopBeforeFirstStartDoesNotCreateGatewayFiles(t *testing.T) {
 	require.NoDirExists(t, g.Directory())
 }
 
-//nolint:forbidigo // Serial PATH override tests device-login invocation without contacting any provider.
 func TestAuthenticateStartsGatewayAndRunsSelectedProviderLogin(t *testing.T) {
-	bin := t.TempDir()
-	log := filepath.Join(bin, "calls")
-	require.NoError(t, os.WriteFile(filepath.Join(bin, "docker"), []byte(`#!/bin/sh
-echo "$*" >> "$CALL_LOG"
+	t.Parallel()
+	docker := fakeDocker(t, `echo "$*" >> calls
 case "$*" in *" exec "*) echo 'Complete device login in your browser';; esac
-`), 0700))
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("CALL_LOG", log)
-	g := gateway.New(t.TempDir())
+`)
+	g := gateway.NewWithOptions(t.TempDir(), gateway.Options{DockerPath: docker})
+	log := filepath.Join(g.Directory(), "calls")
 	for _, provider := range []string{"chatgpt", "copilot"} {
 		var output bytes.Buffer
 		require.NoError(t, g.Authenticate(context.Background(), provider, nil, &output, io.Discard))
@@ -165,28 +154,25 @@ case "$*" in *" exec "*) echo 'Complete device login in your browser';; esac
 	require.ErrorContains(t, g.Authenticate(context.Background(), "invalid", nil, io.Discard, io.Discard), "unknown gateway provider")
 }
 
-//nolint:forbidigo // Serial test owns PATH; concurrent callers still exercise cross-process-compatible file locking.
 func TestConcurrentLaunchersSerializeGatewayReconciliation(t *testing.T) {
-	bin := t.TempDir()
-	log := filepath.Join(bin, "calls")
-	require.NoError(t, os.WriteFile(filepath.Join(bin, "docker"), []byte(`#!/bin/sh
-case "$*" in
+	t.Parallel()
+	docker := fakeDocker(t, `case "$*" in
   *" ps "*) if test -f ready; then printf 'litellm healthy\ndb healthy\n'; fi ;;
   *" up "*)
     mkdir reconciling || exit 1
-    echo up >> "$CALL_LOG"
+    echo up >> calls
     sleep 0.1
     touch ready
     rmdir reconciling ;;
 esac
-`), 0700))
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("CALL_LOG", log)
+`)
 	dataDir := t.TempDir()
+	options := gateway.Options{DockerPath: docker}
+	log := filepath.Join(gateway.NewWithOptions(dataDir, options).Directory(), "calls")
 	var workers sync.WaitGroup
 	errors := make(chan error, 4)
 	for range 4 {
-		workers.Go(func() { errors <- gateway.New(dataDir).Ensure(context.Background(), io.Discard) })
+		workers.Go(func() { errors <- gateway.NewWithOptions(dataDir, options).Ensure(context.Background(), io.Discard) })
 	}
 	workers.Wait()
 	close(errors)
@@ -198,12 +184,10 @@ esac
 	require.Equal(t, strings.Repeat("up\n", 4), string(calls))
 }
 
-//nolint:forbidigo // Serial PATH override isolates Compose failure from the developer's Docker installation.
 func TestGatewayStartupFailureIsReturned(t *testing.T) {
-	bin := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(bin, "docker"), []byte("#!/bin/sh\ncase \"$*\" in *\" up \"*) exit 17;; esac\n"), 0700))
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	err := gateway.New(t.TempDir()).Ensure(context.Background(), io.Discard)
+	t.Parallel()
+	docker := fakeDocker(t, "case \"$*\" in *\" up \"*) exit 17;; esac\n")
+	err := gateway.NewWithOptions(t.TempDir(), gateway.Options{DockerPath: docker}).Ensure(context.Background(), io.Discard)
 	require.ErrorContains(t, err, "start LLM gateway")
 	require.ErrorContains(t, err, "exit status 17")
 }

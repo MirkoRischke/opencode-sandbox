@@ -306,7 +306,15 @@ func managedSnapshotWorkspace(group string, labels map[string]string) (workspace
 }
 
 func (r workspaceSnapshot) removeLocked(ctx context.Context, observers ...RemovalObserver) error {
-	unlock, err := r.lock()
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		return err
+	}
+	return r.removeLockedIn(ctx, dir, observers...)
+}
+
+func (r workspaceSnapshot) removeLockedIn(ctx context.Context, cacheDir string, observers ...RemovalObserver) error {
+	unlock, err := r.lockIn(cacheDir)
 	if err != nil {
 		return err
 	}

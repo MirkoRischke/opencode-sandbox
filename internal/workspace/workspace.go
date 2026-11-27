@@ -108,6 +108,10 @@ func gitMounts(root, guestRoot string, metadata gitMetadata) []Mount {
 // Resolve never searches parents for a workspace or for Git metadata. A present
 // but invalid .git marker is an error, not a non-Git fallback.
 func Resolve(ctx context.Context, directory string) (Workspace, error) {
+	return resolveWithGitEnv(ctx, directory, os.Environ())
+}
+
+func resolveWithGitEnv(ctx context.Context, directory string, env []string) (Workspace, error) {
 	root, err := canonicalRoot(directory)
 	if err != nil {
 		return nil, err
@@ -118,15 +122,15 @@ func Resolve(ctx context.Context, directory string) (Workspace, error) {
 	} else if err != nil {
 		return nil, fmt.Errorf("inspect workspace Git metadata: %w", err)
 	}
-	dir, err := gitPath(ctx, root, "--absolute-git-dir")
+	dir, err := gitPath(ctx, root, "--absolute-git-dir", env)
 	if err != nil {
 		return nil, err
 	}
-	common, err := gitPath(ctx, root, "--git-common-dir")
+	common, err := gitPath(ctx, root, "--git-common-dir", env)
 	if err != nil {
 		return nil, err
 	}
-	top, err := gitPath(ctx, root, "--show-toplevel")
+	top, err := gitPath(ctx, root, "--show-toplevel", env)
 	if err != nil {
 		return nil, err
 	}
@@ -162,10 +166,11 @@ func canonicalRoot(directory string) (string, error) {
 	return root, nil
 }
 
-func gitPath(ctx context.Context, root, option string) (string, error) {
+func gitPath(ctx context.Context, root, option string, env []string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--path-format=absolute", option)
 	// Host Git overrides must not redirect discovery to a different checkout.
-	for _, entry := range os.Environ() {
+	cmd.Env = make([]string, 0, len(env))
+	for _, entry := range env {
 		if !strings.HasPrefix(entry, "GIT_") {
 			cmd.Env = append(cmd.Env, entry)
 		}

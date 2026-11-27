@@ -32,7 +32,16 @@ func hostStateDir(xdg, home string) (string, error) {
 	return filepath.Join(home, ".local", "state"), nil
 }
 
-func newConfigCommand() *cobra.Command {
+type configInspectionInputs func() (launcherconfig.Paths, string, error)
+
+func newConfigCommand(inputs configInspectionInputs) *cobra.Command {
+	inspect := func() (launcherconfig.Settings, []string, error) {
+		paths, directory, err := inputs()
+		if err != nil {
+			return launcherconfig.Settings{}, nil, err
+		}
+		return inspectConfig(paths, directory)
+	}
 	config := &cobra.Command{
 		Use:   "config",
 		Short: "Inspect launcher configuration",
@@ -52,7 +61,7 @@ func newConfigCommand() *cobra.Command {
 		Short: "Validate global and current-directory configuration without launching or approving it",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if _, _, err := inspectConfig(); err != nil {
+			if _, _, err := inspect(); err != nil {
 				return err
 			}
 			_, err := fmt.Fprintln(cmd.OutOrStdout(), "Configuration valid.")
@@ -64,7 +73,7 @@ func newConfigCommand() *cobra.Command {
 		Short: "Print merged launcher configuration and list its sources without approving it",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			settings, sources, err := inspectConfig()
+			settings, sources, err := inspect()
 			if err != nil {
 				return err
 			}
@@ -89,12 +98,13 @@ func newConfigCommand() *cobra.Command {
 	return config
 }
 
-func inspectConfig() (launcherconfig.Settings, []string, error) {
+func hostConfigInspection() (launcherconfig.Paths, string, error) {
 	configDir, err := hostConfigDir(os.Getenv("XDG_CONFIG_HOME"), os.Getenv("HOME"))
-	if err != nil {
-		return launcherconfig.Settings{}, nil, err
-	}
-	settings, sources, err := (launcherconfig.Paths{ConfigDir: configDir}).InspectWorkspaceSettings(".")
+	return launcherconfig.Paths{ConfigDir: configDir}, ".", err
+}
+
+func inspectConfig(paths launcherconfig.Paths, directory string) (launcherconfig.Settings, []string, error) {
+	settings, sources, err := paths.InspectWorkspaceSettings(directory)
 	if err != nil {
 		return settings, nil, err
 	}

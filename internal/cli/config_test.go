@@ -12,8 +12,17 @@ import (
 	launcherconfig "opencode-sandbox/internal/config"
 
 	"github.com/BurntSushi/toml"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )
+
+func testConfigCommand(paths launcherconfig.Paths, directory, subcommand string) *cobra.Command {
+	command := newCommand(func() (launcherconfig.Paths, string, error) {
+		return paths, directory, nil
+	})
+	command.SetArgs([]string{"config", subcommand})
+	return command
+}
 
 func TestConfigDirectoryUsesXDGWhenSet(t *testing.T) {
 	t.Parallel()
@@ -60,17 +69,6 @@ func TestRepoSettingsTrustFallsBackToHome(t *testing.T) {
 }
 
 func TestConfigValidate(t *testing.T) {
-	if os.Getenv("OPENCODE_SANDBOX_VALIDATE_TEST") == "1" {
-		output, err := executeCommand("config", "validate")
-		if wantError := os.Getenv("OPENCODE_SANDBOX_VALIDATE_ERROR"); wantError != "" {
-			require.ErrorContains(t, err, wantError)
-			require.Empty(t, output)
-		} else {
-			require.NoError(t, err)
-			require.Equal(t, "Configuration valid.\n", output)
-		}
-		return
-	}
 	t.Parallel()
 	for _, tc := range []struct {
 		name      string
@@ -95,6 +93,7 @@ func TestConfigValidate(t *testing.T) {
 		{name: "credentials not read", workspace: "[secrets.test]\nsource.file = './missing-credentials'\nguest.env = 'TOKEN'\nallowed_hosts = ['example.com']\nheaders = ['Authorization']\n[secrets.other]\nsource.keyring = {}\nguest.env = 'OTHER_TOKEN'\nallowed_hosts = ['example.com']\nheaders = ['Authorization']\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			root := t.TempDir()
 			configDir := t.TempDir()
 			stateDir := t.TempDir()
@@ -111,15 +110,18 @@ func TestConfigValidate(t *testing.T) {
 			require.NoError(t, os.Mkdir(dir, 0700))
 			trust := filepath.Join(dir, "trust.json")
 			require.NoError(t, os.WriteFile(trust, []byte("invalid trust"), 0600))
-			executable, err := os.Executable()
-			require.NoError(t, err)
-			command := exec.CommandContext(t.Context(), executable, "-test.run=^TestConfigValidate$")
-			command.Dir = root
-			command.Env = append(os.Environ(),
-				"XDG_CONFIG_HOME="+configDir, "XDG_STATE_HOME="+stateDir,
-				"OPENCODE_SANDBOX_VALIDATE_TEST=1", "OPENCODE_SANDBOX_VALIDATE_ERROR="+tc.wantError)
-			output, err := command.CombinedOutput()
-			require.NoError(t, err, "%s", output)
+			var output bytes.Buffer
+			command := testConfigCommand(launcherconfig.Paths{ConfigDir: configDir, StateDir: stateDir}, root, "validate")
+			command.SetOut(&output)
+			command.SetErr(&output)
+			err := command.ExecuteContext(t.Context())
+			if tc.wantError != "" {
+				require.ErrorContains(t, err, tc.wantError)
+				require.Empty(t, output.String())
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, "Configuration valid.\n", output.String())
+			}
 			data, err := os.ReadFile(trust)
 			require.NoError(t, err)
 			require.Equal(t, "invalid trust", string(data))
@@ -135,6 +137,7 @@ func TestConfigValidate(t *testing.T) {
 }
 
 func TestConfigShow(t *testing.T) {
+	t.Parallel()
 	configDir := t.TempDir()
 	stateDir := t.TempDir()
 	parent := t.TempDir()
@@ -152,17 +155,12 @@ func TestConfigShow(t *testing.T) {
 		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
 		require.NoError(t, os.WriteFile(path, []byte(content), 0600))
 	}
-	t.Chdir(workspace)
-	t.Setenv("XDG_CONFIG_HOME", configDir)
-	t.Setenv("XDG_STATE_HOME", stateDir)
-
 	var combined bytes.Buffer
 	show := func() (string, string, error) {
 		t.Helper()
 		combined.Reset()
 		var stdout, stderr bytes.Buffer
-		cmd := NewCommand()
-		cmd.SetArgs([]string{"config", "show"})
+		cmd := testConfigCommand(launcherconfig.Paths{ConfigDir: configDir, StateDir: stateDir}, workspace, "show")
 		cmd.SetOut(io.MultiWriter(&stdout, &combined))
 		cmd.SetErr(io.MultiWriter(&stderr, &combined))
 		err := cmd.ExecuteContext(t.Context())

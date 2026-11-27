@@ -3,12 +3,8 @@ package cli
 import (
 	"bytes"
 	"context"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -166,15 +162,8 @@ func TestLaunchRejectsInvalidArguments(t *testing.T) {
 	}
 }
 
-func TestCompletionScriptsWithoutLoadingHostState(t *testing.T) {
+func TestCompletionScripts(t *testing.T) {
 	t.Parallel()
-	if os.Getenv("OPENCODE_SANDBOX_COMPLETION_TEST") != "1" {
-		dir := t.TempDir()
-		require.NoError(t, os.Mkdir(filepath.Join(dir, "opencode-sandbox"), 0700))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "opencode-sandbox", "config.toml"), []byte("invalid TOML ["), 0600))
-		runIsolatedCommandTest(t, t.Name(), "XDG_CONFIG_HOME="+dir, "OPENCODE_SANDBOX_COMPLETION_TEST=1")
-		return
-	}
 	for _, shell := range []string{"bash", "zsh", "fish", "powershell"} {
 		t.Run(shell, func(t *testing.T) {
 			output, err := executeCommand("completion", shell)
@@ -201,16 +190,4 @@ func TestCompletionSuggestions(t *testing.T) {
 			}
 		})
 	}
-}
-
-func runIsolatedCommandTest(t *testing.T, name string, env ...string) {
-	t.Helper()
-	executable, err := os.Executable()
-	require.NoError(t, err)
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
-	command := exec.CommandContext(ctx, executable, "-test.run=^"+name+"$")
-	command.Env = append(os.Environ(), env...)
-	output, err := command.CombinedOutput()
-	require.NoError(t, err, "isolated test %s: %s", name, output)
 }

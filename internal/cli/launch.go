@@ -97,7 +97,7 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 }
 
 // Host credential discovery belongs to the CLI; VM lifecycle code receives a client.
-func loadHostAWS(ctx context.Context, settings launcherconfig.AWSSettings, logger *slog.Logger) (*sandbox.AWSOptions, error) {
+func loadHostAWS(ctx context.Context, settings launcherconfig.AWSSettings, logger *slog.Logger, options ...func(*awsconfig.LoadOptions) error) (*sandbox.AWSOptions, error) {
 	if settings.Role == "" {
 		return nil, nil
 	}
@@ -110,7 +110,7 @@ func loadHostAWS(ctx context.Context, settings launcherconfig.AWSSettings, logge
 	if settings.Profile != "" {
 		loadOptions = append(loadOptions, awsconfig.WithSharedConfigProfile(settings.Profile))
 	}
-	cfg, err := awsconfig.LoadDefaultConfig(loadCtx, loadOptions...)
+	cfg, err := awsconfig.LoadDefaultConfig(loadCtx, append(loadOptions, options...)...)
 	if err != nil {
 		return nil, fmt.Errorf("load host AWS profile: %w", err)
 	}
@@ -124,9 +124,9 @@ func loadHostAWS(ctx context.Context, settings launcherconfig.AWSSettings, logge
 		}
 		return credentials, err
 	})
-	options := &sandbox.AWSOptions{RoleARN: settings.Role, Region: cfg.Region, Client: sts.NewFromConfig(cfg)}
+	awsOptions := &sandbox.AWSOptions{RoleARN: settings.Role, Region: cfg.Region, Client: sts.NewFromConfig(cfg)}
 	logger.Info("Host AWS configuration loaded", "profile", settings.Profile, "region", cfg.Region)
-	return options, nil
+	return awsOptions, nil
 }
 
 // Validate AWS only after CLI overrides, so a profile-only config can use a CLI role.

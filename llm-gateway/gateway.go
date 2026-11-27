@@ -28,6 +28,7 @@ type Gateway struct {
 	baseURL     string
 	client      *http.Client
 	configFile  string
+	dockerPath  string
 }
 
 // Options isolates a gateway's Compose resources and host listener. Zero values
@@ -38,6 +39,8 @@ type Options struct {
 	// ConfigFile optionally supplies a user-managed LiteLLM configuration.
 	// An empty path or a missing file starts the gateway without a config file.
 	ConfigFile string
+	// DockerPath selects the Docker executable. If empty, Docker is found on PATH.
+	DockerPath string
 }
 
 // New uses the XDG data root, independently of the current source checkout.
@@ -53,6 +56,9 @@ func NewWithOptions(dataDir string, options Options) *Gateway {
 	if options.Port == 0 {
 		options.Port = 4000
 	}
+	if options.DockerPath == "" {
+		options.DockerPath = "docker"
+	}
 	return &Gateway{
 		directory:   filepath.Join(dataDir, "opencode-sandbox", "llm-gateway"),
 		projectName: options.ProjectName,
@@ -60,6 +66,7 @@ func NewWithOptions(dataDir string, options Options) *Gateway {
 		baseURL:     fmt.Sprintf("http://127.0.0.1:%d", options.Port),
 		client:      &http.Client{Timeout: 15 * time.Second},
 		configFile:  options.ConfigFile,
+		dockerPath:  options.DockerPath,
 	}
 }
 
@@ -175,7 +182,7 @@ func (g *Gateway) compose(ctx context.Context, config *fileConfig, input io.Read
 		env = append(env, "OPENCODE_SANDBOX_GATEWAY_CONFIG="+config.path,
 			"OPENCODE_SANDBOX_GATEWAY_CONFIG_SHA256="+config.digest)
 	}
-	command := exec.CommandContext(ctx, "docker", append(options, args...)...)
+	command := exec.CommandContext(ctx, g.dockerPath, append(options, args...)...)
 	command.Dir = g.directory
 	command.Env = env
 	command.Stdin, command.Stdout, command.Stderr = input, output, stderr

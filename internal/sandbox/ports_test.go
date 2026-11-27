@@ -22,16 +22,38 @@ func TestOccupiedHostPortFailsClearly(t *testing.T) {
 	t.Parallel()
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, listener.Close()) })
 	address, ok := listener.Addr().(*net.TCPAddr)
 	require.True(t, ok)
 	port := uint16(address.Port)
 	bindings := portBindings([]config.PortSettings{{HostPort: port, VMPort: 8080}})
 	err = checkPortBindings(bindings)
-	require.ErrorContains(t, err, "host TCP port 127.0.0.1:")
+	require.ErrorContains(t, err, "host TCP port "+address.String()+" unavailable")
 	var opErr *net.OpError
 	require.ErrorAs(t, err, &opErr)
-	require.NoError(t, listener.Close())
-	require.NoError(t, checkPortBindings(bindings))
+}
+
+func TestPortBindingCheckClosesListener(t *testing.T) {
+	t.Parallel()
+	listener := &portCheckListener{}
+	bindings := portBindings([]config.PortSettings{{HostPort: 3000, VMPort: 8080}})
+	err := checkPortBindingsWith(bindings, func(network, address string) (net.Listener, error) {
+		require.Equal(t, "tcp4", network)
+		require.Equal(t, "127.0.0.1:3000", address)
+		return listener, nil
+	})
+	require.NoError(t, err)
+	require.True(t, listener.closed)
+}
+
+type portCheckListener struct {
+	net.Listener
+	closed bool
+}
+
+func (l *portCheckListener) Close() error {
+	l.closed = true
+	return nil
 }
 
 func TestStoredPortBindings(t *testing.T) {

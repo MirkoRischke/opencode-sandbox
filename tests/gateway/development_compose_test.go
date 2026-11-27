@@ -31,7 +31,7 @@ printf '%s\n' "$@" "$OPENCODE_SANDBOX_GATEWAY_CONFIG" "$OPENCODE_SANDBOX_GATEWAY
 				"PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"),
 				"OPENCODE_SANDBOX_GATEWAY_CONFIG=", "OPENCODE_SANDBOX_GATEWAY_CONFIG_SHA256=")
 			run := func(action string) (string, error) {
-				command := exec.CommandContext(t.Context(), "bash", "compose.sh", action)
+				command := exec.CommandContext(t.Context(), "bash", "../../llm-gateway/compose.sh", action)
 				command.Env = env
 				output, err := command.CombinedOutput()
 				return string(output), err
