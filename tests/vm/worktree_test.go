@@ -2,12 +2,14 @@ package sandbox_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"opencode-sandbox/internal/sandbox"
+	"opencode-sandbox/internal/workspace"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -95,6 +97,27 @@ func TestPreparingStoppedSandboxResumesState(t *testing.T) {
 	execInSandbox(t, s, "touch", "/root/persistent-state")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
+	w, err := workspace.Resolve(ctx, s.Worktree)
+	require.NoError(t, err)
+	labels := func(s *sandbox.Sandbox) map[string]string {
+		var stored struct {
+			Labels map[string]string `json:"labels"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(storedSandboxConfig(t, s)), &stored))
+		return stored.Labels
+	}
+	fresh := labels(s)
+	require.Equal(t, "workspace-vm", fresh["kind"])
+	require.Equal(t, w.ID(), fresh["workspace-id"])
+	require.Equal(t, w.Root(), fresh["workspace-path"])
+	require.Equal(t, "worktree", fresh["workspace-name"])
+	require.Equal(t, w.RepositoryID(), fresh["repository-id"])
+	require.Equal(t, "repo", fresh["repository-name"])
+	require.Equal(t, "true", fresh["linked-worktree"])
+	require.Equal(t, filepath.Join(w.RepositoryRoot(), ".git"), fresh["git-common-dir"])
+	firstLaunch, err := time.Parse(time.RFC3339Nano, fresh["last-launched-at"])
+	require.NoError(t, err)
+	require.Equal(t, time.UTC, firstLaunch.Location())
 	// Simulate the user stopping a persistent VM outside the launcher.
 	require.NoError(t, s.Stop(ctx))
 
@@ -103,6 +126,13 @@ func TestPreparingStoppedSandboxResumesState(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, resumed.Close()) })
 	assert.Equal(t, s.Name, resumed.Name)
+	resumedLabels := labels(resumed)
+	lastLaunch, err := time.Parse(time.RFC3339Nano, resumedLabels["last-launched-at"])
+	require.NoError(t, err)
+	require.Equal(t, time.UTC, lastLaunch.Location())
+	require.True(t, lastLaunch.After(firstLaunch))
+	fresh["last-launched-at"] = resumedLabels["last-launched-at"]
+	require.Equal(t, fresh, resumedLabels)
 	execInSandbox(t, resumed, "test", "-f", "/root/persistent-state")
 }
 

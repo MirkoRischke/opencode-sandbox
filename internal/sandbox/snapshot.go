@@ -49,7 +49,16 @@ func snapshotIdentity(root string) workspaceSnapshot {
 }
 
 func (r workspaceSnapshot) labels() map[string]string {
-	return map[string]string{"opencode-sandbox": "", "kind": "workspace-baseline", "workspace-name": r.name, "workspace-id": r.id, "workspace-path": r.root}
+	return map[string]string{
+		"opencode-sandbox": "",
+		"kind":             "workspace-baseline",
+		"repository-id":    r.id,
+		"repository-name":  r.name,
+		// Keep the original keys for baseline discovery and ownership checks.
+		"workspace-id":   r.id,
+		"workspace-name": r.name,
+		"workspace-path": r.root,
+	}
 }
 
 func (r workspaceSnapshot) owns(labels map[string]string) bool {
@@ -190,7 +199,7 @@ func createPreparationVM(ctx context.Context, w workspace.Workspace, name string
 	// disposable VM gets broad access; restore applies the workspace policy.
 	// Explicit host-service permissions remain; other protected destinations stay blocked.
 	preparationSettings.Network.Unrestricted = true
-	opts := sandboxOptions(w, preparationSettings)
+	opts := sandboxOptions(w, preparationSettings, preparationVMKind)
 	opts = append(opts, m.WithImage(image))
 	for _, secret := range secrets {
 		// Shared snapshots must not retain a particular worktree's gateway key.
@@ -460,7 +469,7 @@ func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, w
 		return nil, fmt.Errorf("restore workspace snapshot: %w", err)
 	}
 	defer restored.Close() //nolint:errcheck // Release the original handle on every path; the restarted handle belongs to the caller.
-	handle, err := configureRestoredWorktree(ctx, restored, name, w.ID(), secrets)
+	handle, err := configureRestoredWorktree(ctx, restored, name, w, secrets)
 	if err != nil {
 		return nil, discardRestoredVM(restored, err)
 	}
@@ -479,13 +488,13 @@ func discardRestoredVM(restored *m.Sandbox, cause error) error {
 	return errors.Join(cause, restored.Destroy(cleanup))
 }
 
-func configureRestoredWorktree(ctx context.Context, restored *m.Sandbox, name, workspaceID string, secrets []Secret) (*m.SandboxHandle, error) {
+func configureRestoredWorktree(ctx context.Context, restored *m.Sandbox, name string, w workspace.Workspace, secrets []Secret) (*m.SandboxHandle, error) {
 	// Do not execute project commands until host credentials/labels/workdir are
 	// configured. Snapshot restore itself has no secret creation interface.
 	if err := restored.Stop(ctx); err != nil {
 		return nil, fmt.Errorf("stop restored VM: %w", err)
 	}
-	patch := restoredWorktreePatch(workspaceID, secrets)
+	patch := restoredWorktreePatch(w, secrets)
 	// The restore interface cannot enable TLS inspection directly. A temporary
 	// non-credential secret activates the runtime's supported TLS transition;
 	// removing it leaves interception enabled. Never expose this to project code.
@@ -516,12 +525,11 @@ func configureRestoredWorktree(ctx context.Context, restored *m.Sandbox, name, w
 	return handle, nil
 }
 
-func restoredWorktreePatch(workspaceID string, secrets []Secret) m.ModifyOptions {
-	patch := m.ModifyOptions{
-		Policy: m.ModificationPolicyNextStart, Workdir: guestWorkspace,
-		Labels:  map[string]string{"opencode-sandbox": "", "workspace-id": workspaceID},
-		Secrets: make(map[string]m.SecretModifySpec, len(secrets)),
-	}
+func restoredWorktreePatch(w workspace.Workspace, secrets []Secret) m.ModifyOptions {
+	patch := workspaceVMLabelPatch(w)
+	patch.Policy = m.ModificationPolicyNextStart
+	patch.Workdir = guestWorkspace
+	patch.Secrets = make(map[string]m.SecretModifySpec, len(secrets))
 	for _, secret := range secrets {
 		entry := secret.entry
 		placeholder := entry.Placeholder

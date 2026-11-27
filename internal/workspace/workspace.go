@@ -76,6 +76,9 @@ func (w GitWorktree) RepositoryName() string {
 func (r GitRepository) RepositoryRoot() string { return filepath.Dir(r.metadata.common) }
 func (w GitWorktree) RepositoryRoot() string   { return filepath.Dir(w.metadata.common) }
 
+// GitCommonDir returns the canonical path to a linked worktree's shared Git metadata.
+func (w GitWorktree) GitCommonDir() string { return w.metadata.common }
+
 func (d Directory) Mounts(guestRoot string) []Mount {
 	return []Mount{{Source: d.root, Target: guestRoot}}
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -18,6 +19,11 @@ import (
 )
 
 const guestWorkspace = "/workspace"
+
+const (
+	workspaceVMKind   = "workspace-vm"
+	preparationVMKind = "workspace-preparation"
+)
 
 type Sandbox struct {
 	Name        string
@@ -58,7 +64,7 @@ func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secr
 	s.log().Info("Preparing VM")
 	started := time.Now().UTC()
 	var created bool
-	s.vm, created, err = connectOrRestore(ctx, s.Name, w, secrets, settings, sandboxOptions(w, settings), diagnosticOptions, stateDir)
+	s.vm, created, err = connectOrRestore(ctx, s.Name, w, secrets, settings, sandboxOptions(w, settings, workspaceVMKind), diagnosticOptions, stateDir)
 	if err != nil {
 		return nil, fmt.Errorf("prepare sandbox: %w", err)
 	}
@@ -74,6 +80,9 @@ func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secr
 		}
 	}
 	if err := s.initializeRuntime(ctx, secrets); err != nil {
+		return nil, errors.Join(err, s.Shutdown())
+	}
+	if err := s.recordLaunch(ctx, w); err != nil {
 		return nil, errors.Join(err, s.Shutdown())
 	}
 	s.log().Info("VM ready", "duration_ms", time.Since(started).Milliseconds())
@@ -112,7 +121,7 @@ func (s *Sandbox) configureGuest(ctx context.Context, settings launcherconfig.Se
 	return s.configureEnvironment(ctx, settings)
 }
 
-func sandboxOptions(w workspace.Workspace, settings launcherconfig.Settings) []m.SandboxOption {
+func sandboxOptions(w workspace.Workspace, settings launcherconfig.Settings, kind string) []m.SandboxOption {
 	mounts := workspaceMounts(w)
 	mounts["/var/lib/docker"] = m.Mount.Owned(m.OwnedVolumeOptions{
 		Kind: m.VolumeKindDisk, SizeMiB: settings.VM.DockerDiskMiB,
@@ -125,13 +134,52 @@ func sandboxOptions(w workspace.Workspace, settings launcherconfig.Settings) []m
 		m.WithWorkdir(guestWorkspace), m.WithMounts(mounts), m.WithDetached(),
 		m.WithNetwork(networkPolicy(settings.Network)), m.WithInterceptTLS(),
 		m.WithPortBindings(portBindings(settings.Network.HostToVM)...),
-		m.WithLabel("opencode-sandbox", ""),
-		m.WithLabel("workspace-id", w.ID()),
+		m.WithLabels(workspaceLabels(w, kind)),
 	}
 	if settings.Network.Diagnostics {
 		opts = append(opts, m.WithLogLevel(m.LogLevelDebug))
 	}
 	return opts
+}
+
+func workspaceLabels(w workspace.Workspace, kind string) map[string]string {
+	labels := map[string]string{
+		"opencode-sandbox": "",
+		"kind":             kind,
+		"repository-id":    w.RepositoryID(),
+		"repository-name":  w.RepositoryName(),
+		"workspace-id":     w.ID(),
+		"workspace-name":   filepath.Base(w.Root()),
+		"workspace-path":   w.Root(),
+	}
+	if linked, ok := w.(workspace.GitWorktree); ok {
+		labels["linked-worktree"] = "true"
+		labels["git-common-dir"] = linked.GitCommonDir()
+	}
+	return labels
+}
+
+func workspaceVMLabelPatch(w workspace.Workspace) m.ModifyOptions {
+	patch := m.ModifyOptions{Labels: workspaceLabels(w, workspaceVMKind)}
+	if _, linked := patch.Labels["linked-worktree"]; !linked {
+		patch.LabelsRemove = []string{"linked-worktree", "git-common-dir"}
+	}
+	return patch
+}
+
+// Record successful VM initialization with a live update: connection options
+// do not change persisted labels when resuming an existing VM.
+func (s *Sandbox) recordLaunch(ctx context.Context, w workspace.Workspace) error {
+	patch := workspaceVMLabelPatch(w)
+	patch.Labels["last-launched-at"] = time.Now().UTC().Format(time.RFC3339Nano)
+	plan, err := s.vm.Modify(ctx, patch)
+	if err != nil {
+		return fmt.Errorf("record workspace launch labels: %w", err)
+	}
+	if !plan.Applied {
+		return fmt.Errorf("record workspace launch labels: modification not applied")
+	}
+	return nil
 }
 
 // initializeRuntime runs on every launch, including restored and resumed VMs.

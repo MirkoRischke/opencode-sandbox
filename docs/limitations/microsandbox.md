@@ -106,12 +106,12 @@ assertions) passed; the updated launcher was installed with `mise run install`.
 
 ## MSB-02 — Restore cannot configure the full destination before boot
 
-**Status:** confirmed Go restore API gap. Last checked: v0.7.8.
+**Status:** confirmed Go restore API gap. Last checked: Go SDK and runtime v0.7.15.
 
-Source rechecked 2026-10-28 at v0.7.11:
-[`RestoreConfig`](https://github.com/superradcompany/microsandbox/blob/v0.7.11/sdk/go/restore.go#L15-L57)
-still lacks these destination settings. Live label modification added in v0.7.9
-does not supply restore-time secrets/workdir/TLS or eliminate the enrichment cycle.
+[`RestoreConfig`](https://github.com/superradcompany/microsandbox/blob/v0.7.15/sdk/go/restore.go#L15-L57)
+still lacks these destination settings. In an isolated v0.7.15 runtime, a disk
+restore started without the source VM or snapshot artifact labels. A live label
+update was immediately visible to `msb inspect` while the restored VM stayed running.
 
 `RestoreConfig` accepts resource, mount, port, and host-policy overrides, but not
 create-time secrets, labels, working directory, arbitrary environment, TLS settings,

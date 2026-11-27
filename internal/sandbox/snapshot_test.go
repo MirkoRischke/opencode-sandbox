@@ -21,8 +21,16 @@ func TestSnapshotIdentityIncludesReadableRepositoryAndStableLabels(t *testing.T)
 	require.Regexp(t, `^oc-workspace-my-project-[0-9a-f]{16}$`, repo.group)
 	require.Equal(t, "My_Project", repo.labels()["workspace-name"])
 	require.Equal(t, "/projects/My_Project", repo.labels()["workspace-path"])
+	require.Equal(t, "My_Project", repo.labels()["repository-name"])
+	require.Equal(t, repo.id, repo.labels()["repository-id"])
 	require.Len(t, repo.id, 64)
 	require.True(t, repo.owns(repo.labels()))
+	legacy := repo.labels()
+	delete(legacy, "repository-id")
+	delete(legacy, "repository-name")
+	require.True(t, repo.owns(legacy))
+	_, managed := managedSnapshotWorkspace(repo.group, legacy)
+	require.True(t, managed)
 	require.False(t, repo.owns(map[string]string{"workspace-id": repo.id}))
 	require.NotEqual(t, repo.group, snapshotIdentity("/other/My_Project").group)
 	require.LessOrEqual(t, len(snapshotIdentity("/projects/"+strings.Repeat("long", 50)).group), 128)
@@ -56,6 +64,29 @@ func TestSnapshotDiscoverySharesLinkedWorktrees(t *testing.T) {
 	third, err := resolveSnapshotWorkspace(context.Background(), alias)
 	require.NoError(t, err)
 	require.Equal(t, second, third)
+	aliasedWorktree, err := workspace.Resolve(t.Context(), alias)
+	require.NoError(t, err)
+	linkedLabels := workspaceLabels(aliasedWorktree, workspaceVMKind)
+	require.Equal(t, map[string]string{
+		"opencode-sandbox": "",
+		"kind":             "workspace-vm",
+		"repository-id":    repository.RepositoryID(),
+		"repository-name":  "repo",
+		"workspace-id":     linked.ID(),
+		"workspace-name":   "tree",
+		"workspace-path":   linked.Root(),
+		"linked-worktree":  "true",
+		"git-common-dir":   filepath.Join(repository.Root(), ".git"),
+	}, linkedLabels)
+	restored := restoredWorktreePatch(aliasedWorktree, nil)
+	require.Equal(t, linkedLabels, restored.Labels)
+	require.Empty(t, restored.LabelsRemove)
+	linkedLabels["kind"] = "workspace-preparation"
+	require.Equal(t, linkedLabels, workspaceLabels(aliasedWorktree, preparationVMKind))
+	mainCheckout := restoredWorktreePatch(repository, nil)
+	require.NotContains(t, mainCheckout.Labels, "linked-worktree")
+	require.NotContains(t, mainCheckout.Labels, "git-common-dir")
+	require.ElementsMatch(t, []string{"linked-worktree", "git-common-dir"}, mainCheckout.LabelsRemove)
 	unrelated, err := resolveSnapshotWorkspace(context.Background(), t.TempDir())
 	require.NoError(t, err)
 	require.NotEqual(t, first.id, unrelated.id)
@@ -73,10 +104,12 @@ func TestRestoredSecretsKeepValuesHostSideAndRetainDestinationScope(t *testing.T
 		Allow: []string{"github.com"}, Substitution: m.SecretSubstitution{HeaderFields: []string{"authorization"}},
 		AllowPlaceholderFor: []string{"example.org"}, RequireTLSIdentity: &requireTLS,
 	})}
-	patch := restoredWorktreePatch("test-workspace-id", []Secret{secret})
+	w, err := workspace.Resolve(t.Context(), t.TempDir())
+	require.NoError(t, err)
+	patch := restoredWorktreePatch(w, []Secret{secret})
 	require.Equal(t, m.ModificationPolicyNextStart, patch.Policy)
 	require.Equal(t, "/workspace", patch.Workdir)
-	require.Equal(t, "test-workspace-id", patch.Labels["workspace-id"])
+	require.Equal(t, w.ID(), patch.Labels["workspace-id"])
 	require.Empty(t, patch.Env, "never put resolved credentials in guest environment")
 	require.Equal(t, "synthetic-secret", patch.Secrets["GH_TOKEN"].Value)
 	require.Equal(t, "$MSB_GH_TOKEN", patch.Secrets["GH_TOKEN"].Placeholder)
