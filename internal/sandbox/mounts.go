@@ -10,9 +10,9 @@ import (
 )
 
 func validateMounts(w workspace.Workspace, settings config.Settings) error {
-	reservedPaths := []string{w.Root(), snapshotWorktree, "/var/lib/docker", "/proc", "/sys", "/dev", sandboxConfigDir,
+	reservedPaths := []string{"/var/lib/docker", "/proc", "/sys", "/dev", sandboxConfigDir,
 		"/run/opencode-sandbox", "/var/run/opencode-sandbox", "/var/log/opencode-sandbox"}
-	for _, mount := range w.Mounts(snapshotWorktree) {
+	for _, mount := range w.Mounts(guestWorkspace) {
 		reservedPaths = append(reservedPaths, mount.Target)
 	}
 	for i, mount := range settings.Files {
@@ -32,13 +32,11 @@ func validateMounts(w workspace.Workspace, settings config.Settings) error {
 	return nil
 }
 
-func workspaceMounts(w workspace.Workspace, guestRoots ...string) map[string]m.MountConfig {
+func workspaceMounts(w workspace.Workspace) map[string]m.MountConfig {
 	mounts := map[string]m.MountConfig{}
 	owner := m.MountOptions{Owner: &m.MountOwner{UID: 0, GID: 0}}
-	for _, root := range guestRoots {
-		for _, mount := range w.Mounts(root) {
-			mounts[mount.Target] = m.Mount.Bind(mount.Source, owner)
-		}
+	for _, mount := range w.Mounts(guestWorkspace) {
+		mounts[mount.Target] = m.Mount.Bind(mount.Source, owner)
 	}
 	return mounts
 }

@@ -19,7 +19,7 @@ func TestSandboxEditsAreVisibleOnHost(t *testing.T) {
 	s := startSandbox(t)
 	file := filepath.Join(s.Worktree, "guest.txt")
 
-	execInSandbox(t, s, "bash", "-eu", "-c", `echo 'written in sandbox' > "$1"`, "--", file)
+	execInSandbox(t, s, "bash", "-eu", "-c", `echo 'written in sandbox' > guest.txt`)
 
 	contents, err := os.ReadFile(file)
 	require.NoError(t, err)
@@ -40,15 +40,22 @@ func TestSandboxCanBeSelectedByMarkerLabel(t *testing.T) {
 	require.Contains(t, names, s.Name)
 }
 
-func TestGitStatusWorksInMountedWorktree(t *testing.T) {
+func TestGitStatusAndCommitWorkInMountedLinkedWorktree(t *testing.T) {
 	t.Parallel()
 	s := startSandbox(t)
 	err := os.WriteFile(filepath.Join(s.Worktree, "host.txt"), []byte("written on host\n"), 0644)
 	require.NoError(t, err)
 
-	output := execInSandbox(t, s, "git", "status", "--porcelain")
+	assert.Equal(t, "/workspace\n", execInSandbox(t, s, "pwd"))
+	execInSandbox(t, s, "test", "!", "-e", s.Worktree)
+	assert.Equal(t, "?? host.txt\n", execInSandbox(t, s, "git", "status", "--porcelain"))
+	execInSandbox(t, s, "git", "add", "host.txt")
+	execInSandbox(t, s, "git", "-c", "user.name=Sandbox Test", "-c", "user.email=sandbox@example.invalid",
+		"-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", "commit", "-m", "Commit from /workspace")
 
-	assert.Equal(t, "?? host.txt\n", output)
+	head := execInSandbox(t, s, "git", "rev-parse", "HEAD")
+	assert.Equal(t, head, runGit(t, "-C", s.Worktree, "rev-parse", "HEAD"))
+	assert.Empty(t, runGit(t, "-C", s.Worktree, "status", "--porcelain"))
 }
 
 func TestPreparingAgainReusesSandboxState(t *testing.T) {

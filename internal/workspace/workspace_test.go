@@ -37,7 +37,7 @@ func TestWorkspaceTypesAndMounts(t *testing.T) {
 	require.IsType(t, GitRepository{}, checkout)
 	require.Equal(t, []Mount{{Source: repo, Target: repo}}, checkout.Mounts(repo))
 	common := filepath.Join(repo, ".git")
-	require.Equal(t, []Mount{{Source: repo, Target: "/workspace"}, {Source: common, Target: common}}, checkout.Mounts("/workspace"))
+	require.Equal(t, []Mount{{Source: repo, Target: "/workspace"}}, checkout.Mounts("/workspace"))
 	linked := resolve(t, tree)
 	require.IsType(t, GitWorktree{}, linked)
 	require.Equal(t, []Mount{{Source: tree, Target: tree}, {Source: common, Target: common}}, linked.Mounts(tree))

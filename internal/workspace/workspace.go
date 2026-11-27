@@ -81,6 +81,9 @@ func (d Directory) Mounts(guestRoot string) []Mount {
 }
 
 func (r GitRepository) Mounts(guestRoot string) []Mount {
+	if r.metadata.dir == filepath.Join(r.root, ".git") {
+		return []Mount{{Source: r.root, Target: guestRoot}}
+	}
 	return gitMounts(r.root, guestRoot, r.metadata)
 }
 

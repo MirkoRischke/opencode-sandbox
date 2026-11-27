@@ -51,7 +51,6 @@ func TestSnapshotDiscoverySharesLinkedWorktrees(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, repository.ID(), linked.ID(), "VM identities must remain worktree-specific")
 	require.NotEqual(t, Name(repository), Name(linked))
-	require.Equal(t, linked.ID(), restoredWorktreePatch(tree, nil).Labels["workspace-id"])
 	alias := filepath.Join(dir, "alias")
 	require.NoError(t, os.Symlink(tree, alias))
 	third, err := resolveSnapshotWorkspace(context.Background(), alias)
@@ -74,9 +73,10 @@ func TestRestoredSecretsKeepValuesHostSideAndRetainDestinationScope(t *testing.T
 		Allow: []string{"github.com"}, Substitution: m.SecretSubstitution{HeaderFields: []string{"authorization"}},
 		AllowPlaceholderFor: []string{"example.org"}, RequireTLSIdentity: &requireTLS,
 	})}
-	patch := restoredWorktreePatch("/worktree", []Secret{secret})
+	patch := restoredWorktreePatch("test-workspace-id", []Secret{secret})
 	require.Equal(t, m.ModificationPolicyNextStart, patch.Policy)
-	require.Equal(t, "/worktree", patch.Workdir)
+	require.Equal(t, "/workspace", patch.Workdir)
+	require.Equal(t, "test-workspace-id", patch.Labels["workspace-id"])
 	require.Empty(t, patch.Env, "never put resolved credentials in guest environment")
 	require.Equal(t, "synthetic-secret", patch.Secrets["GH_TOKEN"].Value)
 	require.Equal(t, "$MSB_GH_TOKEN", patch.Secrets["GH_TOKEN"].Placeholder)

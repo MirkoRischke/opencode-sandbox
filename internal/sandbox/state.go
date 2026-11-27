@@ -44,7 +44,7 @@ func validateStateLocation(w workspace.Workspace, stateDir string) error {
 	if err != nil {
 		return fmt.Errorf("resolve managed state location: %w", err)
 	}
-	for _, mount := range w.Mounts(snapshotWorktree) {
+	for _, mount := range w.Mounts(guestWorkspace) {
 		if config.MountTargetsOverlap(root, mount.Source) {
 			return fmt.Errorf("managed state directory %q overlaps workspace mount source %q", root, mount.Source)
 		}

@@ -27,7 +27,7 @@ printf 'exit 0\n' > /root/.bashrc`)
 
 	require.NoError(t, s.Open(ctx, []string{"./terminal-probe"}))
 
-	require.Equal(t, "xterm-256color\ntruecolor\n\n", execInSandbox(t, s, "cat", s.Worktree+"/terminal-env.txt"))
+	require.Equal(t, "xterm-256color\ntruecolor\n\n", execInSandbox(t, s, "cat", "terminal-env.txt"))
 }
 
 //nolint:paralleltest // runInTerminal schedules the parent in parallel; its isolated child must not call Parallel again when exercising the controlling terminal.
@@ -64,10 +64,10 @@ printf 'exit %s\n' "$2" >> /root/.bashrc`, "probe", test.startupExit, test.shell
 			} else {
 				require.EqualError(t, err, "guest command exited with code 9")
 			}
-			state := execInSandbox(t, s, "cat", s.Worktree+"/shell-state.txt")
+			state := execInSandbox(t, s, "cat", "shell-state.txt")
 			lines := strings.Split(strings.TrimSpace(state), "\n")
 			require.Len(t, lines, 3)
-			require.Equal(t, s.Worktree, lines[0])
+			require.Equal(t, "/workspace", lines[0])
 			require.Contains(t, lines[1], "i", "fallback Bash must be interactive")
 			require.NotEmpty(t, lines[2], "fallback shell must be Bash")
 		})

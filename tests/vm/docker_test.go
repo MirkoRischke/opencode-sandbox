@@ -146,9 +146,9 @@ volumes:
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 	var output bytes.Buffer
-	err := s.Exec(ctx, nil, &output, &output, "docker", "buildx", "build", "--load", "-t", "sandbox-docker-test:local", dir)
+	err := s.Exec(ctx, nil, &output, &output, "docker", "buildx", "build", "--load", "-t", "sandbox-docker-test:local", "./docker-test")
 	require.NoError(t, err, "build Docker fixture: %s", output.String())
-	return dir
+	return "docker-test"
 }
 
 func dockerCompose(t *testing.T, s *sandbox.Sandbox, dir string, args ...string) string {

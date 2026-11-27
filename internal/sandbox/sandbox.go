@@ -17,9 +17,11 @@ import (
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
+const guestWorkspace = "/workspace"
+
 type Sandbox struct {
 	Name        string
-	Worktree    string
+	Worktree    string // Canonical host path for a workspace VM.
 	vm          *m.Sandbox
 	diagnostics *networkDiagnostics
 	logger      *slog.Logger
@@ -56,7 +58,7 @@ func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secr
 	s.log().Info("Preparing VM")
 	started := time.Now().UTC()
 	var created bool
-	s.vm, created, err = connectOrRestore(ctx, s.Name, w, secrets, settings, sandboxOptions(w, w.Root(), settings), diagnosticOptions, stateDir)
+	s.vm, created, err = connectOrRestore(ctx, s.Name, w, secrets, settings, sandboxOptions(w, settings), diagnosticOptions, stateDir)
 	if err != nil {
 		return nil, fmt.Errorf("prepare sandbox: %w", err)
 	}
@@ -110,8 +112,8 @@ func (s *Sandbox) configureGuest(ctx context.Context, settings launcherconfig.Se
 	return s.configureEnvironment(ctx, settings)
 }
 
-func sandboxOptions(w workspace.Workspace, guestRoot string, settings launcherconfig.Settings) []m.SandboxOption {
-	mounts := workspaceMounts(w, guestRoot)
+func sandboxOptions(w workspace.Workspace, settings launcherconfig.Settings) []m.SandboxOption {
+	mounts := workspaceMounts(w)
 	mounts["/var/lib/docker"] = m.Mount.Owned(m.OwnedVolumeOptions{
 		Kind: m.VolumeKindDisk, SizeMiB: settings.VM.DockerDiskMiB,
 	})
@@ -120,7 +122,7 @@ func sandboxOptions(w workspace.Workspace, guestRoot string, settings launcherco
 		m.WithImage(settings.VM.Image), m.WithPullPolicy(m.PullPolicyNever),
 		m.WithCPUs(settings.VM.CPUs), m.WithMemory(settings.VM.MemoryMiB),
 		m.WithRootDisk(m.RootDisk.Managed(settings.VM.RootDiskMiB)),
-		m.WithWorkdir(guestRoot), m.WithMounts(mounts), m.WithDetached(),
+		m.WithWorkdir(guestWorkspace), m.WithMounts(mounts), m.WithDetached(),
 		m.WithNetwork(networkPolicy(settings.Network)), m.WithInterceptTLS(),
 		m.WithPortBindings(portBindings(settings.Network.HostToVM)...),
 		m.WithLabel("opencode-sandbox", ""),
@@ -145,7 +147,7 @@ func (s *Sandbox) initializeRuntime(ctx context.Context, secrets []Secret) error
 }
 
 // initializeProject provisions tools only in disposable snapshot preparation VMs.
-func (s *Sandbox) initializeProject(ctx context.Context, workspaceRoot string) error {
+func (s *Sandbox) initializeProject(ctx context.Context) error {
 	// mise discovers supported filenames (including .mise.toml and mise/config.toml).
 	// Ignore the image's global config when deciding whether this project uses mise.
 	// Trust first: even config discovery parses trust-sensitive environment settings.
@@ -155,10 +157,9 @@ configs=$(mise config ls --no-header --no-truncate)
 if printf '%s\n' "$configs" | grep -F -- "$PWD/" >/dev/null; then
   mise install
 fi
-# Restore rebinds /workspace at the canonical directory path. Persist trust for
-# that path now, rather than running project setup again after every restore.
-mise settings add trusted_config_paths "$1"
-`, "initialize-project", workspaceRoot)
+# Restored VMs can bind another linked worktree here without rerunning setup.
+mise settings add trusted_config_paths "$PWD"
+`)
 	if err != nil {
 		return fmt.Errorf("initialize project tools: %w", err)
 	}
@@ -169,7 +170,7 @@ func (s *Sandbox) Exec(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 	if len(command) == 0 {
 		return fmt.Errorf("missing guest command")
 	}
-	opts := []m.ExecOption{m.WithExecCwd(s.Worktree)}
+	opts := []m.ExecOption{m.WithExecCwd(guestWorkspace)}
 	if deadline, ok := ctx.Deadline(); ok {
 		opts = append(opts, m.WithExecTimeout(time.Until(deadline)))
 	}
@@ -282,7 +283,7 @@ func (s *Sandbox) Open(ctx context.Context, command []string) error {
 	// Pass literal arguments, then keep the terminal attached to interactive Bash.
 	args := append([]string{"-c", `(exec -- "$@"); exec bash -i`, "sandbox-startup"}, command...)
 	code, err := s.vm.AttachWith(ctx, "bash", args,
-		m.WithAttachCwd(s.Worktree), m.WithAttachEnv(terminalEnv))
+		m.WithAttachCwd(guestWorkspace), m.WithAttachEnv(terminalEnv))
 	s.log().Info("Guest terminal detached", "exit_code", code, "success", err == nil)
 	if err != nil {
 		return err

@@ -20,8 +20,6 @@ import (
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
-const snapshotWorktree = "/workspace"
-
 type workspaceSnapshot struct {
 	root  string
 	name  string
@@ -192,7 +190,7 @@ func createPreparationVM(ctx context.Context, w workspace.Workspace, name string
 	// disposable VM gets broad access; restore applies the workspace policy.
 	// Explicit host-service permissions remain; other protected destinations stay blocked.
 	preparationSettings.Network.Unrestricted = true
-	opts := sandboxOptions(w, snapshotWorktree, preparationSettings)
+	opts := sandboxOptions(w, preparationSettings)
 	opts = append(opts, m.WithImage(image))
 	for _, secret := range secrets {
 		// Shared snapshots must not retain a particular worktree's gateway key.
@@ -206,7 +204,7 @@ func createPreparationVM(ctx context.Context, w workspace.Workspace, name string
 	if err != nil {
 		return nil, fmt.Errorf("create preparation VM: %w", err)
 	}
-	prep := &Sandbox{Name: name, Worktree: snapshotWorktree, vm: vm, logger: logging.FromContext(ctx).With("vm", name)}
+	prep := &Sandbox{Name: name, Worktree: w.Root(), vm: vm, logger: logging.FromContext(ctx).With("vm", name)}
 	prep.log().Info("Preparation VM created")
 	if settings.Network.Diagnostics {
 		prep.diagnostics = startNetworkDiagnostics(ctx, vm, w.Root(), started, diagnostics)
@@ -221,7 +219,7 @@ func createPreparationVM(ctx context.Context, w workspace.Workspace, name string
 		defer cancel()
 		return nil, errors.Join(err, prep.Remove(cleanup))
 	}
-	if err := prep.initializeProject(ctx, w.Root()); err != nil {
+	if err := prep.initializeProject(ctx); err != nil {
 		cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		return nil, errors.Join(err, prep.Remove(cleanup))
@@ -447,7 +445,7 @@ func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, w
 	policy.HTTP = nil
 	restore := m.RestoreConfig{
 		CPUs: &settings.VM.CPUs, MemoryMiB: &settings.VM.MemoryMiB, NetworkPolicy: policy,
-		Volumes: workspaceMounts(w, snapshotWorktree, w.Root()),
+		Volumes: workspaceMounts(w),
 		Ports:   portBindings(settings.Network.HostToVM),
 	}
 	if err := addStateMounts(restore.Volumes, w, settings.State, stateDir); err != nil {
@@ -462,7 +460,7 @@ func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, w
 		return nil, fmt.Errorf("restore workspace snapshot: %w", err)
 	}
 	defer restored.Close() //nolint:errcheck // Release the original handle on every path; the restarted handle belongs to the caller.
-	handle, err := configureRestoredWorktree(ctx, restored, name, w.Root(), secrets)
+	handle, err := configureRestoredWorktree(ctx, restored, name, w.ID(), secrets)
 	if err != nil {
 		return nil, discardRestoredVM(restored, err)
 	}
@@ -481,13 +479,13 @@ func discardRestoredVM(restored *m.Sandbox, cause error) error {
 	return errors.Join(cause, restored.Destroy(cleanup))
 }
 
-func configureRestoredWorktree(ctx context.Context, restored *m.Sandbox, name, root string, secrets []Secret) (*m.SandboxHandle, error) {
+func configureRestoredWorktree(ctx context.Context, restored *m.Sandbox, name, workspaceID string, secrets []Secret) (*m.SandboxHandle, error) {
 	// Do not execute project commands until host credentials/labels/workdir are
 	// configured. Snapshot restore itself has no secret creation interface.
 	if err := restored.Stop(ctx); err != nil {
 		return nil, fmt.Errorf("stop restored VM: %w", err)
 	}
-	patch := restoredWorktreePatch(root, secrets)
+	patch := restoredWorktreePatch(workspaceID, secrets)
 	// The restore interface cannot enable TLS inspection directly. A temporary
 	// non-credential secret activates the runtime's supported TLS transition;
 	// removing it leaves interception enabled. Never expose this to project code.
@@ -518,10 +516,10 @@ func configureRestoredWorktree(ctx context.Context, restored *m.Sandbox, name, r
 	return handle, nil
 }
 
-func restoredWorktreePatch(root string, secrets []Secret) m.ModifyOptions {
+func restoredWorktreePatch(workspaceID string, secrets []Secret) m.ModifyOptions {
 	patch := m.ModifyOptions{
-		Policy: m.ModificationPolicyNextStart, Workdir: root,
-		Labels:  map[string]string{"opencode-sandbox": "", "workspace-id": snapshotIdentity(root).id},
+		Policy: m.ModificationPolicyNextStart, Workdir: guestWorkspace,
+		Labels:  map[string]string{"opencode-sandbox": "", "workspace-id": workspaceID},
 		Secrets: make(map[string]m.SecretModifySpec, len(secrets)),
 	}
 	for _, secret := range secrets {

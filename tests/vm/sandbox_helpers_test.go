@@ -79,12 +79,13 @@ func startSandbox(t *testing.T) *sandbox.Sandbox {
 	return prepareSandbox(t, newWorktree(t))
 }
 
-func runGit(t *testing.T, args ...string) {
+func runGit(t *testing.T, args ...string) string {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	output, err := exec.CommandContext(ctx, "git", args...).CombinedOutput()
-	require.NoError(t, err, "prepare Git fixture: %s", output)
+	require.NoError(t, err, "run host Git: %s", output)
+	return string(output)
 }
 
 func execInSandbox(t *testing.T, s *sandbox.Sandbox, command ...string) string {

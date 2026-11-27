@@ -11,11 +11,13 @@ ports. Run `opencode-sandbox` from the directory you want to work in.
 
 ## Choose a workspace
 
-- Launch from the exact directory you want the guest to edit. Changes are
-  visible immediately on the host, so you can use your usual editor.
+- Launch from the exact directory you want the guest to edit. It is mounted
+  at `/workspace`, where guest commands and shells start. Changes are visible
+  immediately on the host, so you can use your usual editor.
 - Launch from a Git checkout or worktree root if you want Git metadata
   available. From a subdirectory, the parent repository and its configuration
-  are not shared. Git is optional.
+  are not shared. Use Git's default absolute paths for linked worktrees
+  that reference metadata outside the checkout. Git is optional.
 - Use a project directory, not a drive root, home directory, or system
   directory. Symlinks to the same directory use the same VM.
 - Use [host file mappings](host-files.md) to share other files. Review the
