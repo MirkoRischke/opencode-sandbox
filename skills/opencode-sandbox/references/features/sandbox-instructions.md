@@ -1,8 +1,8 @@
 # Sandbox instructions
 
-Give your agent a short guide to its workspace, network limits, and read-only
-files. It can choose commands that work in the VM instead of guessing what
-it can access.
+Give your agent a short guide to its workspace, network limits, read-only
+files, and [GitHub App access](github.md). It can choose commands that work in
+the VM instead of guessing what it can access.
 
 For OpenCode, add the generated guest file to `instructions` in `opencode.json`:
 

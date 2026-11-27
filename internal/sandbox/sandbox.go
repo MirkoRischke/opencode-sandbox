@@ -26,11 +26,12 @@ const (
 )
 
 type Sandbox struct {
-	Name        string
-	Worktree    string // Canonical host path for a workspace VM.
-	vm          *m.Sandbox
-	diagnostics *networkDiagnostics
-	logger      *slog.Logger
+	Name              string
+	Worktree          string // Canonical host path for a workspace VM.
+	vm                *m.Sandbox
+	diagnostics       *networkDiagnostics
+	logger            *slog.Logger
+	stopGitHubRefresh func()
 }
 
 func (s *Sandbox) log() *slog.Logger {
@@ -53,6 +54,10 @@ func Prepare(ctx context.Context, directory string, secrets []Secret, settings l
 
 // PrepareWorkspace creates or resumes one VM for an already resolved workspace.
 func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secret, settings launcherconfig.Settings, diagnostics ...DiagnosticsOptions) (*Sandbox, error) {
+	return prepareWorkspace(ctx, w, secrets, settings, loadGitHubAuth, diagnostics)
+}
+
+func prepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secret, settings launcherconfig.Settings, loadGitHub func(context.Context, *launcherconfig.GitHubSettings, string) (*githubAuth, error), diagnostics []DiagnosticsOptions) (*Sandbox, error) {
 	diagnosticOptions, stateDir, err := validatePreparation(w, settings, diagnostics)
 	if err != nil {
 		return nil, err
@@ -63,11 +68,16 @@ func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secr
 	s := &Sandbox{Name: sandboxName(w), Worktree: w.Root(), logger: logging.FromContext(ctx).With("vm", sandboxName(w))}
 	s.log().Info("Preparing VM")
 	started := time.Now().UTC()
-	var created bool
-	s.vm, created, err = connectOrRestore(ctx, s.Name, w, secrets, settings, sandboxOptions(w, settings, workspaceVMKind), diagnosticOptions, stateDir)
+	github, err := loadGitHub(ctx, settings.GitHub, githubRepository(w))
+	if err != nil {
+		return nil, err
+	}
+	connection, err := connectOrRestore(ctx, s.Name, w, secrets, settings, github, diagnosticOptions, stateDir)
 	if err != nil {
 		return nil, fmt.Errorf("prepare sandbox: %w", err)
 	}
+	s.vm = connection.vm
+	created := connection.created
 	s.log().Info("VM connected", "created", created, "duration_ms", time.Since(started).Milliseconds())
 	if settings.Network.Diagnostics {
 		s.diagnostics = startNetworkDiagnostics(ctx, s.vm, w.Root(), w.RepositoryID(), started, diagnosticOptions)
@@ -79,13 +89,19 @@ func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secr
 			return nil, errors.Join(err, s.Remove(cleanup))
 		}
 	}
-	if err := s.initializeRuntime(ctx, secrets); err != nil {
+	if github != nil || connection.refreshGitHubInstructions {
+		if err := s.configureGitHubInstructions(ctx, github); err != nil {
+			return nil, errors.Join(err, s.Shutdown())
+		}
+	}
+	if err := s.initializeRuntime(ctx, github.secrets(secrets, false)); err != nil {
 		return nil, errors.Join(err, s.Shutdown())
 	}
-	if err := s.recordLaunch(ctx, w); err != nil {
+	if err := s.recordLaunch(ctx, w, github == nil && connection.refreshGitHubInstructions); err != nil {
 		return nil, errors.Join(err, s.Shutdown())
 	}
 	s.log().Info("VM ready", "duration_ms", time.Since(started).Milliseconds())
+	s.startGitHubRefresh(ctx, github, false)
 	return s, nil
 }
 
@@ -169,9 +185,12 @@ func workspaceVMLabelPatch(w workspace.Workspace) m.ModifyOptions {
 
 // Record successful VM initialization with a live update: connection options
 // do not change persisted labels when resuming an existing VM.
-func (s *Sandbox) recordLaunch(ctx context.Context, w workspace.Workspace) error {
+func (s *Sandbox) recordLaunch(ctx context.Context, w workspace.Workspace, clearGitHubLabel bool) error {
 	patch := workspaceVMLabelPatch(w)
 	patch.Labels["last-launched-at"] = time.Now().UTC().Format(time.RFC3339Nano)
+	if clearGitHubLabel {
+		patch.LabelsRemove = append(patch.LabelsRemove, githubAppLabel)
+	}
 	plan, err := s.vm.Modify(ctx, patch)
 	if err != nil {
 		return fmt.Errorf("record workspace launch labels: %w", err)
@@ -189,7 +208,7 @@ func (s *Sandbox) initializeRuntime(ctx context.Context, secrets []Secret) error
 	}
 	githubEnabled := false
 	for _, secret := range secrets {
-		githubEnabled = githubEnabled || secret.entry.EnvVar == "GH_TOKEN"
+		githubEnabled = githubEnabled || secret.entry.EnvVar == githubTokenEnv
 	}
 	return s.configureGitHub(ctx, githubEnabled)
 }
@@ -353,11 +372,17 @@ func (s *Sandbox) Remove(ctx context.Context) (err error) {
 
 // Close releases the SDK connection without stopping this persistent VM.
 func (s *Sandbox) Close() error {
+	if s.stopGitHubRefresh != nil {
+		s.stopGitHubRefresh()
+	}
 	s.diagnostics.finish()
 	return s.vm.Close()
 }
 
 func (s *Sandbox) Stop(ctx context.Context) error {
+	if s.stopGitHubRefresh != nil {
+		s.stopGitHubRefresh()
+	}
 	s.log().Info("Stopping VM")
 	err := s.vm.Stop(ctx)
 	s.diagnostics.finish()

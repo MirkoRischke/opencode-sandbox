@@ -77,6 +77,9 @@ into your existing file:
 Replace `gpt-6-luna` with the public `model_name` configured in LiteLLM, not the
 upstream provider's model ID. `gateway/coder` is the name you select in OpenCode.
 OpenCode reads the placeholder from its VM environment at runtime.
+If other proxied secret placeholders appear in conversation context, the
+gateway can receive them unchanged. This does not authorize substitution of
+those credentials at the gateway.
 
 Add this mapping to `~/.config/opencode-sandbox/config.toml` on the host so
 OpenCode can read the file inside the VM:

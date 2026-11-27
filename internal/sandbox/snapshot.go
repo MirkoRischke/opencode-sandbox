@@ -120,12 +120,16 @@ func CreateWorkspaceSnapshot(ctx context.Context, w workspace.Workspace, secrets
 	if err := configureRuntime(); err != nil {
 		return "", err
 	}
-	return repo.prepare(ctx, w, secrets, settings, diagnosticOptions)
+	github, err := loadGitHubAuth(ctx, settings.GitHub, "")
+	if err != nil {
+		return "", err
+	}
+	return repo.prepare(ctx, w, secrets, settings, github, diagnosticOptions)
 }
 
 // prepare shares publication and cleanup between explicit rebuilds and first
 // launches. The caller holds the workspace lock and has validated host inputs.
-func (repo workspaceSnapshot) prepare(ctx context.Context, w workspace.Workspace, secrets []Secret, settings config.Settings, diagnostics DiagnosticsOptions) (reference string, err error) {
+func (repo workspaceSnapshot) prepare(ctx context.Context, w workspace.Workspace, secrets []Secret, settings config.Settings, github *githubAuth, diagnostics DiagnosticsOptions) (reference string, err error) {
 	logging.FromContext(ctx).Info("Preparing workspace snapshot")
 	// Refuse to overwrite unrelated artifacts, even at our deterministic name.
 	if _, err := repo.head(ctx); err != nil {
@@ -136,7 +140,7 @@ func (repo workspaceSnapshot) prepare(ctx context.Context, w workspace.Workspace
 		return "", err
 	}
 	generation := fmt.Sprintf("prepared-%x", nonce)
-	prep, err := createPreparationVM(ctx, w, "oc-prepare-"+generation, secrets, settings, diagnostics)
+	prep, err := createPreparationVM(ctx, w, "oc-prepare-"+generation, secrets, settings, github, diagnostics)
 	if err != nil {
 		return "", err
 	}
@@ -186,7 +190,7 @@ func (s *Sandbox) quiesceSnapshot(ctx context.Context, command string) error {
 
 // The caller has validated settings, resolved paths and configured the runtime.
 // Preparation always creates a disposable VM, never resumes/restores one.
-func createPreparationVM(ctx context.Context, w workspace.Workspace, name string, secrets []Secret, settings config.Settings, diagnostics DiagnosticsOptions) (*Sandbox, error) {
+func createPreparationVM(ctx context.Context, w workspace.Workspace, name string, secrets []Secret, settings config.Settings, github *githubAuth, diagnostics DiagnosticsOptions) (*Sandbox, error) {
 	image, err := resolveImage(ctx, settings.VM.Image)
 	if err != nil {
 		return nil, err
@@ -201,6 +205,7 @@ func createPreparationVM(ctx context.Context, w workspace.Workspace, name string
 	preparationSettings.Network.Unrestricted = true
 	opts := sandboxOptions(w, preparationSettings, preparationVMKind)
 	opts = append(opts, m.WithImage(image))
+	secrets = github.secrets(secrets, true)
 	for _, secret := range secrets {
 		// Shared snapshots must not retain a particular worktree's gateway key.
 		if secret.entry.EnvVar == "LLM_GATEWAY_KEY" {
@@ -214,6 +219,7 @@ func createPreparationVM(ctx context.Context, w workspace.Workspace, name string
 		return nil, fmt.Errorf("create preparation VM: %w", err)
 	}
 	prep := &Sandbox{Name: name, Worktree: w.Root(), vm: vm, logger: logging.FromContext(ctx).With("vm", name)}
+	prep.startGitHubRefresh(ctx, github, true)
 	prep.log().Info("Preparation VM created")
 	if settings.Network.Diagnostics {
 		prep.diagnostics = startNetworkDiagnostics(ctx, vm, w.Root(), w.RepositoryID(), started, diagnostics)
@@ -400,52 +406,56 @@ func (r workspaceSnapshot) removeMembers(ctx context.Context, keepID string, obs
 	return nil
 }
 
-func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, secrets []Secret, settings config.Settings, opts []m.SandboxOption, diagnostics DiagnosticsOptions, stateDir string) (*m.Sandbox, bool, error) {
+type workspaceConnection struct {
+	vm                        *m.Sandbox
+	created                   bool
+	refreshGitHubInstructions bool
+}
+
+func connectOrRestore(ctx context.Context, name string, w workspace.Workspace, secrets []Secret, settings config.Settings, github *githubAuth, diagnostics DiagnosticsOptions, stateDir string) (workspaceConnection, error) {
 	logger := logging.FromContext(ctx).With("vm", name)
-	_, err := m.GetSandbox(ctx, name)
+	handle, err := m.GetSandbox(ctx, name)
 	if err == nil {
 		logger.Info("Reusing workspace VM")
-		vm, err := connectWithSecrets(ctx, name, secrets, opts)
-		return vm, false, err
+		return connectWithSecrets(ctx, handle, github.secrets(secrets, false), github != nil)
 	}
 	if !m.IsKind(err, m.ErrSandboxNotFound) {
-		return nil, false, fmt.Errorf("find worktree VM: %w", err)
+		return workspaceConnection{}, fmt.Errorf("find worktree VM: %w", err)
 	}
 	repo := repositorySnapshot(w)
 	unlock, err := repo.lock()
 	if err != nil {
-		return nil, false, err
+		return workspaceConnection{}, err
 	}
 	defer unlock()
 	// A concurrent launch may have created this VM before we took the lock.
-	if _, err := m.GetSandbox(ctx, name); err == nil {
-		vm, err := connectWithSecrets(ctx, name, secrets, opts)
-		return vm, false, err
+	if handle, err := m.GetSandbox(ctx, name); err == nil {
+		return connectWithSecrets(ctx, handle, github.secrets(secrets, false), github != nil)
 	} else if !m.IsKind(err, m.ErrSandboxNotFound) {
-		return nil, false, fmt.Errorf("find worktree VM: %w", err)
+		return workspaceConnection{}, fmt.Errorf("find worktree VM: %w", err)
 	}
 	head, err := repo.head(ctx)
 	if err != nil {
-		return nil, false, err
+		return workspaceConnection{}, err
 	}
 	if err := checkPortBindings(portBindings(settings.Network.HostToVM)); err != nil {
-		return nil, false, err
+		return workspaceConnection{}, err
 	}
 	if head == nil {
-		if _, err := repo.prepare(ctx, w, secrets, settings, diagnostics); err != nil {
-			return nil, false, err
+		if _, err := repo.prepare(ctx, w, secrets, settings, github, diagnostics); err != nil {
+			return workspaceConnection{}, err
 		}
 		head, err = repo.head(ctx)
 		if err != nil {
-			return nil, false, err
+			return workspaceConnection{}, err
 		}
 		if head == nil {
-			return nil, false, fmt.Errorf("prepared workspace snapshot has no baseline")
+			return workspaceConnection{}, fmt.Errorf("prepared workspace snapshot has no baseline")
 		}
 	}
 	logger.Info("Restoring workspace VM", "snapshot", head.Reference())
-	vm, err := restoreWorktree(ctx, head, name, w, secrets, settings, stateDir)
-	return vm, err == nil, err
+	vm, err := restoreWorktree(ctx, head, name, w, github.secrets(secrets, false), settings, stateDir)
+	return workspaceConnection{vm: vm, created: err == nil}, err
 }
 
 func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, w workspace.Workspace, secrets []Secret, settings config.Settings, stateDir string) (*m.Sandbox, error) {
@@ -469,7 +479,7 @@ func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, w
 		return nil, fmt.Errorf("restore workspace snapshot: %w", err)
 	}
 	defer restored.Close() //nolint:errcheck // Release the original handle on every path; the restarted handle belongs to the caller.
-	handle, err := configureRestoredWorktree(ctx, restored, name, w, secrets)
+	handle, err := configureRestoredWorktree(ctx, restored, name, w, secrets, settings.GitHub != nil)
 	if err != nil {
 		return nil, discardRestoredVM(restored, err)
 	}
@@ -488,13 +498,16 @@ func discardRestoredVM(restored *m.Sandbox, cause error) error {
 	return errors.Join(cause, restored.Destroy(cleanup))
 }
 
-func configureRestoredWorktree(ctx context.Context, restored *m.Sandbox, name string, w workspace.Workspace, secrets []Secret) (*m.SandboxHandle, error) {
+func configureRestoredWorktree(ctx context.Context, restored *m.Sandbox, name string, w workspace.Workspace, secrets []Secret, githubApp bool) (*m.SandboxHandle, error) {
 	// Do not execute project commands until host credentials/labels/workdir are
 	// configured. Snapshot restore itself has no secret creation interface.
 	if err := restored.Stop(ctx); err != nil {
 		return nil, fmt.Errorf("stop restored VM: %w", err)
 	}
 	patch := restoredWorktreePatch(w, secrets)
+	if githubApp {
+		patch.Labels[githubAppLabel] = ""
+	}
 	// The restore interface cannot enable TLS inspection directly. A temporary
 	// non-credential secret activates the runtime's supported TLS transition;
 	// removing it leaves interception enabled. Never expose this to project code.
@@ -531,16 +544,7 @@ func restoredWorktreePatch(w workspace.Workspace, secrets []Secret) m.ModifyOpti
 	patch.Workdir = guestWorkspace
 	patch.Secrets = make(map[string]m.SecretModifySpec, len(secrets))
 	for _, secret := range secrets {
-		entry := secret.entry
-		placeholder := entry.Placeholder
-		if placeholder == "" {
-			placeholder = "$MSB_" + entry.EnvVar
-		}
-		patch.Secrets[entry.EnvVar] = m.SecretModifySpec{
-			Value: entry.Value, Placeholder: placeholder, AllowedHosts: entry.Allow,
-			Substitution: &entry.Substitution, AllowPlaceholderFor: entry.Passthrough,
-			ViolationAction: entry.ViolationAction, RequireTLSIdentity: entry.RequireTLSIdentity,
-		}
+		patch.Secrets[secret.entry.EnvVar] = secret.modifySpec()
 	}
 	return patch
 }

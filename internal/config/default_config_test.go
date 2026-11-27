@@ -146,6 +146,13 @@ func requireDocumentedFields(t *testing.T, output string, typ reflect.Type) {
 		require.NotEmpty(t, description, "%s.%s needs a description", typ.Name(), field.Name)
 		require.Contains(t, output, "# "+description)
 		switch field.Type.Kind() {
+		case reflect.Pointer:
+			if _, ok := configExamples[field.Type.Elem()]; ok {
+				require.Contains(t, output, "# ["+name+"]")
+				requireDocumentedFields(t, output, field.Type.Elem())
+				continue
+			}
+			require.Contains(t, output, name+" =", "%s must be included", name)
 		case reflect.Struct:
 			requireDocumentedFields(t, output, field.Type)
 		case reflect.Map:

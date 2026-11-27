@@ -455,12 +455,45 @@ msb exec nesting-restored -- test -c /dev/kvm # exit 1
   The full nested suite was not run during this investigation because the
   restored guest failed the KVM prerequisite.
 
+## MSB-15 — Unexpected secret placeholders can block model requests
+
+**Status:** observed with Go SDK/runtime v0.7.15 and OpenCode v2.3.2 on 2026-11-27.
+The request block follows the configured policy. The runtime has no redaction
+action or body-only passthrough exception for an unrelated destination.
+
+OpenCode retained a `CONTEXT7_API_KEY` placeholder in a shell tool result.
+Microsandbox logged `action=block-and-log`, `location=body` on subsequent
+`POST /v1/chat/completions` requests to the local LiteLLM gateway. The saved
+session contained the matching placeholder; a fresh session in the same VM
+using the same model returned a response.
+
+Impact: a tool result containing a placeholder can prevent further turns in that
+session even though the proxy never substitutes the real credential into the
+model request. The Go SDK's `AllowPlaceholderFor` permits an unchanged
+placeholder at a named host, but the runtime checks that exception at the
+connection level, without a body, port, or HTTP path restriction.
+
+The launcher now uses that exception for configured proxied secrets at
+`host.microsandbox.internal` when it provisions the LLM gateway. An integration
+test verifies that the gateway receives these placeholders unchanged while
+its own `Authorization` header still receives the gateway credential.
+
+- Evidence: [Go secret options](https://github.com/superradcompany/microsandbox/blob/v0.7.15/sdk/go/options.go),
+  [runtime secret handler](https://github.com/superradcompany/microsandbox/blob/v0.7.15/crates/network/lib/engine/secrets/handler.rs).
+- Project reference: `tests/vm/secrets_test.go`
+  (`TestHostHTTPGatewaySubstitutesOnlyItsAuthorizationAndPassesPlaceholders`).
+- Upgrade check: with a dummy credential, verify the expected authentication
+  header is still substituted at the authorized service and that an unrelated
+  gateway request containing the placeholder in its body can be redacted or
+  handled by a body-specific rule, without widening substitution or forwarding
+  permissions elsewhere.
+
 ## Issues needing verification, not confirmed upstream bugs
 
 ### Intermittent snapshot listing failure after snapshot removal and VM resume
 
-**Status:** observed with Go SDK/runtime v0.7.11 on 2026-11-13 and again
-with v0.7.15 on 2026-11-21 and 2026-11-23; upstream cause unconfirmed.
+**Status:** observed with Go SDK/runtime v0.7.11 on 2026-11-13 and with
+v0.7.15, most recently on 2026-11-27; upstream cause unconfirmed.
 
 The pre-change gateway-test baseline (`mise run test`, four parallel VM tests)
 failed `TestRemovingSnapshotLeavesExistingVMDisksIntact` at its final
@@ -488,9 +521,14 @@ post-failure cleanup check. The test sets its own network settings, independent
 of the changed default public allowlist. The same test did not fail on a
 subsequent full run with the same SDK/runtime.
 
+On 2026-11-27, `mise run test` with v0.7.15 again hit the missing metadata
+error at `tests/vm/snapshot_test.go:356` in
+`TestAutomaticSnapshotStopsOnMiseInstallationFailure`. That test passed
+when rerun in isolation with the same SDK/runtime.
+
 Impact: an intermittent failure in the standard VM suite prevents claiming a
-clean full-suite baseline; no snapshot implementation or assertion was changed.
-This is not proof of an upstream defect rather than a tool/runtime interaction.
+clean full-suite baseline. This is not proof of an upstream defect rather than
+a tool/runtime interaction.
 
 - Project reference: `tests/vm/snapshot_test.go`.
 - Upgrade check: rerun the affected tests in isolation and in the concurrent

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -49,6 +51,11 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 		return err
 	}
 	settings.AWS = awsSettings
+	unlock, err := lockWorkspaceLaunch(stateDir, w.ID())
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	// Gateway credentials are managed per VM, never loaded from user secrets.
 	for name, secret := range settings.Secrets {
 		if name == "llm_gateway" || secret.Guest.Env == "LLM_GATEWAY_KEY" {
@@ -91,6 +98,26 @@ func launch(ctx context.Context, awsRole, awsProfile *string) (err error) {
 	}
 	defer stopAWS()
 	return s.Open(ctx, settings.Startup.Command)
+}
+
+// Only one launcher can own a workspace VM's session and renew its credentials.
+func lockWorkspaceLaunch(stateDir, workspaceID string) (func(), error) {
+	dir := filepath.Join(stateDir, "opencode-sandbox", "launch-locks")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return nil, fmt.Errorf("create workspace launch lock directory: %w", err)
+	}
+	file, err := os.OpenFile(filepath.Join(dir, workspaceID+".lock"), os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return nil, fmt.Errorf("open workspace launch lock: %w", err)
+	}
+	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		_ = file.Close() //nolint:errcheck // Closing the unbuffered lock file does not change the acquisition error.
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, fmt.Errorf("another launcher already owns this workspace VM: %w", err)
+		}
+		return nil, fmt.Errorf("lock workspace launch: %w", err)
+	}
+	return func() { _ = file.Close() }, nil //nolint:errcheck // Closing releases the lock; no buffered data to flush.
 }
 
 // Host credential discovery belongs to the CLI; VM lifecycle code receives a client.

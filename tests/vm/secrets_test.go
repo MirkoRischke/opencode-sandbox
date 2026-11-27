@@ -66,7 +66,7 @@ func TestHostHTTPGatewaySubstitutesOnlyItsAuthorizationAndPassesPlaceholders(t *
 		require.Equal(t, "Bearer FAKE_GATEWAY_KEY", got.headers.Get("Authorization"))
 		require.Equal(t, "$MSB_LLM_GATEWAY_KEY", got.headers.Get("X-Untrusted"))
 		require.Equal(t, "$MSB_SERVICE_KEY", got.headers.Get("X-Service-Key"))
-		require.Equal(t, body, got.body)
+		require.Equal(t, body, got.body) //nolint:testifylint // The gateway must receive the exact bytes, not just equivalent JSON.
 	case <-ctx.Done():
 		t.Fatal("host gateway did not receive the request")
 	}

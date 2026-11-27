@@ -32,7 +32,8 @@
   repository and VM without putting real gateway keys in the guest.
 - [Proxied secrets](secrets.md): use file- or keyring-backed credentials without
   sharing their values with the guest.
-- [GitHub access](github.md): authenticate `gh` and HTTPS Git with a scoped token.
+- [GitHub access](github.md): push branches and comment on PRs as your own
+  sandbox bot.
 - [AWS roles](aws.md): provide temporary role credentials that refresh from the host.
 
 ## Troubleshooting and cleanup

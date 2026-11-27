@@ -37,3 +37,23 @@ No additional read-only host mounts.
 Reading these mounts is allowed. Do not edit, delete, rename, change permissions,
 or write generated files beneath them. Copy inputs into guest-writable storage
 if modifications are needed.
+{{define "github" -}}
+{{if eq .Mode "read-write" -}}
+<!-- opencode-sandbox:github -->
+
+## GitHub App access
+
+Use `gh` and HTTPS Git with the default `GH_TOKEN` for {{.Repo}}. The app can
+push feature branches and comment on pull requests in that repository.
+For reads in other private repositories covered by the app, use
+`GH_TOKEN="$GH_READ_TOKEN" gh …` or `GH_TOKEN="$GH_READ_TOKEN" git …`.
+{{else if eq .Mode "read-only" -}}
+<!-- opencode-sandbox:github -->
+
+## GitHub App access
+
+Use `gh` or HTTPS Git with `GH_TOKEN` to read repositories covered by the app.
+Work locally if you need to make changes; pushes and PR comments are unavailable
+in this session.
+{{end -}}
+{{end -}}

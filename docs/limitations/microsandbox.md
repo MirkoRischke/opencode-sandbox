@@ -492,8 +492,8 @@ its own `Authorization` header still receives the gateway credential.
 
 ### Intermittent snapshot listing failure after snapshot removal and VM resume
 
-**Status:** observed with Go SDK/runtime v0.7.11 on 2026-11-13 and again
-with v0.7.15 on 2026-11-21 and 2026-11-23; upstream cause unconfirmed.
+**Status:** observed with Go SDK/runtime v0.7.11 on 2026-11-13 and with
+v0.7.15, most recently on 2026-11-27; upstream cause unconfirmed.
 
 The pre-change gateway-test baseline (`mise run test`, four parallel VM tests)
 failed `TestRemovingSnapshotLeavesExistingVMDisksIntact` at its final
@@ -521,9 +521,14 @@ post-failure cleanup check. The test sets its own network settings, independent
 of the changed default public allowlist. The same test did not fail on a
 subsequent full run with the same SDK/runtime.
 
+On 2026-11-27, `mise run test` with v0.7.15 again hit the missing metadata
+error at `tests/vm/snapshot_test.go:356` in
+`TestAutomaticSnapshotStopsOnMiseInstallationFailure`. That test passed
+when rerun in isolation with the same SDK/runtime.
+
 Impact: an intermittent failure in the standard VM suite prevents claiming a
-clean full-suite baseline; no snapshot implementation or assertion was changed.
-This is not proof of an upstream defect rather than a tool/runtime interaction.
+clean full-suite baseline. This is not proof of an upstream defect rather than
+a tool/runtime interaction.
 
 - Project reference: `tests/vm/snapshot_test.go`.
 - Upgrade check: rerun the affected tests in isolation and in the concurrent

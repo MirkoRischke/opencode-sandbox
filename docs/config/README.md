@@ -85,7 +85,7 @@ credentials or starting even an existing VM.
 | `snapshot` | [Prepared workspace snapshots](../features/snapshots.md) |
 | `files`, `state` | [Host file mappings](../features/host-files.md) and [persistent workspace state](../features/persistent-state.md) |
 | `network` | [Internet policy and port access](../features/networking.md), [network diagnostics](../features/diagnostics.md#network-denials) |
-| `secrets`, `aws` | [Proxied secrets](../features/secrets.md), [GitHub access](../features/github.md), and [AWS roles](../features/aws.md) |
+| `secrets`, `github`, `aws` | [Proxied secrets](../features/secrets.md), [GitHub access](../features/github.md), and [AWS roles](../features/aws.md) |
 | `logging` | [Launcher logs](../features/diagnostics.md#launcher-logs) |
 
 See the [feature index](../features/README.md) for the full list.

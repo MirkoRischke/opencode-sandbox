@@ -17,7 +17,8 @@ var configExamples = map[reflect.Type]any{
 	reflect.TypeFor[FileSettings](): FileSettings{
 		Source: "~/.config/opencode/skills", Target: "/root/.config/opencode/skills", Mode: "mount",
 	},
-	reflect.TypeFor[StateSettings](): StateSettings{Name: "agent-sessions", Target: "/var/lib/agent-sessions"},
+	reflect.TypeFor[StateSettings]():  StateSettings{Name: "agent-sessions", Target: "/var/lib/agent-sessions"},
+	reflect.TypeFor[GitHubSettings](): GitHubSettings{Owner: "acme", AppID: 123456},
 	reflect.TypeFor[SecretSettings](): SecretSettings{
 		Source: SecretSourceSettings{File: "creds/token"}, Guest: SecretGuestSettings{Env: "API_TOKEN"},
 		AllowedHosts: []string{"api.example.com"}, Headers: []string{"authorization"},
@@ -89,6 +90,10 @@ func (f configField) write(out *bytes.Buffer, commented bool) error {
 	}
 	switch f.value.Kind() {
 	case reflect.Pointer:
+		if example, ok := configExamples[f.value.Type().Elem()]; ok {
+			fmt.Fprintf(out, "\n# %s\n# [%s]\n", f.description, f.path)
+			return writeConfigTable(out, reflect.ValueOf(example), f.path, true)
+		}
 		fmt.Fprintf(out, "# %s\n# %s = {}\n", f.description, f.name)
 	case reflect.Struct:
 		fmt.Fprintf(out, "\n# %s\n%s[%s]\n", f.description, prefix, f.path)

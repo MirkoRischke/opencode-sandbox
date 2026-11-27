@@ -1,0 +1,13 @@
+{
+  "name": "Acme Bob Sandbox",
+  "url": "https://github.com/acme",
+  "public": false,
+  "hook_attributes": {
+    "url": "https://github.com/acme",
+    "active": false
+  },
+  "default_permissions": {
+    "contents": "write",
+    "pull_requests": "write"
+  }
+}

@@ -19,7 +19,25 @@ type Settings struct {
 	Network  NetworkSettings           `toml:"network" description:"Network access and directional port exposure. Recreate the VM after changes."`
 	Snapshot SnapshotSettings          `toml:"snapshot" description:"Prepared disk baseline shared by linked Git worktrees; per-directory outside Git. Created automatically on first launch; rebuild and remove with the snapshot commands. Rebuild the snapshot and recreate the VM after provisioning changes."`
 	Logging  LoggingSettings           `toml:"logging" description:"Host launcher logging. Console output goes to stderr; JSON logfiles retain Debug and above."`
+	GitHub   *GitHubSettings           `toml:"github,omitempty" description:"Opt in to GitHub App authentication instead of a static GH_TOKEN."`
 	Secrets  map[string]SecretSettings `toml:"secrets" description:"Optional file- or OS-keyring-backed secrets, substituted by the host proxy. Workspace entries replace same-named global entries completely. Uncomment and adjust the example to enable."`
+}
+
+type GitHubSettings struct {
+	Owner string `toml:"owner" description:"GitHub username or organization that owns the repositories."`
+	AppID int64  `toml:"app_id" description:"GitHub App ID. Store its base64-encoded PEM in the host keyring as github-app-<app_id>."`
+}
+
+var githubOwnerPattern = regexp.MustCompile(`(?i)^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+
+func (s GitHubSettings) validate() error {
+	if !githubOwnerPattern.MatchString(s.Owner) {
+		return fmt.Errorf("github.owner must be a GitHub username or organization name")
+	}
+	if s.AppID <= 0 {
+		return fmt.Errorf("github.app_id must be a positive GitHub App ID")
+	}
+	return nil
 }
 
 type LoggingSettings struct {
@@ -139,6 +157,11 @@ func (s Settings) Validate() error {
 	}
 	if err := validateState(s.State, s.Files); err != nil {
 		return err
+	}
+	if s.GitHub != nil {
+		if err := s.GitHub.validate(); err != nil {
+			return err
+		}
 	}
 	return ValidateSecrets(s.Secrets)
 }

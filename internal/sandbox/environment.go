@@ -34,6 +34,41 @@ func renderEnvironmentInstructions(environment environmentInstructions) ([]byte,
 	return contents.Bytes(), nil
 }
 
+func (s *Sandbox) configureGitHubInstructions(ctx context.Context, auth *githubAuth) error {
+	var environment struct {
+		Mode string
+		Repo string
+	}
+	if auth != nil {
+		environment.Mode = "read-only"
+		if auth.repo != "" {
+			environment.Mode = "read-write"
+			environment.Repo = auth.owner + "/" + auth.repo
+		}
+	}
+	var contents bytes.Buffer
+	if err := sandboxInstructionsTemplate.ExecuteTemplate(&contents, "github", environment); err != nil {
+		return fmt.Errorf("render sandbox GitHub instructions: %w", err)
+	}
+	// Keep the existing instructions about applied network and mount settings.
+	// The launcher owns the GitHub section at the end of this file.
+	err := s.Exec(ctx, &contents, nil, nil, "bash", "-eu", "-c", `
+file=$1
+tmp=$(mktemp "$file.XXXXXX")
+trap 'rm -f -- "$tmp"' EXIT
+if [[ -f "$file" ]]; then
+  sed '/^<!-- opencode-sandbox:github -->$/,$d' "$file" > "$tmp"
+fi
+cat >> "$tmp"
+chmod 644 "$tmp"
+mv -f -- "$tmp" "$file"
+`, "sandbox-github-instructions", sandboxInstructions)
+	if err != nil {
+		return fmt.Errorf("configure sandbox GitHub instructions: %w", err)
+	}
+	return nil
+}
+
 // configureEnvironment runs only for newly created VMs, including snapshot restores.
 // Existing VMs retain the instructions describing their original applied settings.
 func (s *Sandbox) configureEnvironment(ctx context.Context, settings config.Settings) error {

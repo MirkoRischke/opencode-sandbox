@@ -43,6 +43,31 @@ func TestLoadSecretsPreservesHostPatterns(t *testing.T) {
 	require.Equal(t, "fake-token", secrets[0].entry.Value)
 }
 
+func TestGitHubAppOverridesStaticGitHubSecret(t *testing.T) {
+	t.Parallel()
+	settings := config.DefaultSettings()
+	settings.GitHub = &config.GitHubSettings{Owner: "acme", AppID: 123}
+	settings.Secrets = map[string]config.SecretSettings{
+		"pat": {
+			Source: config.SecretSourceSettings{Keyring: &config.KeyringSettings{}},
+			Guest:  config.SecretGuestSettings{Env: "GH_TOKEN"}, AllowedHosts: []string{"github.com"},
+			Headers: []string{"authorization"},
+		},
+		"other": {
+			Source: config.SecretSourceSettings{Keyring: &config.KeyringSettings{}},
+			Guest:  config.SecretGuestSettings{Env: "API_TOKEN"}, AllowedHosts: []string{"api.example.com"},
+			Headers: []string{"authorization"},
+		},
+	}
+	secrets, err := loadSecrets(settings, func(_, account string) (string, error) {
+		require.Equal(t, "other", account)
+		return "fixture", nil
+	})
+	require.NoError(t, err)
+	require.Len(t, secrets, 1)
+	require.Equal(t, "API_TOKEN", secrets[0].entry.EnvVar)
+}
+
 func TestGitHubTokenRejectsUnsafePermissionsAndInvalidContents(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {

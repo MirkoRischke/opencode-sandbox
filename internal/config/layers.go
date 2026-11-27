@@ -33,6 +33,7 @@ func mergeSettings(settings Settings, data []byte, origin string) (Settings, err
 		return settings, err
 	}
 	delete(overlay, "secrets")
+	delete(overlay, "github")
 	delete(overlay, "files")
 	delete(overlay, "state")
 	if network, ok := overlay["network"].(map[string]any); ok {
@@ -43,6 +44,7 @@ func mergeSettings(settings Settings, data []byte, origin string) (Settings, err
 	k := koanf.New(".")
 	base := settings
 	base.Secrets = nil // Preserve named entries and empty keyring tables outside koanf.
+	base.GitHub = nil
 	if err := k.Load(structs.Provider(base, "toml"), nil); err != nil {
 		return settings, err
 	}
@@ -54,6 +56,14 @@ func mergeSettings(settings Settings, data []byte, origin string) (Settings, err
 		return settings, err
 	}
 	merged.Secrets = mergeSecretEntries(settings.Secrets, partial.Secrets)
+	merged.GitHub = settings.GitHub
+	if metadata.IsDefined("github") {
+		// Keep the owner and app ID together; an empty table is an explicit opt-in.
+		merged.GitHub = partial.GitHub
+		if merged.GitHub == nil {
+			merged.GitHub = &GitHubSettings{}
+		}
+	}
 	merged.Network.AllowedHosts = appendCollection(settings.Network.AllowedHosts, partial.Network.AllowedHosts)
 	merged.Network.HostToVM = appendCollection(settings.Network.HostToVM, partial.Network.HostToVM)
 	merged.Network.VMToHost = settings.Network.VMToHost

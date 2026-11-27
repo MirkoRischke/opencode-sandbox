@@ -20,6 +20,19 @@ type Secret struct {
 	entry m.SecretEntry
 }
 
+func (s Secret) modifySpec() m.SecretModifySpec {
+	entry := s.entry
+	placeholder := entry.Placeholder
+	if placeholder == "" {
+		placeholder = "$MSB_" + entry.EnvVar
+	}
+	return m.SecretModifySpec{
+		Value: entry.Value, Placeholder: placeholder, AllowedHosts: entry.Allow,
+		Substitution: &entry.Substitution, AllowPlaceholderFor: entry.Passthrough,
+		ViolationAction: entry.ViolationAction, RequireTLSIdentity: entry.RequireTLSIdentity,
+	}
+}
+
 // AddGatewaySecret configures gateway authentication and lets prompts carry
 // unchanged placeholders for other secrets.
 func AddGatewaySecret(secrets []Secret, key string) []Secret {
@@ -59,6 +72,9 @@ func loadSecrets(settings config.Settings, get func(string, string) (string, err
 	var secrets []Secret
 	for _, name := range names {
 		config := settings.Secrets[name]
+		if settings.GitHub != nil && isGitHubToken(config.Guest.Env) {
+			continue
+		}
 		value, err := resolveSecretValue(name, config, get)
 		if err != nil {
 			return nil, err
@@ -159,26 +175,57 @@ func ValidateSecretValue(value string) error {
 	return nil
 }
 
-func connectWithSecrets(ctx context.Context, name string, secrets []Secret, opts []m.SandboxOption) (*m.Sandbox, error) {
-	handle, err := m.GetSandbox(ctx, name)
-	if err != nil {
-		return nil, fmt.Errorf("find sandbox before connecting: %w", err)
-	}
+func connectWithSecrets(ctx context.Context, handle *m.SandboxHandle, secrets []Secret, githubApp bool) (workspaceConnection, error) {
 	if handle.Status() == m.SandboxStatusStopped {
 		bindings, err := storedPortBindings(handle.ConfigJSON())
 		if err != nil {
-			return nil, err
+			return workspaceConnection{}, err
 		}
 		if err := checkPortBindings(bindings); err != nil {
-			return nil, err
+			return workspaceConnection{}, err
 		}
 	}
-	for _, secret := range secrets {
-		opts = append(opts, m.WithSecrets(secret.entry))
-	}
-	vm, err := m.ConnectOrCreateSandbox(ctx, name, opts...)
+	stored, err := handle.Config()
 	if err != nil {
-		return nil, fmt.Errorf("connect sandbox: %w", err)
+		return workspaceConnection{}, fmt.Errorf("read stored VM configuration: %w", err)
 	}
-	return vm, nil
+	_, wasGitHubApp := stored.Labels[githubAppLabel]
+	if githubApp || wasGitHubApp {
+		if err := reconcileGitHubSecrets(ctx, handle, secrets, githubApp); err != nil {
+			return workspaceConnection{}, err
+		}
+	}
+	vm, err := handle.ConnectOrStart(ctx, m.WithConnectOrStartDetached())
+	if err != nil {
+		return workspaceConnection{}, fmt.Errorf("connect sandbox: %w", err)
+	}
+	return workspaceConnection{vm: vm, refreshGitHubInstructions: wasGitHubApp}, nil
+}
+
+func reconcileGitHubSecrets(ctx context.Context, handle *m.SandboxHandle, secrets []Secret, appEnabled bool) error {
+	patch := m.ModifyOptions{
+		Policy:  m.ModificationPolicyRestart,
+		Secrets: make(map[string]m.SecretModifySpec),
+	}
+	for _, secret := range secrets {
+		if isGitHubToken(secret.entry.EnvVar) {
+			patch.Secrets[secret.entry.EnvVar] = secret.modifySpec()
+		}
+	}
+	for _, name := range []string{githubTokenEnv, githubReadTokenEnv} {
+		if _, keep := patch.Secrets[name]; !keep {
+			patch.SecretsRemove = append(patch.SecretsRemove, name)
+		}
+	}
+	if appEnabled {
+		patch.Labels = map[string]string{githubAppLabel: ""}
+	}
+	plan, err := handle.Modify(ctx, patch)
+	if err != nil {
+		return fmt.Errorf("update GitHub credentials before starting the VM: %w", err)
+	}
+	if !plan.Applied {
+		return fmt.Errorf("update GitHub credentials before starting the VM: modification not applied")
+	}
+	return nil
 }
