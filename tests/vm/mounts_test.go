@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestReadOnlyFileAndDirectoryMounts(t *testing.T) {
+func TestHostFileAndDirectoryMounts(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	config := filepath.Join(dir, "cli.json")
@@ -22,10 +22,13 @@ func TestReadOnlyFileAndDirectoryMounts(t *testing.T) {
 	skills := filepath.Join(dir, "skills")
 	require.NoError(t, os.MkdirAll(filepath.Join(skills, "example"), 0700))
 	require.NoError(t, os.WriteFile(filepath.Join(skills, "example", "SKILL.md"), []byte("skill contents"), 0600))
+	output := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(output, "obsolete"), nil, 0600))
 	settings := testSettings(t)
 	settings.Files = []launcherconfig.FileSettings{
 		{Source: config, Target: "/root/.config/opencode/cli.json"},
-		{Source: skills, Target: "/root/.config/opencode/skills"},
+		{Source: skills, Target: "/root/.config/opencode/skills", Mode: "mount-ro"},
+		{Source: output, Target: "/mnt/shared-output", Mode: "mount-rw"},
 	}
 	s := prepareSandboxWithSettings(t, newWorktree(t), settings)
 	require.Equal(t, `{"mouse":false}`, execInSandbox(t, s, "cat", "/root/.config/opencode/cli.json"))
@@ -36,6 +39,11 @@ if printf 'changed' > /root/.config/opencode/cli.json; then exit 1; fi
 if touch /root/.config/opencode/skills/new; then exit 1; fi
 if rm /root/.config/opencode/skills/example/SKILL.md; then exit 1; fi
 `)
+	execInSandbox(t, s, "bash", "-eu", "-c", `printf result > /mnt/shared-output/result; rm /mnt/shared-output/obsolete`)
+	result, err := os.ReadFile(filepath.Join(output, "result"))
+	require.NoError(t, err)
+	require.Equal(t, "result", string(result))
+	require.NoFileExists(t, filepath.Join(output, "obsolete"))
 	contents, err := os.ReadFile(config)
 	require.NoError(t, err)
 	require.Equal(t, `{"mouse":false}`, string(contents))

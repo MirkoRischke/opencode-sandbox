@@ -112,3 +112,37 @@ func TestRepoFileApprovalUsesResolvedPaths(t *testing.T) {
 	_, err = paths.LoadWorkspaceSettings(root, nil)
 	require.ErrorContains(t, err, fmt.Sprintf("files[0].source %q", source))
 }
+
+func TestWritableMountRequiresOwnWorkspaceConfigAndDirectory(t *testing.T) {
+	t.Parallel()
+	parent := t.TempDir()
+	root := filepath.Join(parent, "repo")
+	require.NoError(t, os.Mkdir(root, 0700))
+	source := filepath.Join(parent, "shared")
+	require.NoError(t, os.Mkdir(source, 0700))
+	data := []byte("[[files]]\nsource = '../shared'\ntarget = '/mnt/shared'\nmode = 'mount-rw'\n")
+	paths := Paths{ConfigDir: t.TempDir(), StateDir: t.TempDir()}
+	global := filepath.Join(paths.ConfigDir, "opencode-sandbox")
+	require.NoError(t, os.Mkdir(global, 0700))
+	for _, path := range []string{filepath.Join(global, "config.toml"), filepath.Join(parent, workspaceConfigName)} {
+		require.NoError(t, os.WriteFile(path, data, 0600))
+		_, err := paths.ValidateWorkspaceSettings(root)
+		require.ErrorContains(t, err, "mount-rw is only allowed in the workspace's own")
+		require.NoError(t, os.Remove(path))
+	}
+
+	require.NoError(t, os.WriteFile(filepath.Join(root, workspaceConfigName), data, 0600))
+	_, err := paths.LoadWorkspaceSettings(root, nil)
+	require.ErrorContains(t, err, "untrusted config")
+	settings, err := paths.LoadWorkspaceSettings(root, func(_ string, _ []byte, settings Settings) error {
+		require.Equal(t, FileSettings{Source: source, Target: "/mnt/shared", Mode: "mount-rw"}, settings.Files[0])
+		return nil
+	})
+	require.NoError(t, err)
+	require.True(t, settings.Files[0].IsWritableMount())
+
+	require.NoError(t, os.Remove(source))
+	require.NoError(t, os.WriteFile(source, nil, 0600))
+	_, err = paths.LoadWorkspaceSettings(root, nil)
+	require.ErrorContains(t, err, "must be a directory for mount-rw")
+}

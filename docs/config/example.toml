@@ -4,8 +4,9 @@
 
 # Optional host file/directory mappings. Nothing is shared implicitly.
 # Sources must exist. ~/ means the host home; relative paths use this config's directory.
-# Repo file lists replace the global list; top-level files = [] disables inheritance.
-# mode defaults to "mount" (read-only); "copy" creates writable guest copies.
+# File mappings accumulate across config files.
+# mode defaults to "mount-ro"; "copy" creates writable guest copies.
+# For "mount-rw", use the workspace's own .opencode-sandbox.toml.
 # [[files]]
 # source = "~/.config/opencode/AGENTS.md"
 # target = "/root/.config/opencode/AGENTS.md"

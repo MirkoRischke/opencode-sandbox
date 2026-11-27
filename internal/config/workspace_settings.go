@@ -58,8 +58,9 @@ func (p Paths) InspectWorkspaceSettings(directory string) (Settings, []string, e
 }
 
 type configLayer struct {
-	path string
-	data []byte
+	path      string
+	data      []byte
+	workspace bool
 }
 
 func (p Paths) loadSettings(directory string, approve func(string, []byte, Settings) error) (Settings, []string, error) {
@@ -73,9 +74,17 @@ func (p Paths) loadSettings(directory string, approve func(string, []byte, Setti
 	}
 	sources := make([]string, 0, len(layers))
 	for _, layer := range layers {
+		inheritedFiles := len(settings.Files)
 		settings, err = mergeSettings(settings, layer.data, filepath.Dir(layer.path))
 		if err != nil {
 			return settings, nil, fmt.Errorf("config %q: %w", layer.path, err)
+		}
+		if !layer.workspace {
+			for i, file := range settings.Files[inheritedFiles:] {
+				if file.IsWritableMount() {
+					return settings, nil, fmt.Errorf("config %q: files[%d].mode: mount-rw is only allowed in the workspace's own %s", layer.path, i, workspaceConfigName)
+				}
+			}
 		}
 		sources = append(sources, layer.path)
 	}
@@ -103,6 +112,7 @@ func (p Paths) configLayers(directory string) ([]configLayer, error) {
 		return nil, err
 	}
 	var paths []string
+	var workspaceConfig string
 	if directory != "" {
 		root, err := filepath.Abs(directory)
 		if err != nil {
@@ -112,6 +122,7 @@ func (p Paths) configLayers(directory string) ([]configLayer, error) {
 		if err != nil {
 			return nil, err
 		}
+		workspaceConfig = filepath.Join(root, workspaceConfigName)
 		for dir := root; ; dir = filepath.Dir(dir) {
 			paths = append(paths, filepath.Join(dir, workspaceConfigName))
 			if filepath.Dir(dir) == dir {
@@ -122,6 +133,7 @@ func (p Paths) configLayers(directory string) ([]configLayer, error) {
 	}
 	var layers []configLayer
 	for _, path := range append([]string{global}, paths...) {
+		isWorkspace := path == workspaceConfig
 		data, err := os.ReadFile(path)
 		if os.IsNotExist(err) {
 			continue
@@ -138,7 +150,7 @@ func (p Paths) configLayers(directory string) ([]configLayer, error) {
 			path = filepath.Join(dir, filepath.Base(path))
 		}
 		p.log("Configuration source", "path", path, "raw", string(data))
-		layers = append(layers, configLayer{path: path, data: data})
+		layers = append(layers, configLayer{path: path, data: data, workspace: isWorkspace})
 	}
 	return layers, nil
 }

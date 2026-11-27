@@ -117,7 +117,7 @@ func sandboxOptions(w workspace.Workspace, settings launcherconfig.Settings) []m
 	mounts["/var/lib/docker"] = m.Mount.Owned(m.OwnedVolumeOptions{
 		Kind: m.VolumeKindDisk, SizeMiB: settings.VM.DockerDiskMiB,
 	})
-	addReadOnlyMounts(mounts, settings)
+	addFileMounts(mounts, settings)
 	opts := []m.SandboxOption{
 		m.WithImage(settings.VM.Image), m.WithPullPolicy(m.PullPolicyNever),
 		m.WithCPUs(settings.VM.CPUs), m.WithMemory(settings.VM.MemoryMiB),

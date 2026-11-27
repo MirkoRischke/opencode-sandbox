@@ -8,8 +8,8 @@
   another agent installed in your image.
 - [Launcher configuration](../config/README.md): set defaults globally and
   approve directory-local overrides.
-- [Host file mappings](host-files.md): mount selected host files read-only or
-  copy them into writable guest storage.
+- [Host file mappings](host-files.md): share host files read-only, write
+  directly to a selected host directory, or make editable guest copies.
 - [Sandbox instructions](sandbox-instructions.md): tell your agent about its
   workspace and network restrictions.
 - [Shell completion](shell-completion.md): use Tab to discover launcher commands

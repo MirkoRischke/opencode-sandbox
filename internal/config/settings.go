@@ -11,7 +11,7 @@ import (
 // Settings is the host-side launcher configuration, separate from OpenCode's
 // guest JSON configuration. Add new launcher settings as fields or sections.
 type Settings struct {
-	Files    []FileSettings            `toml:"files" description:"Explicit host file/directory mappings. Default mode mount is read-only; copy seeds writable guest files on creation and snapshot restore. Recreate the VM after changing mappings."`
+	Files    []FileSettings            `toml:"files" description:"Explicit host file/directory mappings. mount-ro is the default; mount-rw is only for directories in the workspace's own config; copy seeds writable guest files on creation and snapshot restore. Recreate the VM after changing mappings."`
 	State    []StateSettings           `toml:"state" description:"Opt-in writable directories kept per workspace across VM removal. Workspace lists replace global lists. Recreate the VM after changing mappings."`
 	AWS      AWSSettings               `toml:"aws" description:"Optional AWS role credentials for launches. CLI flags override individual fields; host credentials are never stored here."`
 	VM       VMSettings                `toml:"vm" description:"VM resources. Recreate the VM after changing these settings."`

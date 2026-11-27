@@ -41,13 +41,13 @@ func workspaceMounts(w workspace.Workspace) map[string]m.MountConfig {
 	return mounts
 }
 
-func addReadOnlyMounts(mounts map[string]m.MountConfig, settings config.Settings) {
+func addFileMounts(mounts map[string]m.MountConfig, settings config.Settings) {
 	for _, mount := range settings.Files {
 		if mount.IsCopy() {
 			continue
 		}
 		mounts[mount.Target] = m.Mount.Bind(mount.Source, m.MountOptions{
-			Readonly: true, Owner: &m.MountOwner{UID: 0, GID: 0},
+			Readonly: !mount.IsWritableMount(), Owner: &m.MountOwner{UID: 0, GID: 0},
 		})
 	}
 }

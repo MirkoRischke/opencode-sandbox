@@ -13,16 +13,28 @@ import (
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
-func TestConfiguredMountsAreReadOnly(t *testing.T) {
+func TestConfiguredMountModes(t *testing.T) {
 	t.Parallel()
 	settings := config.DefaultSettings()
-	settings.Files = []config.FileSettings{{Source: t.TempDir(), Target: "/opt/skills"}, {Source: t.TempDir(), Target: "/opt/copy", Mode: "copy"}}
+	settings.Files = []config.FileSettings{
+		{Source: t.TempDir(), Target: "/opt/default"},
+		{Source: t.TempDir(), Target: "/opt/legacy", Mode: "mount"},
+		{Source: t.TempDir(), Target: "/opt/read-only", Mode: "mount-ro"},
+		{Source: t.TempDir(), Target: "/opt/writable", Mode: "mount-rw"},
+		{Source: t.TempDir(), Target: "/opt/copy", Mode: "copy"},
+	}
+	require.NoError(t, settings.Validate())
 	mounts := map[string]m.MountConfig{}
-	addReadOnlyMounts(mounts, settings)
-	require.Equal(t, settings.Files[0].Source, mounts["/opt/skills"].Bind)
+	addFileMounts(mounts, settings)
+	for _, file := range settings.Files[:4] {
+		require.Equal(t, file.Source, mounts[file.Target].Bind)
+		require.Equal(t, &m.MountOwner{UID: 0, GID: 0}, mounts[file.Target].Owner)
+	}
 	require.NotContains(t, mounts, "/opt/copy")
-	require.True(t, mounts["/opt/skills"].Readonly)
-	require.Equal(t, &m.MountOwner{UID: 0, GID: 0}, mounts["/opt/skills"].Owner)
+	require.True(t, mounts["/opt/default"].Readonly)
+	require.True(t, mounts["/opt/legacy"].Readonly)
+	require.True(t, mounts["/opt/read-only"].Readonly)
+	require.False(t, mounts["/opt/writable"].Readonly)
 }
 
 func TestMountsCannotOverlapManagedMounts(t *testing.T) {

@@ -451,7 +451,7 @@ func restoreWorktree(ctx context.Context, head *m.SnapshotHandle, name string, w
 	if err := addStateMounts(restore.Volumes, w, settings.State, stateDir); err != nil {
 		return nil, err
 	}
-	addReadOnlyMounts(restore.Volumes, settings)
+	addFileMounts(restore.Volumes, settings)
 	if settings.Network.Diagnostics {
 		restore.LogLevel = m.LogLevelDebug
 	}

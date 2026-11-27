@@ -11,11 +11,13 @@ import (
 type FileSettings struct {
 	Source string `toml:"source" description:"Existing host file or directory. Relative paths resolve against this config file; ~/ resolves against the host home."`
 	Target string `toml:"target" description:"Exact absolute guest path. Targets must not overlap other mappings or launcher-managed paths."`
-	Mode   string `toml:"mode" description:"mount (default): live read-only host access. copy: writable guest copy, refreshed on creation and snapshot restore; directories merge contents, preserving destination-only files."`
+	Mode   string `toml:"mode" description:"mount-ro (default): live read-only host access. mount-rw: live read-write access to a host directory, only in the workspace's own config. copy: writable guest copy, refreshed on creation and snapshot restore; directories merge contents, preserving destination-only files."`
 }
 
 // IsCopy distinguishes copies from mounts, including the implicit mount default.
 func (f FileSettings) IsCopy() bool { return f.Mode == "copy" }
+
+func (f FileSettings) IsWritableMount() bool { return f.Mode == "mount-rw" }
 
 func resolveFileSource(source, origin string) (string, error) {
 	if strings.HasPrefix(source, "~/") {
@@ -47,9 +49,9 @@ func validateFiles(files []FileSettings) error {
 
 func (f FileSettings) validate(i int) error {
 	switch f.Mode {
-	case "", "mount", "copy":
+	case "", "mount", "mount-ro", "mount-rw", "copy":
 	default:
-		return fmt.Errorf("files[%d].mode: %q must be mount or copy", i, f.Mode)
+		return fmt.Errorf("files[%d].mode: %q must be mount-ro, mount-rw, or copy", i, f.Mode)
 	}
 	if f.Source == "" || strings.ContainsRune(f.Source, '\x00') || !filepath.IsAbs(f.Source) {
 		return fmt.Errorf("files[%d].source: %q must resolve to an absolute host path", i, f.Source)
@@ -76,6 +78,9 @@ func (s Settings) ValidateFileSources() error {
 		info, err := os.Stat(mount.Source)
 		if err != nil {
 			return fmt.Errorf("files[%d].source %q: %w", i, mount.Source, err)
+		}
+		if mount.IsWritableMount() && !info.IsDir() {
+			return fmt.Errorf("files[%d].source %q must be a directory for mount-rw", i, mount.Source)
 		}
 		if !info.IsDir() && !info.Mode().IsRegular() {
 			return fmt.Errorf("files[%d].source %q must be a regular file or directory", i, mount.Source)
