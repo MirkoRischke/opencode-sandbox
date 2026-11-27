@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,7 +23,8 @@ func newStateCommand() *cobra.Command {
 	var repo, all bool
 	path := &cobra.Command{
 		Use:   "path",
-		Short: "Print the absolute path to an existing persistent state directory",
+		Short: "Print the absolute path to a persistent state directory",
+		Long:  "Print the absolute path to a persistent state directory. If it does not exist yet, warn on stderr without creating it.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			dir, err := hostStateDir(os.Getenv("XDG_STATE_HOME"), os.Getenv("HOME"))
@@ -41,10 +43,14 @@ func newStateCommand() *cobra.Command {
 				}
 			}
 			info, err := os.Stat(target)
-			if err != nil {
+			switch {
+			case errors.Is(err, os.ErrNotExist):
+				if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "Warning: persistent state directory does not exist yet"); err != nil {
+					return err
+				}
+			case err != nil:
 				return fmt.Errorf("inspect persistent state directory: %w", err)
-			}
-			if !info.IsDir() {
+			case !info.IsDir():
 				return fmt.Errorf("persistent state path %q is not a directory", target)
 			}
 			_, err = fmt.Fprintln(cmd.OutOrStdout(), target)
