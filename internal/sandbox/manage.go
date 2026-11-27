@@ -14,13 +14,17 @@ import (
 
 // List returns all labeled VMs, including stopped VMs, sorted by name.
 func List(ctx context.Context) ([]*m.SandboxHandle, error) {
+	return listVMs(ctx, map[string]string{"opencode-sandbox": ""})
+}
+
+func listVMs(ctx context.Context, labels map[string]string) ([]*m.SandboxHandle, error) {
 	if err := configureRuntime(); err != nil {
 		return nil, fmt.Errorf("locate Microsandbox runtime: %w", err)
 	}
 	var vms []*m.SandboxHandle
 	cursor := ""
 	for {
-		opts := []m.SandboxListOption{m.WithListLabels(map[string]string{"opencode-sandbox": ""})}
+		opts := []m.SandboxListOption{m.WithListLabels(labels)}
 		if cursor != "" {
 			opts = append(opts, m.WithListCursor(cursor))
 		}
