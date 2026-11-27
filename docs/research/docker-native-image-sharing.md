@@ -1,5 +1,8 @@
 # Docker-native image reuse across isolated Microsandbox VMs
 
+<!-- MD052 misreads adjacent shortcut citations like [S17][S18] as one full reference. -->
+<!-- markdownlint-disable-file MD052 -->
+
 Researched 2026-10-18. Scope: stock Docker/Distribution/BuildKit mechanisms;
 no custom cache daemon, proxy, or image-store implementation. Documentation and
 source inspection only; no infrastructure changed and no runtime validation.

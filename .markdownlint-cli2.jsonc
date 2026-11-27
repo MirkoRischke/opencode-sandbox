@@ -1,0 +1,6 @@
+{
+  "gitignore": true,
+  "ignores": [
+    "skills/opencode-sandbox/references/**"
+  ]
+}

@@ -11,7 +11,7 @@ Tests were not rerun when writing the original inventory. Source rechecked throu
 are not behavioral verification. Separately attributed parent-session test results
 do not imply every upgrade check was exercised.
 
-### v0.7.15 upgrade recheck (2026-11-13)
+## v0.7.15 upgrade recheck (2026-11-13)
 
 Reviewed releases v0.7.12–v0.7.15 and compared relevant versioned source against
 v0.7.11. No existing open limitation was established resolved. The full standard

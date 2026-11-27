@@ -3,6 +3,7 @@ node = "26"
 go = "1.27.4"
 golangci-lint = "2.15.0"
 hadolint = "2.15.1"
+markdownlint-cli2 = "0.24.2"
 microsandbox = "0.7.15"
 
 [env]
@@ -12,8 +13,14 @@ SANDBOX_DEFAULT_IMAGE = "{{ read_file(path='internal/config/default-image.txt') 
 includes = ["llm-gateway/tasks.toml"]
 
 [tasks.lint]
-description = "Lint Go code and the Dockerfiles"
+description = "Lint Go code, Dockerfiles, and Markdown"
+depends = ["lint:markdown"]
 run = ["golangci-lint run --build-tags live ./...", "hadolint Dockerfile images/*/Dockerfile"]
+
+[tasks."lint:markdown"]
+description = "Lint Markdown and check that bundled skill docs are in sync"
+depends = ["skill:check"]
+run = 'markdownlint-cli2 "**/*.md"'
 
 [tasks.verify]
 description = "Run linting and the standard test suite"

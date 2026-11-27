@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 20
     env:
       # Use the local toolchain versions; never install the VM runtime in CI.
-      MISE_ENABLE_TOOLS: go,golangci-lint,hadolint
+      MISE_ENABLE_TOOLS: go,golangci-lint,hadolint,node,markdownlint-cli2
     steps:
       - uses: actions/checkout@v7
         with:
