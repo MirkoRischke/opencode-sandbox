@@ -216,7 +216,7 @@ func createPreparationVM(ctx context.Context, w workspace.Workspace, name string
 	prep := &Sandbox{Name: name, Worktree: w.Root(), vm: vm, logger: logging.FromContext(ctx).With("vm", name)}
 	prep.log().Info("Preparation VM created")
 	if settings.Network.Diagnostics {
-		prep.diagnostics = startNetworkDiagnostics(ctx, vm, w.Root(), started, diagnostics)
+		prep.diagnostics = startNetworkDiagnostics(ctx, vm, w.Root(), w.RepositoryID(), started, diagnostics)
 	}
 	if err := prep.configureGuest(ctx, settings); err != nil {
 		cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)

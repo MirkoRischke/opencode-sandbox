@@ -36,12 +36,11 @@ func newPruneFixture(t *testing.T) *pruneFixture {
 	f.deleted = resolvePruneWorkspace(t, tree)
 	f.unrelated = resolvePruneWorkspace(t, t.TempDir())
 	for _, w := range []workspace.Workspace{f.current, f.deleted, f.unrelated} {
-		require.NoError(t, workspace.Track(f.state, w))
 		for _, path := range f.dataPaths(w) {
 			writePruneFile(t, path)
 		}
 		f.resources.vms = append(f.resources.vms, pruneVM{
-			name: Name(w), workspaceID: w.ID(), remove: f.remover("VM " + w.ID()),
+			name: Name(w), workspaceID: w.ID(), repositoryID: w.RepositoryID(), remove: f.remover("VM " + w.ID()),
 		})
 	}
 	for _, w := range []workspace.Workspace{f.current, f.unrelated} {
@@ -51,7 +50,7 @@ func newPruneFixture(t *testing.T) *pruneFixture {
 	}
 	// A preparation VM is selected by its workspace label, not its random name.
 	f.resources.vms = append(f.resources.vms, pruneVM{
-		name: "oc-prepare-random", workspaceID: f.deleted.ID(), remove: f.remover("preparation"),
+		name: "oc-prepare-random", workspaceID: f.deleted.ID(), repositoryID: f.deleted.RepositoryID(), remove: f.remover("preparation"),
 	})
 	runPruneGit(t, "-C", repo, "worktree", "remove", tree)
 	return f
@@ -67,15 +66,14 @@ func (f *pruneFixture) remover(name string) func(context.Context) error {
 func (f *pruneFixture) dataPaths(w workspace.Workspace) []string {
 	return []string{
 		filepath.Join(WorkspaceStatePath(f.state, w), "history", "session"),
-		filepath.Join(logging.Directory(f.state, w.Root()), "launch.log"),
-		diagnosticsPath(f.state, w.Root()),
+		filepath.Join(logging.Directory(f.state, w.Root(), w.RepositoryID()), "launch.log"),
+		diagnosticsPath(f.state, w.Root(), w.RepositoryID()),
 	}
 }
 
 func (f *pruneFixture) assertDeleted(t *testing.T, w workspace.Workspace, deleted bool) {
 	t.Helper()
-	paths := append(f.dataPaths(w), workspace.RecordPath(f.state, w.ID()))
-	for _, path := range paths {
+	for _, path := range f.dataPaths(w) {
 		if deleted {
 			require.NoFileExists(t, path)
 		} else {
@@ -166,26 +164,30 @@ func TestPruneAttemptsTargetsAndPreservesDataOnRuntimeFailure(t *testing.T) {
 		}}
 	}
 	plan := PrunePlan{
-		runtime:  []pruneStep{step("VM1", failure), step("VM2", nil), step("snapshot", nil)},
-		local:    []pruneStep{step("database", nil)},
-		metadata: []pruneStep{step("ownership", nil)},
-		shared:   []pruneStep{step("image", nil), step("cache", nil)},
+		runtime: []pruneStep{step("VM1", failure), step("VM2", nil), step("snapshot", nil)},
+		local:   []pruneStep{step("database", nil)},
+		shared:  []pruneStep{step("image", nil), step("cache", nil)},
 	}
 	require.ErrorIs(t, plan.Execute(context.Background()), failure)
 	require.Equal(t, []string{"VM1", "VM2", "snapshot", "image", "cache"}, calls)
 }
 
-func TestPruneLocalFailurePreservesOwnership(t *testing.T) {
+func TestPruneFindsHostFilesWithoutAWorktreeOrVM(t *testing.T) {
 	t.Parallel()
-	failure := errors.New("permission denied")
-	plan := PrunePlan{
-		local: []pruneStep{{name: "database", run: func(context.Context) error { return failure }}},
-		metadata: []pruneStep{{name: "ownership", run: func(context.Context) error {
-			t.Fatal("ownership must survive failed deletion")
-			return nil
-		}}},
+	f := newPruneFixture(t)
+	scope, err := resolvePruneScope(t.Context(), PruneOptions{
+		Directory: f.current.Root(), StateDir: f.state, Repository: true,
+	})
+	require.NoError(t, err)
+	plan, err := planWorkspacePrune(scope, pruneResources{})
+	require.NoError(t, err)
+	require.NoError(t, plan.Execute(t.Context()))
+	for _, path := range f.dataPaths(f.deleted) {
+		require.NoFileExists(t, path)
 	}
-	require.ErrorIs(t, plan.Execute(context.Background()), failure)
+	for _, path := range f.dataPaths(f.unrelated) {
+		require.FileExists(t, path)
+	}
 }
 
 func TestPruneScopeValidation(t *testing.T) {
@@ -206,9 +208,10 @@ func TestPruneDoesNotFollowDataSymlinks(t *testing.T) {
 	writePruneFile(t, sentinel)
 	link := filepath.Join(state, "logs")
 	require.NoError(t, os.Symlink(outside, link))
-	steps, err := prunePaths([]string{link})
+	step, err := hostPruneStep(state, link)
 	require.NoError(t, err)
-	require.NoError(t, runPruneSteps(context.Background(), steps))
+	require.NotNil(t, step)
+	require.NoError(t, step.run(t.Context()))
 	require.FileExists(t, sentinel)
 	_, err = os.Lstat(link)
 	require.ErrorIs(t, err, os.ErrNotExist)

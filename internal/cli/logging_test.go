@@ -12,12 +12,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testLogRepoID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
 func TestLoggingSetupFailureIsNonfatal(t *testing.T) {
 	t.Parallel()
 	state := filepath.Join(t.TempDir(), "not-a-directory")
 	require.NoError(t, os.WriteFile(state, nil, 0600))
 	var warnings bytes.Buffer
-	ctx, finish := startLogging(context.Background(), state, "/project", "launch", &warnings)
+	ctx, finish := startLogging(context.Background(), state, "/project", testLogRepoID, "launch", &warnings)
 	logging.FromContext(ctx).Info("No file available")
 	finish(nil)
 	require.Contains(t, warnings.String(), "Launcher logging unavailable")

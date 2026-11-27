@@ -19,7 +19,7 @@ func TestDestinationLevelsAndFormats(t *testing.T) {
 			var threshold slog.LevelVar
 			threshold.Set(level)
 			state := t.TempDir()
-			logger, closer, err := OpenWithLevel(state, "/project", &console, &threshold)
+			logger, closer, err := OpenWithLevel(state, "/project", testRepoID, &console, &threshold)
 			require.NoError(t, err)
 			t.Cleanup(func() { require.NoError(t, closer.Close()) })
 			logger = logger.With("component", "test").WithGroup("operation")
@@ -33,7 +33,7 @@ func TestDestinationLevelsAndFormats(t *testing.T) {
 			}
 			require.Contains(t, console.String(), "component=test")
 			require.Contains(t, console.String(), "operation.attempt=1")
-			files := logFiles(t, Directory(state, "/project"))
+			files := logFiles(t, Directory(state, "/project", testRepoID))
 			require.Len(t, files, 1)
 			data, err := os.ReadFile(files[0])
 			require.NoError(t, err)
@@ -55,7 +55,7 @@ func TestConsoleSurvivesFileSetupFailure(t *testing.T) {
 	state := filepath.Join(t.TempDir(), "file")
 	require.NoError(t, os.WriteFile(state, nil, 0600))
 	var console bytes.Buffer
-	logger, closer, err := OpenWithLevel(state, "/project", &console, slog.LevelWarn)
+	logger, closer, err := OpenWithLevel(state, "/project", testRepoID, &console, slog.LevelWarn)
 	require.Error(t, err)
 	require.NoError(t, closer.Close())
 	logger.Warn("still visible")
@@ -65,7 +65,7 @@ func TestConsoleSurvivesFileSetupFailure(t *testing.T) {
 func TestConsoleSurvivesFileWriteFailure(t *testing.T) {
 	t.Parallel()
 	var console bytes.Buffer
-	logger, closer, err := OpenWithLevel(t.TempDir(), "/project", &console, slog.LevelWarn)
+	logger, closer, err := OpenWithLevel(t.TempDir(), "/project", testRepoID, &console, slog.LevelWarn)
 	require.NoError(t, err)
 	w, ok := closer.(*writer)
 	require.True(t, ok)

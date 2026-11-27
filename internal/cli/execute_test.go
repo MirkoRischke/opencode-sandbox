@@ -26,7 +26,7 @@ func TestExecuteLogsReturnedErrorOnce(t *testing.T) {
 	command.AddCommand(&cobra.Command{
 		Use: "probe",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			ctx, finish := startLogging(cmd.Context(), state, "/project", "probe", cmd.ErrOrStderr())
+			ctx, finish := startLogging(cmd.Context(), state, "/project", testLogRepoID, "probe", cmd.ErrOrStderr())
 			defer finish(errors.New("failure"))
 			logging.FromContext(ctx).Info("file-only info")
 			logging.FromContext(ctx).Warn("visible warning")
@@ -39,7 +39,7 @@ func TestExecuteLogsReturnedErrorOnce(t *testing.T) {
 	require.NotContains(t, stderr.String(), "file-only info")
 	require.Contains(t, stderr.String(), "visible warning")
 	require.Equal(t, 1, strings.Count(stderr.String(), "the underlying failure"))
-	files, err := filepath.Glob(filepath.Join(logging.Directory(state, "/project"), "*.log"))
+	files, err := filepath.Glob(filepath.Join(logging.Directory(state, "/project", testLogRepoID), "*.log"))
 	require.NoError(t, err)
 	require.Len(t, files, 1)
 	data, err := os.ReadFile(files[0])

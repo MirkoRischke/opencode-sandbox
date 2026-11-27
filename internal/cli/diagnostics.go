@@ -41,7 +41,7 @@ func newDiagnosticsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, err = fmt.Fprintln(cmd.OutOrStdout(), logging.Directory(stateDir, w.Root()))
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), logging.Directory(stateDir, w.Root(), w.RepositoryID()))
 			return err
 		},
 	})

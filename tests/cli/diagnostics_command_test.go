@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"opencode-sandbox/internal/logging"
+	"opencode-sandbox/internal/workspace"
 
 	"github.com/stretchr/testify/require"
 )
@@ -24,7 +25,9 @@ func TestLauncherDiagnosticsUsesHomeFallbackWithoutLoadingSettings(t *testing.T)
 	writeSettingsAt(t, config, "invalid = [")
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".opencode-sandbox.toml"), []byte("invalid = ["), 0600))
 	identity := sha256.Sum256([]byte(root))
-	path := filepath.Join(home, ".local", "state", "opencode-sandbox", "diagnostics", fmt.Sprintf("%x", identity[:16]), "network.json")
+	w, err := workspace.Resolve(t.Context(), root)
+	require.NoError(t, err)
+	path := filepath.Join(home, ".local", "state", "opencode-sandbox", "diagnostics", w.RepositoryID(), fmt.Sprintf("%x", identity[:16]), "network.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
 	data := []byte("{\n  \"denied_targets\": []\n}\n")
 	require.NoError(t, os.WriteFile(path, data, 0600))
@@ -41,6 +44,8 @@ func TestLauncherDiagnosticsUsesHomeFallbackWithoutLoadingSettings(t *testing.T)
 func TestLauncherLogLocationDoesNotLoadOrCreateState(t *testing.T) {
 	t.Parallel()
 	root := newWorktree(t)
+	w, err := workspace.Resolve(t.Context(), root)
+	require.NoError(t, err)
 	alias := filepath.Join(t.TempDir(), "workspace-link")
 	require.NoError(t, os.Symlink(root, alias))
 	config := t.TempDir()
@@ -65,7 +70,7 @@ func TestLauncherLogLocationDoesNotLoadOrCreateState(t *testing.T) {
 			command.Env = append(os.Environ(), "HOME="+home, "XDG_STATE_HOME="+tc.xdg, "XDG_CONFIG_HOME="+config)
 			output, err := command.CombinedOutput()
 			require.NoError(t, err, "%s", output)
-			require.Equal(t, logging.Directory(state, root), strings.TrimSpace(string(output)))
+			require.Equal(t, logging.Directory(state, root, w.RepositoryID()), strings.TrimSpace(string(output)))
 			_, err = os.Stat(filepath.Join(state, "opencode-sandbox"))
 			require.True(t, os.IsNotExist(err))
 		})

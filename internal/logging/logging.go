@@ -39,22 +39,27 @@ func FromContext(ctx context.Context) *slog.Logger {
 
 var unsafeName = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 var managedDirectory = regexp.MustCompile(`^[a-zA-Z0-9._-]+-[a-f0-9]{16}$`)
+var repositoryDirectory = regexp.MustCompile(`^[a-f0-9]{64}$`)
 var managedFile = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.\d{9}[+-]\d{4}_\d+_\d+\.log$`)
 
 // Directory is pure: workspaceRoot must already be canonical, as at VM launch.
-func Directory(stateDir, workspaceRoot string) string {
+func Directory(stateDir, workspaceRoot, repositoryID string) string {
 	name := unsafeName.ReplaceAllString(filepath.Base(workspaceRoot), "_")
 	if len(name) > 64 {
 		name = name[:64]
 	}
 	hash := sha256.Sum256([]byte(workspaceRoot))
-	return filepath.Join(stateDir, "opencode-sandbox", "logs", fmt.Sprintf("%s-%x", name, hash[:8]))
+	return filepath.Join(RepositoryDirectory(stateDir, repositoryID), fmt.Sprintf("%s-%x", name, hash[:8]))
+}
+
+func RepositoryDirectory(stateDir, repositoryID string) string {
+	return filepath.Join(stateDir, "opencode-sandbox", "logs", repositoryID)
 }
 
 // Open starts a locked segment and prunes inactive logs across workspaces.
 // Each JSON record is written immediately; there is no userspace buffer.
-func Open(stateDir, workspaceRoot string, warnings io.Writer) (*slog.Logger, io.Closer, error) {
-	return OpenWithLevel(stateDir, workspaceRoot, warnings, slog.LevelInfo)
+func Open(stateDir, workspaceRoot, repositoryID string, warnings io.Writer) (*slog.Logger, io.Closer, error) {
+	return OpenWithLevel(stateDir, workspaceRoot, repositoryID, warnings, slog.LevelInfo)
 }
 
 // Console constructs a human-readable logger independent of logfile availability.
@@ -70,15 +75,12 @@ func Console(output io.Writer, level slog.Leveler) *slog.Logger {
 
 // OpenWithLevel routes each record independently to the file and console handlers.
 // On file setup failure it still returns a usable console logger and closer.
-func OpenWithLevel(stateDir, workspaceRoot string, warnings io.Writer, level slog.Leveler) (*slog.Logger, io.Closer, error) {
+func OpenWithLevel(stateDir, workspaceRoot, repositoryID string, warnings io.Writer, level slog.Leveler) (*slog.Logger, io.Closer, error) {
 	if warnings == nil {
 		warnings = io.Discard
 	}
 	console := Console(warnings, level)
-	w := &writer{directory: Directory(stateDir, workspaceRoot), warnings: warnings, warningLogger: console, now: time.Now, limit: maxBytes}
-	if err := privateDirectory(filepath.Dir(w.directory)); err != nil {
-		return console, noopCloser{}, err
-	}
+	w := &writer{directory: Directory(stateDir, workspaceRoot, repositoryID), warnings: warnings, warningLogger: console, now: time.Now, limit: maxBytes}
 	if err := w.rotate(w.now()); err != nil {
 		return console, noopCloser{}, err
 	}
@@ -165,7 +167,11 @@ func privateDirectory(path string) error {
 }
 
 func (w *writer) rotate(now time.Time) error {
-	root := filepath.Dir(w.directory)
+	repository := filepath.Dir(w.directory)
+	root := filepath.Dir(repository)
+	if err := privateDirectory(root); err != nil {
+		return err
+	}
 	lock, err := os.OpenFile(filepath.Join(root, ".cleanup.lock"), os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return err
@@ -176,6 +182,9 @@ func (w *writer) rotate(now time.Time) error {
 	}
 	// Creation and locking happen under the cleanup lock, so another process
 	// cannot prune a newly created segment before its writer locks it.
+	if err := privateDirectory(repository); err != nil {
+		return err
+	}
 	if err := privateDirectory(w.directory); err != nil {
 		return err
 	}

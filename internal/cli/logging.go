@@ -13,13 +13,13 @@ import (
 )
 
 // startLogging is best-effort: logging errors must not block workspace operations.
-func startLogging(ctx context.Context, stateDir, root, command string, warnings io.Writer) (context.Context, func(error)) {
+func startLogging(ctx context.Context, stateDir, root, repositoryID, command string, warnings io.Writer) (context.Context, func(error)) {
 	var level slog.Leveler = slog.LevelInfo
 	e, ok := ctx.Value(executionKey{}).(*execution)
 	if ok {
 		level = &e.level
 	}
-	logger, closer, err := logging.OpenWithLevel(stateDir, root, warnings, level)
+	logger, closer, err := logging.OpenWithLevel(stateDir, root, repositoryID, warnings, level)
 	if err != nil {
 		logger.Warn("Launcher logging unavailable", "error", err)
 	}
@@ -64,7 +64,7 @@ func logWorkspaceOperation(ctx context.Context, command string, warnings io.Writ
 		logging.FromContext(ctx).Warn("Launcher logging unavailable", "error", stateErr)
 		return operation(ctx)
 	}
-	ctx, finish := startLogging(ctx, stateDir, w.Root(), command, warnings)
+	ctx, finish := startLogging(ctx, stateDir, w.Root(), w.RepositoryID(), command, warnings)
 	defer func() { finish(err) }()
 	return operation(ctx)
 }

@@ -11,9 +11,10 @@ import (
 )
 
 type pruneVM struct {
-	name        string
-	workspaceID string
-	remove      func(context.Context) error
+	name         string
+	workspaceID  string
+	repositoryID string
+	remove       func(context.Context) error
 }
 
 type pruneSnapshot struct {
@@ -38,8 +39,9 @@ func discoverPruneResources(ctx context.Context) (pruneResources, error) {
 			return inventory, fmt.Errorf("read VM ownership for %s: %w", vm.Name(), err)
 		}
 		inventory.vms = append(inventory.vms, pruneVM{
-			name:        vm.Name(),
-			workspaceID: config.Labels["workspace-id"],
+			name:         vm.Name(),
+			workspaceID:  config.Labels["workspace-id"],
+			repositoryID: config.Labels["repository-id"],
 			remove: func(ctx context.Context) error {
 				return vm.Destroy(ctx, m.WithDestroyForce(), m.WithDestroyTimeout(30*time.Second))
 			},

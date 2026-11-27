@@ -22,12 +22,12 @@ func fixtureLog(t *testing.T, directory string, n int, modified time.Time) strin
 func TestRetentionRemovesOnlyExpiredSegments(t *testing.T) {
 	t.Parallel()
 	now := time.Now()
-	directory := Directory(t.TempDir(), "/project")
+	directory := Directory(t.TempDir(), "/project", testRepoID)
 	expired := fixtureLog(t, directory, 1, now.Add(-maxAge-time.Second))
 	boundary := fixtureLog(t, directory, 2, now.Add(-maxAge))
 	recent := fixtureLog(t, directory, 3, now.Add(-time.Hour))
 
-	require.NoError(t, cleanup(filepath.Dir(directory), now))
+	require.NoError(t, cleanup(filepath.Dir(filepath.Dir(directory)), now))
 
 	require.NoFileExists(t, expired)
 	require.FileExists(t, boundary)
@@ -42,18 +42,19 @@ func TestRetentionPreservesActiveSegmentsUntilClosed(t *testing.T) {
 	expired := now.Add(-2 * maxAge)
 	require.NoError(t, os.Chtimes(active, expired, expired))
 
-	require.NoError(t, cleanup(filepath.Dir(w.directory), now))
+	require.NoError(t, cleanup(filepath.Dir(filepath.Dir(w.directory)), now))
 	require.FileExists(t, active, "an active segment must survive its retention deadline")
 
 	require.NoError(t, w.Close())
-	require.NoError(t, cleanup(filepath.Dir(w.directory), now))
+	require.NoError(t, cleanup(filepath.Dir(filepath.Dir(w.directory)), now))
 	require.NoDirExists(t, w.directory, "remove the empty workspace directory after its last segment")
+	require.NoDirExists(t, filepath.Dir(w.directory), "remove empty repository directories")
 }
 
 func TestRetentionIgnoresUnknownFilesAndSymlinks(t *testing.T) {
 	t.Parallel()
 	now := time.Now()
-	directory := Directory(t.TempDir(), "/project")
+	directory := Directory(t.TempDir(), "/project", testRepoID)
 	target := fixtureLog(t, directory, 1, now)
 	unknown := filepath.Join(directory, "keep.txt")
 	require.NoError(t, os.WriteFile(unknown, []byte("unmanaged"), 0600))
@@ -62,7 +63,7 @@ func TestRetentionIgnoresUnknownFilesAndSymlinks(t *testing.T) {
 	expired := now.Add(-2 * maxAge)
 	require.NoError(t, os.Chtimes(unknown, expired, expired))
 
-	require.NoError(t, cleanup(filepath.Dir(directory), now))
+	require.NoError(t, cleanup(filepath.Dir(filepath.Dir(directory)), now))
 
 	require.FileExists(t, unknown)
 	require.FileExists(t, target)
@@ -88,13 +89,13 @@ func TestRetentionCountIsPerWorkspace(t *testing.T) {
 	state := t.TempDir()
 	now := time.Now()
 	w := testWriter(t, state, "/active", now)
-	other := Directory(state, "/other")
+	other := Directory(state, "/other", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
 	var files []string
 	for i := range maxFiles + 3 {
 		files = append(files, fixtureLog(t, other, i, now.Add(time.Duration(i-maxFiles-3)*time.Minute)))
 	}
 
-	require.NoError(t, cleanup(filepath.Dir(w.directory), now))
+	require.NoError(t, cleanup(filepath.Dir(filepath.Dir(w.directory)), now))
 
 	require.Len(t, logFiles(t, other), maxFiles)
 	require.Len(t, logFiles(t, w.directory), 1)
@@ -106,13 +107,13 @@ func TestRetentionCountIsPerWorkspace(t *testing.T) {
 func TestRetentionOrdersEqualTimestampsByPath(t *testing.T) {
 	t.Parallel()
 	now := time.Now()
-	directory := Directory(t.TempDir(), "/project")
+	directory := Directory(t.TempDir(), "/project", testRepoID)
 	first := fixtureLog(t, directory, 0, now)
 	for i := 1; i <= maxFiles; i++ {
 		fixtureLog(t, directory, i, now)
 	}
 
-	require.NoError(t, cleanup(filepath.Dir(directory), now))
+	require.NoError(t, cleanup(filepath.Dir(filepath.Dir(directory)), now))
 
 	require.NoFileExists(t, first, "lexically first path breaks ties between equally old segments")
 	require.Len(t, logFiles(t, directory), maxFiles)

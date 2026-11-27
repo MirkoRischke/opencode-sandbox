@@ -70,7 +70,7 @@ func PrepareWorkspace(ctx context.Context, w workspace.Workspace, secrets []Secr
 	}
 	s.log().Info("VM connected", "created", created, "duration_ms", time.Since(started).Milliseconds())
 	if settings.Network.Diagnostics {
-		s.diagnostics = startNetworkDiagnostics(ctx, s.vm, w.Root(), started, diagnosticOptions)
+		s.diagnostics = startNetworkDiagnostics(ctx, s.vm, w.Root(), w.RepositoryID(), started, diagnosticOptions)
 	}
 	if created {
 		if err := s.configureGuest(ctx, settings); err != nil {

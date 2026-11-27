@@ -18,13 +18,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testRepoID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
 func TestDirectoryIdentity(t *testing.T) {
 	t.Parallel()
 	state := t.TempDir()
-	a := Directory(state, "/one/my project")
-	b := Directory(state, "/two/my project")
+	a := Directory(state, "/one/my project", testRepoID)
+	b := Directory(state, "/two/my project", testRepoID)
 	require.NotEqual(t, a, b)
-	require.Equal(t, a, Directory(state, "/one/my project"))
+	require.Equal(t, a, Directory(state, "/one/my project", testRepoID))
+	require.Equal(t, filepath.Join(state, "opencode-sandbox", "logs", testRepoID), filepath.Dir(a))
 	require.True(t, managedDirectory.MatchString(filepath.Base(a)))
 	require.Contains(t, a, "my_project-")
 	_, err := os.Stat(a)
@@ -35,12 +38,12 @@ func TestJSONLogsArePrivateAndUnbuffered(t *testing.T) {
 	t.Parallel()
 	state := t.TempDir()
 	var warnings bytes.Buffer
-	logger, closer, err := Open(state, "/example/workspace", &warnings)
+	logger, closer, err := Open(state, "/example/workspace", testRepoID, &warnings)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, closer.Close()) })
 	ctx := WithLogger(context.Background(), logger)
 	FromContext(ctx).Error("Operation failed", "error", fmt.Errorf("outer: %w", io.ErrUnexpectedEOF))
-	files := logFiles(t, Directory(state, "/example/workspace"))
+	files := logFiles(t, Directory(state, "/example/workspace", testRepoID))
 	require.Len(t, files, 1)
 	contents, err := os.ReadFile(files[0])
 	require.NoError(t, err)
@@ -64,8 +67,7 @@ func TestJSONLogsArePrivateAndUnbuffered(t *testing.T) {
 
 func testWriter(t *testing.T, state, root string, now time.Time) *writer {
 	t.Helper()
-	w := &writer{directory: Directory(state, root), warnings: io.Discard, now: func() time.Time { return now }, limit: maxBytes}
-	require.NoError(t, privateDirectory(filepath.Dir(w.directory)))
+	w := &writer{directory: Directory(state, root, testRepoID), warnings: io.Discard, now: func() time.Time { return now }, limit: maxBytes}
 	require.NoError(t, w.rotate(now))
 	t.Cleanup(func() { require.NoError(t, w.Close()) })
 	return w
@@ -111,7 +113,7 @@ func TestConcurrentWritersAndCleanup(t *testing.T) {
 		})
 	}
 	wg.Wait()
-	files := logFiles(t, Directory(state, "/shared"))
+	files := logFiles(t, Directory(state, "/shared", testRepoID))
 	require.LessOrEqual(t, len(files), maxFiles)
 	for _, file := range files {
 		data, err := os.ReadFile(file)
@@ -124,7 +126,7 @@ func TestConcurrentWritersAndCleanup(t *testing.T) {
 
 func writeRotatingLogs(t *testing.T, state string, records int) {
 	t.Helper()
-	logger, closer, err := Open(state, "/shared", io.Discard)
+	logger, closer, err := Open(state, "/shared", testRepoID, io.Discard)
 	if !assert.NoError(t, err) {
 		return
 	}

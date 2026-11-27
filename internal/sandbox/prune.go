@@ -22,10 +22,9 @@ type pruneStep struct {
 // PrunePlan inventories deletions without performing them. Execute is the only
 // destructive operation; callers can show Targets before requesting approval.
 type PrunePlan struct {
-	runtime  []pruneStep
-	local    []pruneStep
-	metadata []pruneStep
-	shared   []pruneStep
+	runtime []pruneStep
+	local   []pruneStep
+	shared  []pruneStep
 }
 
 // PlanPrune discovers workspace resources and, for --all, shared MSB storage.
@@ -52,7 +51,7 @@ func PlanPrune(ctx context.Context, options PruneOptions) (*PrunePlan, error) {
 
 func (p *PrunePlan) Targets() []string {
 	var targets []string
-	for _, phase := range [][]pruneStep{p.runtime, p.local, p.metadata, p.shared} {
+	for _, phase := range [][]pruneStep{p.runtime, p.local, p.shared} {
 		for _, step := range phase {
 			targets = append(targets, step.name)
 		}
@@ -61,7 +60,6 @@ func (p *PrunePlan) Targets() []string {
 }
 
 // Execute removes VMs/snapshots before host data, then shared MSB storage.
-// Failed workspace cleanup retains ownership records so a retry can find them.
 func (p *PrunePlan) Execute(ctx context.Context) error {
 	workspaceErr := p.removeWorkspaceResources(ctx)
 	sharedErr := runPruneSteps(ctx, p.shared)
@@ -73,10 +71,7 @@ func (p *PrunePlan) removeWorkspaceResources(ctx context.Context) error {
 		// Do not remove a database that a surviving VM could still be writing.
 		return err
 	}
-	if err := runPruneSteps(ctx, p.local); err != nil {
-		return err
-	}
-	return runPruneSteps(ctx, p.metadata)
+	return runPruneSteps(ctx, p.local)
 }
 
 func runPruneSteps(ctx context.Context, steps []pruneStep) error {

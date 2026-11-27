@@ -82,7 +82,7 @@ func WriteNetworkDiagnostics(ctx context.Context, directory, stateDir string, w 
 		return err
 	}
 	root := wspace.Root()
-	path := diagnosticsPath(stateDir, root)
+	path := diagnosticsPath(stateDir, root, wspace.RepositoryID())
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return fmt.Errorf("no saved network diagnostics for %s; enable network.diagnostics and launch the sandbox to collect them: %w", root, err)
@@ -94,13 +94,17 @@ func WriteNetworkDiagnostics(ctx context.Context, directory, stateDir string, w 
 	return err
 }
 
-func diagnosticsPath(stateDir, worktree string) string {
-	identity := sha256.Sum256([]byte(worktree))
-	return filepath.Join(stateDir, "opencode-sandbox", "diagnostics", fmt.Sprintf("%x", identity[:16]), "network.json")
+func repositoryDiagnosticsDirectory(stateDir, repositoryID string) string {
+	return filepath.Join(stateDir, "opencode-sandbox", "diagnostics", repositoryID)
 }
 
-func loadDiagnostics(worktree string, since time.Time, options DiagnosticsOptions) (*networkDiagnostics, error) {
-	path := diagnosticsPath(options.StateDir, worktree)
+func diagnosticsPath(stateDir, worktree, repositoryID string) string {
+	identity := sha256.Sum256([]byte(worktree))
+	return filepath.Join(repositoryDiagnosticsDirectory(stateDir, repositoryID), fmt.Sprintf("%x", identity[:16]), "network.json")
+}
+
+func loadDiagnostics(worktree, repositoryID string, since time.Time, options DiagnosticsOptions) (*networkDiagnostics, error) {
+	path := diagnosticsPath(options.StateDir, worktree, repositoryID)
 	d := &networkDiagnostics{
 		path: path, since: since,
 		overview: networkOverview{SchemaVersion: 1, Worktree: worktree, DeniedTargets: []deniedTarget{}},
@@ -123,9 +127,9 @@ func loadDiagnostics(worktree string, since time.Time, options DiagnosticsOption
 	return d, nil
 }
 
-func startNetworkDiagnostics(ctx context.Context, vm *m.Sandbox, worktree string, since time.Time, options DiagnosticsOptions) *networkDiagnostics {
+func startNetworkDiagnostics(ctx context.Context, vm *m.Sandbox, worktree, repositoryID string, since time.Time, options DiagnosticsOptions) *networkDiagnostics {
 	logger := logging.FromContext(ctx).With("component", "network_diagnostics")
-	d, err := loadDiagnostics(worktree, since, options)
+	d, err := loadDiagnostics(worktree, repositoryID, since, options)
 	if err != nil {
 		logger.Warn("Network diagnostics unavailable; existing history was not changed", "error", err)
 		return nil

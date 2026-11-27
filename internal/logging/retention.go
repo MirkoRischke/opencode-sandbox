@@ -17,7 +17,24 @@ type segment struct {
 // cleanup is called with the root cleanup lock held. Unknown files, symlinks,
 // and active segments are never removed. Limits are best-effort with active writers.
 func cleanup(root string, now time.Time) error {
-	dirs, err := os.ReadDir(root)
+	repositories, err := os.ReadDir(root)
+	if err != nil {
+		return err
+	}
+	for _, repo := range repositories {
+		if !repo.IsDir() || !repositoryDirectory.MatchString(repo.Name()) {
+			continue
+		}
+		directory := filepath.Join(root, repo.Name())
+		if err := cleanupRepository(directory, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func cleanupRepository(repository string, now time.Time) error {
+	dirs, err := os.ReadDir(repository)
 	if err != nil {
 		return err
 	}
@@ -25,9 +42,16 @@ func cleanup(root string, now time.Time) error {
 		if !dir.IsDir() || !managedDirectory.MatchString(dir.Name()) {
 			continue
 		}
-		if err := cleanupDirectory(filepath.Join(root, dir.Name()), now); err != nil {
+		if err := cleanupDirectory(filepath.Join(repository, dir.Name()), now); err != nil {
 			return err
 		}
+	}
+	entries, err := os.ReadDir(repository)
+	if err != nil {
+		return err
+	}
+	if len(entries) == 0 {
+		return os.Remove(repository)
 	}
 	return nil
 }

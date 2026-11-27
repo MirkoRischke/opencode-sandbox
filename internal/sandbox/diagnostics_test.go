@@ -23,19 +23,20 @@ import (
 	m "github.com/superradcompany/microsandbox/sdk/go"
 )
 
+const diagnosticsTestRepoID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
 func TestWriteNetworkDiagnostics(t *testing.T) {
 	t.Parallel()
 	state := t.TempDir()
 	repo := t.TempDir()
 	out, err := exec.Command("git", "-C", repo, "init").CombinedOutput()
 	require.NoError(t, err, string(out))
-	root, err := filepath.EvalSymlinks(repo)
-	require.NoError(t, err)
+	w := resolvePruneWorkspace(t, repo)
 	subdir := filepath.Join(repo, "nested")
 	require.NoError(t, os.Mkdir(subdir, 0700))
 	alias := filepath.Join(t.TempDir(), "alias")
 	require.NoError(t, os.Symlink(repo, alias))
-	path := diagnosticsPath(state, root)
+	path := diagnosticsPath(state, w.Root(), w.RepositoryID())
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
 	data := []byte("{\n  \"denied_targets\": [], \"worktree\": \"example\"\n}\n")
 	require.NoError(t, os.WriteFile(path, data, 0600))
@@ -147,7 +148,7 @@ func TestNetworkDiagnosticsHistorySurvivesRunsAndVMRecreation(t *testing.T) {
 	options := DiagnosticsOptions{StateDir: t.TempDir()}
 	worktree := "/projects/repo/worktree"
 	entry := denialEntry("TLS egress denied by domain policy sni=example.org dst=1.1.1.1:443")
-	d, err := loadDiagnostics(worktree, entry.Timestamp, options)
+	d, err := loadDiagnostics(worktree, diagnosticsTestRepoID, entry.Timestamp, options)
 	require.NoError(t, err)
 	d.observe(entry)
 	d.observe(entry)
@@ -158,7 +159,7 @@ func TestNetworkDiagnosticsHistorySurvivesRunsAndVMRecreation(t *testing.T) {
 	require.Equal(t, os.FileMode(0600), info.Mode().Perm())
 
 	// No VM identity is used in the state path; subsequent launches merge history.
-	d, err = loadDiagnostics(worktree, entry.Timestamp.Add(time.Hour), options)
+	d, err = loadDiagnostics(worktree, diagnosticsTestRepoID, entry.Timestamp.Add(time.Hour), options)
 	require.NoError(t, err)
 	require.Equal(t, path, d.path)
 	entry.Timestamp = entry.Timestamp.Add(time.Hour)
@@ -178,7 +179,7 @@ func TestNetworkDiagnosticsHistorySurvivesRunsAndVMRecreation(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, files, 1, "atomic-save temporary files must be removed")
 
-	other, err := loadDiagnostics("/projects/repo/other-worktree", entry.Timestamp, options)
+	other, err := loadDiagnostics("/projects/repo/other-worktree", diagnosticsTestRepoID, entry.Timestamp, options)
 	require.NoError(t, err)
 	require.NotEqual(t, path, other.path)
 	require.Empty(t, other.overview.DeniedTargets)
@@ -200,11 +201,11 @@ func TestNetworkDiagnosticsKeepDistinctPortsAndIPOnlyTargets(t *testing.T) {
 func TestNetworkDiagnosticsPreserveInvalidHistory(t *testing.T) {
 	t.Parallel()
 	options := DiagnosticsOptions{StateDir: t.TempDir()}
-	path := diagnosticsPath(options.StateDir, "/project")
+	path := diagnosticsPath(options.StateDir, "/project", diagnosticsTestRepoID)
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
 	for _, data := range []string{`broken`, `{"schema_version":2,"worktree":"/project"}`, `{"schema_version":1,"worktree":"/other"}`} {
 		require.NoError(t, os.WriteFile(path, []byte(data), 0600))
-		_, err := loadDiagnostics("/project", time.Now(), options)
+		_, err := loadDiagnostics("/project", diagnosticsTestRepoID, time.Now(), options)
 		require.Error(t, err)
 		stored, err := os.ReadFile(path)
 		require.NoError(t, err)
@@ -229,7 +230,7 @@ func TestNetworkDiagnosticsCollectsOnEveryPoll(t *testing.T) {
 	t.Parallel()
 	options := DiagnosticsOptions{StateDir: t.TempDir()}
 	synctest.Test(t, func(t *testing.T) {
-		d, err := loadDiagnostics("/project", time.Now(), options)
+		d, err := loadDiagnostics("/project", diagnosticsTestRepoID, time.Now(), options)
 		require.NoError(t, err)
 		var calls atomic.Int32
 		go d.run(func() error {
@@ -272,7 +273,7 @@ func TestNetworkDiagnosticsDefersWarningsUntilShutdown(t *testing.T) {
 		t.Run(scenario.name, func(t *testing.T) {
 			t.Parallel()
 			var captured bytes.Buffer
-			d, err := loadDiagnostics("/project", time.Now(), DiagnosticsOptions{StateDir: t.TempDir()})
+			d, err := loadDiagnostics("/project", diagnosticsTestRepoID, time.Now(), DiagnosticsOptions{StateDir: t.TempDir()})
 			require.NoError(t, err)
 			d.logger = logging.Console(&captured, slog.LevelWarn)
 			if scenario.blockSave {
@@ -309,7 +310,7 @@ func TestNetworkDiagnosticsDefersWarningsUntilShutdown(t *testing.T) {
 func TestNetworkDiagnosticsClearsCollectionFailureAfterRecovery(t *testing.T) {
 	t.Parallel()
 	var captured bytes.Buffer
-	d, err := loadDiagnostics("/project", time.Now(), DiagnosticsOptions{StateDir: t.TempDir()})
+	d, err := loadDiagnostics("/project", diagnosticsTestRepoID, time.Now(), DiagnosticsOptions{StateDir: t.TempDir()})
 	require.NoError(t, err)
 	d.logger = logging.Console(&captured, slog.LevelWarn)
 	calls := 0

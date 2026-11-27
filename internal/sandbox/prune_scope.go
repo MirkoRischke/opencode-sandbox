@@ -6,79 +6,63 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"opencode-sandbox/internal/logging"
 	"opencode-sandbox/internal/workspace"
 )
 
-// Stored canonical roots allow selection without reopening deleted worktrees.
 type pruneScope struct {
 	stateDir     string
 	all          bool
-	repositoryID string            // Shared baselines are only selected by --repo or --all.
-	workspaces   map[string]string // workspace ID -> canonical root
-	stateScope   string            // A workspace directory or the whole repository's state.
+	repositoryID string // Shared baselines are only selected by --repo or --all.
+	current      workspace.Workspace
+	hostPaths    []string
 }
 
 func resolvePruneScope(ctx context.Context, options PruneOptions) (pruneScope, error) {
 	scope := pruneScope{
-		stateDir:   options.StateDir,
-		all:        options.All,
-		workspaces: make(map[string]string),
+		stateDir: options.StateDir,
+		all:      options.All,
 	}
+	base := filepath.Join(options.StateDir, "opencode-sandbox")
 	if options.All && options.Repository {
 		return scope, fmt.Errorf("--all and --repo are mutually exclusive")
 	}
 	if options.All {
-		scope.stateScope = StateRoot(options.StateDir)
+		scope.hostPaths = []string{filepath.Join(base, "logs"), filepath.Join(base, "diagnostics"), StateRoot(options.StateDir)}
 		return scope, nil
 	}
 	current, err := workspace.Resolve(ctx, options.Directory)
 	if err != nil {
 		return scope, err
 	}
-	scope.workspaces[current.ID()] = current.Root()
+	scope.current = current
 	if !options.Repository {
-		scope.stateScope = WorkspaceStatePath(options.StateDir, current)
+		scope.hostPaths = []string{
+			logging.Directory(options.StateDir, current.Root(), current.RepositoryID()),
+			filepath.Dir(diagnosticsPath(options.StateDir, current.Root(), current.RepositoryID())),
+			WorkspaceStatePath(options.StateDir, current),
+		}
 		return scope, nil
 	}
 	if _, nonGit := current.(workspace.Directory); nonGit {
 		return scope, fmt.Errorf("--repo requires a Git checkout or worktree root")
 	}
 	scope.repositoryID = current.RepositoryID()
-	scope.stateScope = RepositoryStatePath(options.StateDir, current)
-	records, err := workspace.Records(options.StateDir)
-	if err != nil {
-		return scope, err
-	}
-	for _, record := range records {
-		if record.RepositoryID == current.RepositoryID() {
-			scope.workspaces[record.ID()] = record.Root
-		}
+	scope.hostPaths = []string{
+		logging.RepositoryDirectory(options.StateDir, scope.repositoryID),
+		repositoryDiagnosticsDirectory(options.StateDir, scope.repositoryID),
+		RepositoryStatePath(options.StateDir, current),
 	}
 	return scope, nil
 }
 
-func (s pruneScope) includesWorkspace(id string) bool {
-	_, selected := s.workspaces[id]
-	return s.all || selected
-}
-
 func (s pruneScope) includesVM(vm pruneVM) bool {
-	if s.includesWorkspace(vm.workspaceID) {
-		return true
-	}
-	// Workspace VMs have deterministic names, even without ownership labels.
-	for _, root := range s.workspaces {
-		identity := snapshotIdentity(root)
-		name := fmt.Sprintf("oc-%s-%s", namePart(identity.name), identity.id[:8])
-		if vm.name == name {
-			return true
-		}
-	}
-	return false
+	return s.all ||
+		(s.repositoryID != "" && s.repositoryID == vm.repositoryID) ||
+		vm.workspaceID == s.current.ID() ||
+		vm.name == Name(s.current)
 }
 
 func planWorkspacePrune(scope pruneScope, inventory pruneResources) (*PrunePlan, error) {
@@ -93,14 +77,8 @@ func planWorkspacePrune(scope pruneScope, inventory pruneResources) (*PrunePlan,
 			plan.runtime = append(plan.runtime, pruneStep{name: "snapshots " + snapshot.workspace.group, run: snapshot.remove})
 		}
 	}
-	data, records := scope.hostPaths()
-	var err error
-	plan.local, err = prunePaths(data)
-	if err != nil {
-		return nil, err
-	}
-	if scope.stateScope != "" {
-		step, err := scope.statePruneStep()
+	for _, path := range scope.hostPaths {
+		step, err := hostPruneStep(scope.stateDir, path)
 		if err != nil {
 			return nil, err
 		}
@@ -108,15 +86,11 @@ func planWorkspacePrune(scope pruneScope, inventory pruneResources) (*PrunePlan,
 			plan.local = append(plan.local, *step)
 		}
 	}
-	plan.metadata, err = prunePaths(records)
-	if err != nil {
-		return nil, err
-	}
 	return plan, nil
 }
 
-func (s pruneScope) statePruneStep() (*pruneStep, error) {
-	err := s.withStateParent(func(root *os.Root, name string) error {
+func hostPruneStep(stateDir, path string) (*pruneStep, error) {
+	err := withStateParent(stateDir, path, func(root *os.Root, name string) error {
 		_, err := root.Lstat(name)
 		return err
 	})
@@ -124,10 +98,10 @@ func (s pruneScope) statePruneStep() (*pruneStep, error) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("inspect prune target %q: %w", s.stateScope, err)
+		return nil, fmt.Errorf("inspect prune target %q: %w", path, err)
 	}
-	return &pruneStep{name: "host data " + s.stateScope, run: func(context.Context) error {
-		err := s.withStateParent(func(root *os.Root, name string) error {
+	return &pruneStep{name: "host data " + path, run: func(context.Context) error {
+		err := withStateParent(stateDir, path, func(root *os.Root, name string) error {
 			return root.RemoveAll(name)
 		})
 		if errors.Is(err, os.ErrNotExist) {
@@ -139,12 +113,12 @@ func (s pruneScope) statePruneStep() (*pruneStep, error) {
 
 // Open each parent inside the preceding directory. Recheck at deletion time:
 // the user may have taken time to confirm the preview.
-func (s pruneScope) withStateParent(use func(*os.Root, string) error) error {
-	rel, err := filepath.Rel(s.stateDir, s.stateScope)
+func withStateParent(stateDir, path string, use func(*os.Root, string) error) error {
+	rel, err := filepath.Rel(stateDir, path)
 	if err != nil {
 		return err
 	}
-	root, err := os.OpenRoot(s.stateDir)
+	root, err := os.OpenRoot(stateDir)
 	if err != nil {
 		return err
 	}
@@ -170,40 +144,4 @@ func withStateChild(root *os.Root, path string, use func(*os.Root, string) error
 	}
 	defer child.Close() //nolint:errcheck // Read-only directory handle.
 	return withStateChild(child, rest, use)
-}
-
-func (s pruneScope) hostPaths() (data, records []string) {
-	base := filepath.Join(s.stateDir, "opencode-sandbox")
-	if s.all {
-		return []string{
-			filepath.Join(base, "logs"),
-			filepath.Join(base, "diagnostics"),
-		}, []string{filepath.Join(base, "workspaces")}
-	}
-	for id, root := range s.workspaces {
-		data = append(data,
-			logging.Directory(s.stateDir, root),
-			filepath.Dir(diagnosticsPath(s.stateDir, root)),
-		)
-		records = append(records, workspace.RecordPath(s.stateDir, id))
-	}
-	sort.Strings(data)
-	sort.Strings(records)
-	return data, records
-}
-
-func prunePaths(paths []string) ([]pruneStep, error) {
-	var steps []pruneStep
-	for _, path := range paths {
-		if _, err := os.Lstat(path); os.IsNotExist(err) {
-			continue
-		} else if err != nil {
-			return nil, fmt.Errorf("inspect prune target %q: %w", path, err)
-		}
-		steps = append(steps, pruneStep{
-			name: "host data " + path,
-			run:  func(context.Context) error { return os.RemoveAll(path) },
-		})
-	}
-	return steps, nil
 }
