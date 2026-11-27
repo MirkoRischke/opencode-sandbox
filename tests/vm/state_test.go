@@ -27,7 +27,7 @@ func TestWorkspaceStateSurvivesVMRemoval(t *testing.T) {
 	settings.State = []config.StateSettings{{Name: name, Target: target}}
 	first := prepareSandboxWithSettings(t, root, settings)
 	execInSandbox(t, first, "sh", "-ec", `printf '%s' "$1" > "$2"`, "test", marker, target+"/marker")
-	content, err := os.ReadFile(filepath.Join(state, "opencode-sandbox", "state", w.RepositoryID(), w.ID(), name, "marker"))
+	content, err := os.ReadFile(filepath.Join(sandbox.WorkspaceStatePath(state, w), name, "marker"))
 	require.NoError(t, err)
 	require.Equal(t, marker, string(content))
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)

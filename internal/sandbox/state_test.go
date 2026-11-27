@@ -5,20 +5,27 @@ import (
 	"path/filepath"
 	"testing"
 
-	"opencode-sandbox/internal/workspace"
-
 	"github.com/stretchr/testify/require"
 )
 
-func TestStateLocationCannotOverlapWorkspace(t *testing.T) {
+func TestStatePathNamesSurviveWorktreeRemoval(t *testing.T) {
 	t.Parallel()
-	w, err := workspace.Resolve(t.Context(), t.TempDir())
-	require.NoError(t, err)
-	link := filepath.Join(t.TempDir(), "state-home")
-	require.NoError(t, os.Symlink(w.Root(), link))
+	f := newPruneFixture(t)
 
-	for _, stateDir := range []string{w.Root(), link} {
-		require.ErrorContains(t, validateStateLocation(w, stateDir), "overlaps workspace mount source")
-	}
-	require.NoError(t, validateStateLocation(w, t.TempDir()))
+	repoPath := filepath.Join(f.state, "opencode-sandbox", "state", "repo--"+f.current.RepositoryID())
+	require.Equal(t, repoPath, RepositoryStatePath(f.state, f.deleted))
+	require.Equal(t, filepath.Join(repoPath, "repo--"+f.current.ID()), WorkspaceStatePath(f.state, f.current))
+	require.NoDirExists(t, f.deleted.Root())
+	require.FileExists(t, filepath.Join(repoPath, "tree--"+f.deleted.ID(), "history", "session"))
+}
+
+func TestStatePathsDistinguishSameNamedDirectories(t *testing.T) {
+	t.Parallel()
+	first, second := filepath.Join(t.TempDir(), "My Project"), filepath.Join(t.TempDir(), "My Project")
+	require.NoError(t, os.Mkdir(first, 0700))
+	require.NoError(t, os.Mkdir(second, 0700))
+	state := t.TempDir()
+	a, b := resolvePruneWorkspace(t, first), resolvePruneWorkspace(t, second)
+	require.Equal(t, "my-project--"+a.RepositoryID(), filepath.Base(RepositoryStatePath(state, a)))
+	require.NotEqual(t, RepositoryStatePath(state, a), RepositoryStatePath(state, b))
 }

@@ -32,7 +32,7 @@ func resolvePruneScope(ctx context.Context, options PruneOptions) (pruneScope, e
 		return scope, fmt.Errorf("--all and --repo are mutually exclusive")
 	}
 	if options.All {
-		scope.stateScope = stateRoot(options.StateDir)
+		scope.stateScope = StateRoot(options.StateDir)
 		return scope, nil
 	}
 	current, err := workspace.Resolve(ctx, options.Directory)
@@ -41,14 +41,14 @@ func resolvePruneScope(ctx context.Context, options PruneOptions) (pruneScope, e
 	}
 	scope.workspaces[current.ID()] = current.Root()
 	if !options.Repository {
-		scope.stateScope = workspaceStatePath(options.StateDir, current.RepositoryID(), current.ID())
+		scope.stateScope = WorkspaceStatePath(options.StateDir, current)
 		return scope, nil
 	}
 	if _, nonGit := current.(workspace.Directory); nonGit {
 		return scope, fmt.Errorf("--repo requires a Git checkout or worktree root")
 	}
 	scope.repositoryID = current.RepositoryID()
-	scope.stateScope = filepath.Join(stateRoot(options.StateDir), scope.repositoryID)
+	scope.stateScope = RepositoryStatePath(options.StateDir, current)
 	records, err := workspace.Records(options.StateDir)
 	if err != nil {
 		return scope, err

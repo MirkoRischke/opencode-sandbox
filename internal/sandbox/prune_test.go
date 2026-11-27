@@ -66,7 +66,7 @@ func (f *pruneFixture) remover(name string) func(context.Context) error {
 
 func (f *pruneFixture) dataPaths(w workspace.Workspace) []string {
 	return []string{
-		filepath.Join(workspaceStatePath(f.state, w.RepositoryID(), w.ID()), "history", "session"),
+		filepath.Join(WorkspaceStatePath(f.state, w), "history", "session"),
 		filepath.Join(logging.Directory(f.state, w.Root()), "launch.log"),
 		diagnosticsPath(f.state, w.Root()),
 	}
@@ -218,10 +218,12 @@ func TestPruneRejectsSymlinkedStateAncestor(t *testing.T) {
 	t.Parallel()
 	state, outside := t.TempDir(), t.TempDir()
 	w := resolvePruneWorkspace(t, t.TempDir())
-	keep := filepath.Join(outside, w.RepositoryID(), w.ID(), "keep")
+	relative, err := filepath.Rel(StateRoot(state), WorkspaceStatePath(state, w))
+	require.NoError(t, err)
+	keep := filepath.Join(outside, relative, "keep")
 	writePruneFile(t, keep)
-	require.NoError(t, os.Mkdir(filepath.Dir(stateRoot(state)), 0700))
-	require.NoError(t, os.Symlink(outside, stateRoot(state)))
+	require.NoError(t, os.Mkdir(filepath.Dir(StateRoot(state)), 0700))
+	require.NoError(t, os.Symlink(outside, StateRoot(state)))
 	scope, err := resolvePruneScope(t.Context(), PruneOptions{StateDir: state, Directory: w.Root()})
 	require.NoError(t, err)
 	_, err = planWorkspacePrune(scope, pruneResources{})
@@ -233,15 +235,17 @@ func TestPruneRechecksStateAncestorsAfterPlanning(t *testing.T) {
 	t.Parallel()
 	state, outside := t.TempDir(), t.TempDir()
 	w := resolvePruneWorkspace(t, t.TempDir())
-	keep := filepath.Join(outside, w.RepositoryID(), w.ID(), "keep")
+	relative, err := filepath.Rel(StateRoot(state), WorkspaceStatePath(state, w))
+	require.NoError(t, err)
+	keep := filepath.Join(outside, relative, "keep")
 	writePruneFile(t, keep)
-	writePruneFile(t, filepath.Join(workspaceStatePath(state, w.RepositoryID(), w.ID()), "history", "session"))
+	writePruneFile(t, filepath.Join(WorkspaceStatePath(state, w), "history", "session"))
 	scope, err := resolvePruneScope(t.Context(), PruneOptions{StateDir: state, Directory: w.Root()})
 	require.NoError(t, err)
 	plan, err := planWorkspacePrune(scope, pruneResources{})
 	require.NoError(t, err)
-	require.NoError(t, os.Rename(stateRoot(state), stateRoot(state)+"-old"))
-	require.NoError(t, os.Symlink(outside, stateRoot(state)))
+	require.NoError(t, os.Rename(StateRoot(state), StateRoot(state)+"-old"))
+	require.NoError(t, os.Symlink(outside, StateRoot(state)))
 
 	require.ErrorContains(t, plan.Execute(t.Context()), "symbolic link")
 	require.FileExists(t, keep)
