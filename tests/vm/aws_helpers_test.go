@@ -91,7 +91,7 @@ func fakeAWSHost(t *testing.T, region string, response func(int) (time.Time, boo
 
 // Environment overrides belong exclusively to the launcher subprocess, never
 // the test process. A controlling terminal is required by the SDK attachment.
-func (host *awsHost) run(t *testing.T, s *sandbox.Sandbox, probe string) error {
+func (host *awsHost) run(t *testing.T, worktree string, probe string) error {
 	t.Helper()
 	var args []string
 	if host.options != nil {
@@ -100,7 +100,7 @@ func (host *awsHost) run(t *testing.T, s *sandbox.Sandbox, probe string) error {
 			args = append(args, "--aws-profile", host.profile)
 		}
 	}
-	return runLauncherProbe(t, s, host.env, probe, args...)
+	return runLauncherProbe(t, worktree, host.env, probe, args...)
 }
 
 func validAWSResponse(_ int) (time.Time, bool) {

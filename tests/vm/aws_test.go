@@ -37,8 +37,7 @@ func TestAWSRoleCanUseDefaultHostCredentialsWithoutProfileFlag(t *testing.T) {
 	host.profile = ""
 	require.NoError(t, os.WriteFile(host.env["AWS_CONFIG_FILE"], []byte("[default]\n"), 0600))
 	require.NoError(t, os.WriteFile(host.env["AWS_SHARED_CREDENTIALS_FILE"], []byte("[default]\naws_access_key_id = FAKE_DEFAULT_SOURCE_KEY\naws_secret_access_key = FAKE_DEFAULT_SOURCE_SECRET\n"), 0600))
-	s := prepareLauncherProbe(t)
-	require.NoError(t, host.run(t, s, "true"))
+	require.NoError(t, host.run(t, newLauncherProbeWorktree(t), "true"))
 	require.Contains(t, (<-host.requests).Authorization, "Credential=FAKE_DEFAULT_SOURCE_KEY/")
 }
 
@@ -47,8 +46,7 @@ func TestAWSRoleUsesHostProfileEnvironmentWhenNoProfileFlagIsGiven(t *testing.T)
 	host := fakeAWSHost(t, "", validAWSResponse)
 	host.profile = ""
 	host.env["AWS_PROFILE"] = "sandbox-test"
-	s := prepareLauncherProbe(t)
-	require.NoError(t, host.run(t, s, "true"))
+	require.NoError(t, host.run(t, newLauncherProbeWorktree(t), "true"))
 	require.Contains(t, (<-host.requests).Authorization, "Credential=FAKE_HOST_SOURCE_KEY/")
 }
 
@@ -65,8 +63,8 @@ func TestAWSWritesOnlyRoleCredentialsAndUsesHostRegion(t *testing.T) {
 			host := fakeAWSHost(t, tc.profileRegion, validAWSResponse)
 			host.env["AWS_REGION"] = tc.envRegion
 			host.env["AWS_DEFAULT_REGION"] = tc.defaultEnvRegion
-			s := prepareLauncherProbe(t)
-			require.NoError(t, host.run(t, s, fmt.Sprintf(`
+			worktree := newLauncherProbeWorktree(t)
+			require.NoError(t, host.run(t, worktree, fmt.Sprintf(`
 grep -q '^aws_access_key_id = FAKE_ROLE_KEY_1$' /root/.aws/credentials
 grep -q '^aws_secret_access_key = FAKE_ROLE_SECRET_1$' /root/.aws/credentials
 grep -q '^aws_session_token = FAKE_ROLE_SESSION_1$' /root/.aws/credentials
@@ -80,10 +78,11 @@ test ! -e '%s'
 			request := <-host.requests
 			require.Equal(t, "3600", request.Duration)
 			require.Equal(t, host.options.RoleARN, request.Role)
-			require.Equal(t, s.Name, request.Session)
+			name := launcherProbeVMName(t, worktree)
+			require.Equal(t, name, request.Session)
 			require.Contains(t, request.Authorization, "Credential=FAKE_HOST_SOURCE_KEY/")
 			require.Contains(t, request.Authorization, "/"+tc.want+"/sts/")
-			require.NotContains(t, storedSandboxConfig(t, s), "FAKE_ROLE_SECRET")
+			require.NotContains(t, storedSandboxConfigByName(t, name), "FAKE_ROLE_SECRET")
 		})
 	}
 }

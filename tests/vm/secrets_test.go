@@ -68,12 +68,12 @@ func TestUnconfiguredSecretsAreNotLoadedOrInjected(t *testing.T) {
 	secrets, err := sandbox.LoadSecrets(settings)
 	require.NoError(t, err)
 	require.Empty(t, secrets)
-	s := prepareLauncherProbe(t)
-	require.NoError(t, runLauncherProbe(t, s, map[string]string{
+	worktree := newLauncherProbeWorktree(t)
+	require.NoError(t, runLauncherProbe(t, worktree, map[string]string{
 		"XDG_CONFIG_HOME": dir, "XDG_STATE_HOME": t.TempDir(),
 		"GH_TOKEN": "host-credential-must-not-be-used",
 	}, `test -z "${GH_TOKEN+x}"`))
-	require.NotContains(t, storedSandboxConfig(t, s), "host-credential-must-not-be-used")
+	require.NotContains(t, storedSandboxConfigByName(t, launcherProbeVMName(t, worktree)), "host-credential-must-not-be-used")
 }
 
 func TestConfiguredSecretsUseRelativeFilesAndSubstituteOnlySelectedHeaders(t *testing.T) {

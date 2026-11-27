@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -14,16 +15,16 @@ import (
 
 // runInTerminal reexecutes the test with a controlling terminal, as required by
 // the SDK's interactive attachment. The child returns false to run the test body.
-func runInTerminal(t *testing.T) bool {
+func runInTerminal(t *testing.T, env ...string) bool {
 	t.Helper()
 	if os.Getenv("SANDBOX_TERMINAL_TEST_CHILD") == "1" {
 		return false
 	}
-	// Only the parent runs in parallel; environment changes stay in its child.
+	// Only the parent runs in parallel; environment overrides are scoped to the child.
 	t.Parallel()
 	binary, err := os.Executable()
 	require.NoError(t, err)
-	args := []string{"-test.run=^" + t.Name() + "$", "-test.v", "-test.timeout=2m"}
+	args := []string{"-test.run=^" + regexp.QuoteMeta(t.Name()) + "$", "-test.v", "-test.timeout=2m"}
 	var scriptArgs []string
 	switch runtime.GOOS {
 	case "linux":
@@ -37,7 +38,7 @@ func runInTerminal(t *testing.T) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	command := exec.CommandContext(ctx, "script", scriptArgs...)
-	command.Env = append(os.Environ(), "SANDBOX_TERMINAL_TEST_CHILD=1")
+	command.Env = append(command.Environ(), append(env, "SANDBOX_TERMINAL_TEST_CHILD=1")...)
 	output, err := command.CombinedOutput()
 	require.NoError(t, err, "terminal test: %s", output)
 	return true

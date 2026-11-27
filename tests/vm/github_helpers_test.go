@@ -66,7 +66,12 @@ func loadGitHubSecrets(t *testing.T, path string) []sandbox.Secret {
 
 func storedSandboxConfig(t *testing.T, s *sandbox.Sandbox) string {
 	t.Helper()
-	handle, err := m.GetSandbox(context.Background(), s.Name)
+	return storedSandboxConfigByName(t, s.Name)
+}
+
+func storedSandboxConfigByName(t *testing.T, name string) string {
+	t.Helper()
+	handle, err := m.GetSandbox(t.Context(), name)
 	require.NoError(t, err)
 	return handle.ConfigJSON()
 }

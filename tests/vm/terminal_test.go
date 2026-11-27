@@ -6,48 +6,40 @@ import (
 	"testing"
 	"time"
 
-	"opencode-sandbox/internal/config"
-
 	"github.com/stretchr/testify/require"
 )
 
-//nolint:forbidigo // runInTerminal parallelizes the parent; only its isolated terminal child mutates the environment consumed by the real attachment path.
-func TestGuestTUIReceivesOnlySelectedHostTerminalVariables(t *testing.T) {
-	if runInTerminal(t) {
+//nolint:paralleltest // runInTerminal parallelizes the parent only.
+func TestGuestTerminalReceivesOnlySelectedHostVariables(t *testing.T) {
+	if runInTerminal(t, "TERM=xterm-256color", "COLORTERM=truecolor", "SANDBOX_HOST_ONLY=must-not-cross-into-guest") {
 		return
 	}
 	s := startSandbox(t)
-	// Replace OpenCode only inside this disposable VM, observing the same
-	// interactive attachment used by the launcher without starting a real TUI.
 	execInSandbox(t, s, "bash", "-eu", "-c", `
-cat > /mise/data/shims/opencode <<'PROBE'
+cat > ./terminal-probe <<'PROBE'
 #!/bin/bash
 printf '%s\n' "${TERM-}" "${COLORTERM-}" "${SANDBOX_HOST_ONLY-}" > "$PWD/terminal-env.txt"
 PROBE
-chmod 755 /mise/data/shims/opencode`)
-	// Exit the fallback shell automatically in this terminal-environment probe.
-	execInSandbox(t, s, "bash", "-c", `printf 'exit 0\n' > /root/.bashrc`)
-	t.Setenv("TERM", "xterm-256color")
-	t.Setenv("COLORTERM", "truecolor")
-	t.Setenv("SANDBOX_HOST_ONLY", "must-not-cross-into-guest")
+chmod 755 ./terminal-probe
+printf 'exit 0\n' > /root/.bashrc`)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	require.NoError(t, s.Open(ctx, config.DefaultSettings().Startup.Command))
+	require.NoError(t, s.Open(ctx, []string{"./terminal-probe"}))
 
 	require.Equal(t, "xterm-256color\ntruecolor\n\n", execInSandbox(t, s, "cat", s.Worktree+"/terminal-env.txt"))
 }
 
 //nolint:paralleltest // runInTerminal schedules the parent in parallel; its isolated child must not call Parallel again when exercising the controlling terminal.
-func TestOpenCodeExitFallsBackToInteractiveGuestBash(t *testing.T) {
+func TestStartupExitFallsBackToInteractiveGuestBash(t *testing.T) {
 	if runInTerminal(t) {
 		return
 	}
 	s := startSandbox(t)
 	for _, test := range []struct {
-		name         string
-		opencodeExit string
-		shellExit    string
+		name        string
+		startupExit string
+		shellExit   string
 	}{
 		{"success", "0", "0"},
 		{"opencode failure", "7", "0"},
@@ -55,16 +47,18 @@ func TestOpenCodeExitFallsBackToInteractiveGuestBash(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			execInSandbox(t, s, "bash", "-eu", "-c", `
-printf '#!/bin/bash\nexit %s\n' "$1" > /mise/data/shims/opencode
-chmod 755 /mise/data/shims/opencode
+rm -f startup-ran shell-state.txt
+printf '#!/bin/bash\ntouch startup-ran\nexit %s\n' "$1" > ./startup-probe
+chmod 755 ./startup-probe
 cat > /root/.bashrc <<'PROBE'
+test -f startup-ran || exit 99
 printf '%s\n' "$PWD" "$-" "${BASH_VERSION-}" > "$PWD/shell-state.txt"
 PROBE
-printf 'exit %s\n' "$2" >> /root/.bashrc`, "probe", test.opencodeExit, test.shellExit)
+printf 'exit %s\n' "$2" >> /root/.bashrc`, "probe", test.startupExit, test.shellExit)
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			err := s.Open(ctx, config.DefaultSettings().Startup.Command)
+			err := s.Open(ctx, []string{"./startup-probe"})
 			if test.shellExit == "0" {
 				require.NoError(t, err)
 			} else {

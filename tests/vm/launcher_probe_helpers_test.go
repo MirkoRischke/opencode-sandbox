@@ -18,27 +18,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Run the real CLI without live auth/inference. The guest probe stands in for
-// OpenCode and carries its exit status through the fallback interactive shell.
-func prepareLauncherProbe(t *testing.T) *sandbox.Sandbox {
+func newLauncherProbeWorktree(t *testing.T) string {
 	t.Helper()
-	s := startSandboxWithSettings(t, testSettings(t))
-	execInSandbox(t, s, "bash", "-eu", "-c", `
-cat > /mise/data/shims/opencode <<'PROBE'
-#!/bin/bash
-# mise inspects tool versions during Prepare, before the interactive launch.
-if [ "$#" -gt 0 ]; then exit 0; fi
-bash -eu "$PWD/launcher-probe.sh"
-status=$?
-printf '%s\n' "$status" > "$PWD/launcher-probe-status"
-exit "$status"
-PROBE
-chmod 755 /mise/data/shims/opencode
-printf 'exit "$(cat "$PWD/launcher-probe-status")"\n' > /root/.bashrc`)
-	return s
+	worktree := newWorktree(t)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		require.NoError(t, sandbox.Remove(ctx, worktree))
+	})
+	return worktree
 }
 
-func runLauncherProbe(t *testing.T, s *sandbox.Sandbox, env map[string]string, probe string, flags ...string) error {
+func launcherProbeVMName(t *testing.T, worktree string) string {
+	t.Helper()
+	w, err := workspace.Resolve(t.Context(), worktree)
+	require.NoError(t, err)
+	return sandbox.Name(w)
+}
+
+// Exercise the real launcher and terminal attachment without a provider or TUI.
+func runLauncherProbe(t *testing.T, worktree string, env map[string]string, probe string, flags ...string) error {
 	t.Helper()
 	// These probes exercise launcher/guest behavior, not the shared host gateway.
 	// Keep ordinary VM tests independent of a developer's Compose installation.
@@ -49,7 +48,18 @@ func runLauncherProbe(t *testing.T, s *sandbox.Sandbox, env map[string]string, p
 if [ "$1" = compose ]; then printf 'litellm healthy\ndb healthy\n'; exit 0; fi
 exec %q "$@"
 `, docker)), 0700))
-	require.NoError(t, os.WriteFile(filepath.Join(s.Worktree, "launcher-probe.sh"), []byte(probe), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(worktree, "launcher-probe.sh"), []byte(probe), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(worktree, "launcher-startup"), []byte(`#!/bin/bash
+bash -eu ./launcher-probe.sh
+status=$?
+printf '%s\n' "$status" > launcher-probe-status
+printf 'exit %s\n' "$status" > /root/.bashrc
+exit "$status"
+`), 0700))
+	require.NoError(t, os.WriteFile(filepath.Join(worktree, ".opencode-sandbox.toml"), []byte(`
+[startup]
+command = ["./launcher-startup"]
+`), 0600))
 	args := append([]string{buildLauncher(t)}, flags...)
 	var scriptArgs []string
 	switch runtime.GOOS {
@@ -67,20 +77,18 @@ exec %q "$@"
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	command := exec.CommandContext(ctx, "script", scriptArgs...)
-	command.Dir = s.Worktree
+	command.Dir = worktree
 	command.Env = os.Environ()
 	dataDir := t.TempDir()
 	// Preseed reusable credentials so ordinary launcher probes need no LiteLLM.
-	w, err := workspace.Resolve(ctx, s.Worktree)
+	w, err := workspace.Resolve(ctx, worktree)
 	require.NoError(t, err)
 	credentials := filepath.Join(gateway.New(dataDir).Directory(), "credentials")
 	require.NoError(t, os.MkdirAll(credentials, 0700))
 	require.NoError(t, os.WriteFile(filepath.Join(credentials, "team-"+w.RepositoryID()), []byte("test-team"), 0600))
 	require.NoError(t, os.WriteFile(filepath.Join(credentials, "key-"+sandbox.Name(w)), []byte("sk-test-placeholder"), 0600))
 	command.Env = append(command.Env, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"), "XDG_DATA_HOME="+dataDir)
-	if configDir := env["XDG_CONFIG_HOME"]; configDir != "" {
-		approveTestConfig(t, s.Worktree, configDir, env["XDG_STATE_HOME"])
-	}
+	approveTestConfig(t, worktree, env["XDG_CONFIG_HOME"], env["XDG_STATE_HOME"])
 	for key, value := range env {
 		command.Env = append(command.Env, key+"="+value)
 	}
@@ -88,5 +96,8 @@ exec %q "$@"
 	if err != nil {
 		return fmt.Errorf("launcher: %w: %s", err, output)
 	}
+	status, err := os.ReadFile(filepath.Join(worktree, "launcher-probe-status"))
+	require.NoError(t, err, "the configured startup probe must run")
+	require.Equal(t, "0\n", string(status))
 	return nil
 }
