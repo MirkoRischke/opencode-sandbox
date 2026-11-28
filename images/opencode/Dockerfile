@@ -1,7 +1,7 @@
 FROM opencode-sandbox:base
 
 # renovate: datasource=npm depName=@opencode/cli
-ARG OPENCODE_VERSION=2.3.2
+ARG OPENCODE_VERSION=2.4.2
 
 ENV PATH=/root/.opencode/bin:$PATH
 
