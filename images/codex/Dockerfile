@@ -1,7 +1,7 @@
 FROM opencode-sandbox:base
 
 # renovate: datasource=github-releases depName=openai/codex
-ARG CODEX_VERSION=0.171.0
+ARG CODEX_VERSION=0.172.0
 
 # Keep the installed package separate from runtime state in ~/.codex.
 RUN curl -fsSL "https://raw.githubusercontent.com/openai/codex/rust-v${CODEX_VERSION}/scripts/install/install.sh" -o /tmp/install-codex.sh \
